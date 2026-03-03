@@ -13,6 +13,7 @@ export interface DashboardMember {
   contextTags: string[];
   referrer: string;
   industry: string;
+  memberType: "法人" | "個人";
 }
 
 export const dashboardMembers: DashboardMember[] = [
@@ -23,6 +24,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["接待・会食向き", "経営者同士の会食"],
     referrer: "創設メンバー",
     industry: "コンサル",
+    memberType: "法人",
   },
   {
     ...pick(members[1]),
@@ -31,6 +33,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["カジュアル", "一人で集中", "ビジネスに効く"],
     referrer: "田中 一郎",
     industry: "IT・テック",
+    memberType: "法人",
   },
   {
     ...pick(members[2]),
@@ -39,6 +42,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["接待・会食向き", "和食", "個室あり"],
     referrer: "田中 一郎",
     industry: "飲食",
+    memberType: "個人",
   },
   {
     ...pick(members[3]),
@@ -47,6 +51,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["接待・会食向き", "個室あり"],
     referrer: "渡辺 剛",
     industry: "不動産",
+    memberType: "法人",
   },
   {
     ...pick(members[4]),
@@ -55,6 +60,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["ヘルシー", "一人で集中", "読了後に語りたい一冊"],
     referrer: "山本 恵美",
     industry: "医療",
+    memberType: "法人",
   },
   {
     ...pick(members[5]),
@@ -63,6 +69,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["接待・会食向き", "ワインが充実"],
     referrer: "鈴木 健二",
     industry: "コンサル",
+    memberType: "個人",
   },
   {
     id: "7",
@@ -77,6 +84,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["カジュアル", "一人で集中", "大人の趣味"],
     referrer: "佐藤 裕樹",
     industry: "クリエイティブ",
+    memberType: "個人",
   },
   {
     id: "8",
@@ -91,6 +99,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["カジュアル", "大人数OK", "週末のアクティビティ"],
     referrer: "田中 一郎",
     industry: "経営者",
+    memberType: "法人",
   },
   {
     id: "9",
@@ -105,6 +114,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["カジュアル", "ヘルシー", "週末のアクティビティ"],
     referrer: "中村 明子",
     industry: "IT・テック",
+    memberType: "個人",
   },
   {
     id: "10",
@@ -119,6 +129,7 @@ export const dashboardMembers: DashboardMember[] = [
     contextTags: ["接待・会食向き", "和食", "個室あり"],
     referrer: "山本 恵美",
     industry: "飲食",
+    memberType: "法人",
   },
 ];
 

@@ -95,8 +95,14 @@ export function MarketingHeader() {
             )}
           </nav>
 
-          {/* ログインボタン */}
+          {/* 新規登録 & ログインボタン */}
           <div className="flex items-center gap-3">
+            <Link
+              href="/register"
+              className="hidden sm:inline-flex items-center px-5 py-2 text-sm font-bold text-[var(--tetsu-pink)] border-2 border-[var(--tetsu-pink)] rounded-full hover:bg-[var(--tetsu-pink-pale)] transition-colors"
+            >
+              新規登録
+            </Link>
             <Link
               href="/app/dashboard"
               className="hidden sm:inline-flex items-center px-5 py-2 text-sm font-bold text-white bg-[var(--tetsu-pink)] rounded-full hover:bg-[var(--tetsu-pink-light)] transition-colors shadow-sm"
@@ -164,9 +170,16 @@ export function MarketingHeader() {
               )
             )}
             <Link
+              href="/register"
+              onClick={() => setIsOpen(false)}
+              className="block text-center px-5 py-2.5 text-sm font-bold text-[var(--tetsu-pink)] border-2 border-[var(--tetsu-pink)] rounded-full hover:bg-[var(--tetsu-pink-pale)] transition-colors mt-3"
+            >
+              新規登録
+            </Link>
+            <Link
               href="/app/dashboard"
               onClick={() => setIsOpen(false)}
-              className="block text-center px-5 py-2.5 text-sm font-bold text-white bg-[var(--tetsu-pink)] rounded-full hover:bg-[var(--tetsu-pink-light)] transition-colors mt-3"
+              className="block text-center px-5 py-2.5 text-sm font-bold text-white bg-[var(--tetsu-pink)] rounded-full hover:bg-[var(--tetsu-pink-light)] transition-colors mt-2"
             >
               ログイン
             </Link>

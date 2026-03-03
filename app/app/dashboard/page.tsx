@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Search, ChevronRight } from "lucide-react";
+import { Search, ChevronRight, Building2, User } from "lucide-react";
 import {
   dashboardMembers,
   industryFilters,
@@ -28,6 +28,15 @@ function MemberCard({ member }: { member: DashboardMember }) {
           <span className="text-[11px] text-gray-400 flex-shrink-0">
             {member.jobTitle}
           </span>
+          <span
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
+              member.memberType === "法人"
+                ? "bg-blue-50 text-blue-600"
+                : "bg-gray-50 text-gray-500"
+            }`}
+          >
+            {member.memberType}
+          </span>
         </div>
         <p className="text-xs text-gray-500 truncate mt-0.5">
           {member.headline}
@@ -41,6 +50,7 @@ function MemberCard({ member }: { member: DashboardMember }) {
 export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("全員");
+  const [memberTypeFilter, setMemberTypeFilter] = useState<"全て" | "法人" | "個人">("全て");
 
   const filtered = dashboardMembers.filter((m) => {
     const matchesSearch =
@@ -52,7 +62,10 @@ export default function DashboardPage() {
     const matchesFilter =
       activeFilter === "全員" || m.industry === activeFilter;
 
-    return matchesSearch && matchesFilter;
+    const matchesMemberType =
+      memberTypeFilter === "全て" || m.memberType === memberTypeFilter;
+
+    return matchesSearch && matchesFilter && matchesMemberType;
   });
 
   return (
@@ -78,20 +91,40 @@ export default function DashboardPage() {
           </div>
 
           {/* フィルタータグ */}
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-            {industryFilters.map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setActiveFilter(filter)}
-                className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  activeFilter === filter
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                {filter}
-              </button>
-            ))}
+          <div className="flex items-center gap-3 mt-4">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1">
+              {industryFilters.map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setActiveFilter(filter)}
+                  className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    activeFilter === filter
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+            {/* 法人/個人フィルタ */}
+            <div className="flex gap-1 flex-shrink-0 border-l border-gray-200 pl-3">
+              {(["全て", "法人", "個人"] as const).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setMemberTypeFilter(type)}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                    memberTypeFilter === type
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  {type === "法人" && <Building2 className="w-3 h-3" />}
+                  {type === "個人" && <User className="w-3 h-3" />}
+                  {type}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

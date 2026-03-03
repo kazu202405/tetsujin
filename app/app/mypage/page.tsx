@@ -11,6 +11,7 @@ import {
   MapPin,
   Clock,
   Eye,
+  FileUser,
 } from "lucide-react";
 
 // --- Mock: my profile ---
@@ -211,13 +212,22 @@ export default function MyPage() {
               <p className="text-gray-600 leading-relaxed border-l-4 border-amber-300 pl-4 text-sm mb-4">
                 {myProfile.headline}
               </p>
-              <Link
-                href="/app/profile/1"
-                className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                公開プロフィールを見る
-              </Link>
+              <div className="flex items-center gap-4">
+                <Link
+                  href="/app/profile/1"
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  公開プロフィールを見る
+                </Link>
+                <Link
+                  href="/app/mypage/profile-sheet"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  <FileUser className="w-3.5 h-3.5" />
+                  プロフィールシート
+                </Link>
+              </div>
             </div>
           </div>
 

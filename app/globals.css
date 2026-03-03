@@ -68,15 +68,17 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* TETSUJIN ブランドカラー */
-  --tetsu-black: #0a0a0a;
-  --tetsu-dark: #1a1a1a;
-  --tetsu-red: #c4302b;
-  --tetsu-red-light: #e04040;
-  --tetsu-gold: #c8a55a;
-  --tetsu-gold-light: #d4b46a;
-  --tetsu-warm: #f9f7f4;
-  --tetsu-steel: #64748b;
+  /* TETSUJIN ブランドカラー（ポップ寄り） */
+  --tetsu-black: #1a1a2e;
+  --tetsu-dark: #2d2d44;
+  --tetsu-pink: #e62566;
+  --tetsu-pink-light: #ff3d7f;
+  --tetsu-pink-pale: #fff0f5;
+  --tetsu-orange: #ff6b35;
+  --tetsu-yellow: #ffc947;
+  --tetsu-warm: #fef9f5;
+  --tetsu-warm-pink: #fff5f8;
+  --tetsu-gray: #6b7280;
 }
 
 @layer base {
@@ -144,7 +146,7 @@
   transform: translateX(-50%);
   width: 60%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(196, 48, 43, 0.15), transparent);
+  background: linear-gradient(90deg, transparent, rgba(230, 37, 102, 0.15), transparent);
 }
 
 /* スクロールバー非表示 */
@@ -158,6 +160,6 @@
 
 /* セレクションカラー */
 ::selection {
-  background: rgba(196, 48, 43, 0.12);
+  background: rgba(230, 37, 102, 0.12);
   color: inherit;
 }
