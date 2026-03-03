@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
-  Hash,
   Send,
   Image as ImageIcon,
   Heart,
@@ -16,24 +15,99 @@ import {
   Megaphone,
   ArrowUpRight,
   Plus,
+  Star,
+  Bookmark,
+  Lightbulb,
+  Music,
+  Pencil,
+  Trash2,
+  X,
+  RotateCcw,
+  Check,
+  type LucideIcon,
 } from "lucide-react";
 
-// チャンネル定義
-const channels = [
-  { id: "welcome", name: "新規ご入会挨拶", icon: PartyPopper, color: "text-pink-500" },
-  { id: "chat", name: "つぶやき・雑談", icon: Coffee, color: "text-amber-500" },
-  { id: "gallery", name: "みんなのギャラリー", icon: ImagePlus, color: "text-blue-500" },
-  { id: "exchange", name: "○○さんと交流しました", icon: Handshake, color: "text-green-500" },
-  { id: "club", name: "部活動：全", icon: Dumbbell, color: "text-purple-500" },
-  { id: "announce", name: "告知します！", icon: Megaphone, color: "text-red-500" },
-  { id: "referral", name: "紹介と依頼", icon: ArrowUpRight, color: "text-indigo-500" },
-] as const;
+// アイコンマップ（文字列キー → コンポーネント）
+const iconMap: Record<string, LucideIcon> = {
+  PartyPopper,
+  Coffee,
+  ImagePlus,
+  Handshake,
+  Dumbbell,
+  Megaphone,
+  ArrowUpRight,
+  MessageCircle,
+  Star,
+  Bookmark,
+  Lightbulb,
+  Music,
+};
 
-type ChannelId = (typeof channels)[number]["id"];
+const iconKeys = Object.keys(iconMap);
+
+// カラー候補
+const colorOptions = [
+  { key: "pink", class: "text-pink-500", bg: "bg-pink-500" },
+  { key: "amber", class: "text-amber-500", bg: "bg-amber-500" },
+  { key: "blue", class: "text-blue-500", bg: "bg-blue-500" },
+  { key: "green", class: "text-green-500", bg: "bg-green-500" },
+  { key: "purple", class: "text-purple-500", bg: "bg-purple-500" },
+  { key: "red", class: "text-red-500", bg: "bg-red-500" },
+  { key: "indigo", class: "text-indigo-500", bg: "bg-indigo-500" },
+  { key: "teal", class: "text-teal-500", bg: "bg-teal-500" },
+];
+
+// チャンネルデータ型
+interface ChannelData {
+  id: string;
+  name: string;
+  iconKey: string;
+  color: string;
+}
+
+// デフォルトチャンネル
+const defaultChannels: ChannelData[] = [
+  { id: "welcome", name: "新規ご入会挨拶", iconKey: "PartyPopper", color: "pink" },
+  { id: "chat", name: "つぶやき・雑談", iconKey: "Coffee", color: "amber" },
+  { id: "gallery", name: "みんなのギャラリー", iconKey: "ImagePlus", color: "blue" },
+  { id: "exchange", name: "○○さんと交流しました", iconKey: "Handshake", color: "green" },
+  { id: "club", name: "部活動：全", iconKey: "Dumbbell", color: "purple" },
+  { id: "announce", name: "告知します！", iconKey: "Megaphone", color: "red" },
+  { id: "referral", name: "紹介と依頼", iconKey: "ArrowUpRight", color: "indigo" },
+];
+
+const STORAGE_KEY = "tetsujin-board-channels";
+
+// localStorage読み書き
+function loadChannels(): ChannelData[] {
+  if (typeof window === "undefined") return defaultChannels;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultChannels;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    return defaultChannels;
+  } catch {
+    return defaultChannels;
+  }
+}
+
+function saveChannels(channels: ChannelData[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
+}
+
+// カラーキーからtailwindクラスを取得
+function getColorClass(colorKey: string): string {
+  return colorOptions.find((c) => c.key === colorKey)?.class ?? "text-gray-500";
+}
+
+function getIconComponent(iconKey: string): LucideIcon {
+  return iconMap[iconKey] ?? Star;
+}
 
 interface Post {
   id: string;
-  channelId: ChannelId;
+  channelId: string;
   author: {
     id: string;
     name: string;
@@ -154,17 +228,47 @@ const mockPosts: Post[] = [
 ];
 
 export default function BoardPage() {
-  const [activeChannel, setActiveChannel] = useState<ChannelId>("welcome");
+  const [channels, setChannels] = useState<ChannelData[]>(defaultChannels);
+  const [activeChannel, setActiveChannel] = useState<string>("welcome");
   const [newPost, setNewPost] = useState("");
   const [posts, setPosts] = useState(mockPosts);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
+  // 新規追加フォーム
+  const [newChName, setNewChName] = useState("");
+  const [newChIcon, setNewChIcon] = useState("Star");
+  const [newChColor, setNewChColor] = useState("blue");
+
+  // 編集中のチャンネルID
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editIcon, setEditIcon] = useState("");
+  const [editColor, setEditColor] = useState("");
+
+  // localStorage読み込み（クライアントのみ）
+  useEffect(() => {
+    setChannels(loadChannels());
+  }, []);
+
+  // チャンネル変更時にlocalStorageへ保存
+  const updateChannels = useCallback((next: ChannelData[]) => {
+    setChannels(next);
+    saveChannels(next);
+  }, []);
 
   const channelPosts = useMemo(
     () => posts.filter((p) => p.channelId === activeChannel),
     [posts, activeChannel]
   );
 
-  const activeChannelData = channels.find((c) => c.id === activeChannel)!;
+  const activeChannelData = channels.find((c) => c.id === activeChannel);
+
+  // アクティブチャンネルが削除された場合、先頭に戻す
+  useEffect(() => {
+    if (!activeChannelData && channels.length > 0) {
+      setActiveChannel(channels[0].id);
+    }
+  }, [activeChannelData, channels]);
 
   const handleLike = (postId: string) => {
     setPosts((prev) =>
@@ -197,130 +301,317 @@ export default function BoardPage() {
     setNewPost("");
   };
 
-  return (
-    <div className="min-h-screen flex flex-col lg:flex-row">
-      {/* チャンネルサイドバー（デスクトップ） */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 bg-white border-r border-gray-200 flex-shrink-0">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h2 className="text-base font-bold text-gray-900">掲示板</h2>
-          <p className="text-xs text-gray-400 mt-0.5">チャンネルを選択</p>
-        </div>
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {channels.map((ch) => {
-            const count = posts.filter((p) => p.channelId === ch.id).length;
-            return (
-              <button
-                key={ch.id}
-                onClick={() => setActiveChannel(ch.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all text-left ${
-                  activeChannel === ch.id
-                    ? "bg-gray-100 text-gray-900 font-bold"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                }`}
-              >
-                <ch.icon className={`w-4 h-4 flex-shrink-0 ${ch.color}`} />
-                <span className="flex-1 truncate">{ch.name}</span>
-                {count > 0 && (
-                  <span className="text-[10px] text-gray-400 font-medium">
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
+  // チャンネル追加
+  const handleAddChannel = () => {
+    const trimmed = newChName.trim();
+    if (!trimmed) return;
+    const id = `ch_${Date.now()}`;
+    const next = [...channels, { id, name: trimmed, iconKey: newChIcon, color: newChColor }];
+    updateChannels(next);
+    setNewChName("");
+    setNewChIcon("Star");
+    setNewChColor("blue");
+  };
 
-      {/* メインコンテンツ */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* ヘッダー */}
-        <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-sm border-b border-gray-200">
-          <div className="px-4 sm:px-6 py-3.5 flex items-center gap-3">
-            {/* モバイルチャンネル選択 */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100"
-            >
-              <Hash className="w-5 h-5 text-gray-500" />
-            </button>
-            <div className="flex items-center gap-2">
-              <activeChannelData.icon
-                className={`w-5 h-5 ${activeChannelData.color}`}
-              />
-              <h1 className="text-base font-bold text-gray-900">
-                {activeChannelData.name}
-              </h1>
-            </div>
-            <span className="text-xs text-gray-400 ml-auto">
+  // チャンネル削除
+  const handleDeleteChannel = (id: string) => {
+    const next = channels.filter((c) => c.id !== id);
+    updateChannels(next);
+  };
+
+  // 編集開始
+  const startEdit = (ch: ChannelData) => {
+    setEditingId(ch.id);
+    setEditName(ch.name);
+    setEditIcon(ch.iconKey);
+    setEditColor(ch.color);
+  };
+
+  // 編集確定
+  const confirmEdit = () => {
+    if (!editingId || !editName.trim()) return;
+    const next = channels.map((c) =>
+      c.id === editingId ? { ...c, name: editName.trim(), iconKey: editIcon, color: editColor } : c
+    );
+    updateChannels(next);
+    setEditingId(null);
+  };
+
+  // デフォルトに戻す
+  const resetToDefault = () => {
+    updateChannels(defaultChannels);
+    setActiveChannel("welcome");
+    setEditingId(null);
+  };
+
+  // activeChannelDataがない場合のフォールバック
+  const currentIcon = activeChannelData ? getIconComponent(activeChannelData.iconKey) : Star;
+  const currentColor = activeChannelData ? getColorClass(activeChannelData.color) : "text-gray-500";
+
+  return (
+    <div className="min-h-screen">
+      {/* ヘッダー */}
+      <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-xl font-bold text-gray-900">掲示板</h1>
+            <span className="text-xs text-gray-400">
               {channelPosts.length}件の投稿
             </span>
           </div>
 
-          {/* モバイルチャンネルリスト */}
-          {mobileMenuOpen && (
-            <div className="lg:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-1">
-              {channels.map((ch) => (
+          {/* チャンネルタブ */}
+          <div className="flex flex-wrap gap-2 items-center">
+            {channels.map((ch) => {
+              const Icon = getIconComponent(ch.iconKey);
+              const colorCls = getColorClass(ch.color);
+              const count = posts.filter((p) => p.channelId === ch.id).length;
+              return (
                 <button
                   key={ch.id}
-                  onClick={() => {
-                    setActiveChannel(ch.id);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left ${
+                  onClick={() => setActiveChannel(ch.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
                     activeChannel === ch.id
-                      ? "bg-gray-100 text-gray-900 font-bold"
-                      : "text-gray-500"
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
                   }`}
                 >
-                  <ch.icon className={`w-4 h-4 ${ch.color}`} />
+                  <Icon className={`w-3.5 h-3.5 ${activeChannel === ch.id ? "text-white" : colorCls}`} />
                   {ch.name}
+                  {count > 0 && (
+                    <span className={`text-[10px] ${activeChannel === ch.id ? "text-gray-300" : "text-gray-400"}`}>
+                      {count}
+                    </span>
+                  )}
                 </button>
-              ))}
-            </div>
-          )}
+              );
+            })}
+            {/* 管理ボタン */}
+            <button
+              onClick={() => setShowModal(true)}
+              className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium transition-colors bg-white text-gray-400 border border-gray-200 hover:border-gray-300 hover:text-gray-600"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* メインコンテンツ */}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+
+        {/* チャンネル管理モーダル */}
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => { setShowModal(false); setEditingId(null); }}
+            />
+            <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-sm font-bold text-gray-900">チャンネル管理</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={resetToDefault}
+                    className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    リセット
+                  </button>
+                  <button
+                    onClick={() => { setShowModal(false); setEditingId(null); }}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* 既存チャンネル一覧 */}
+              <div className="space-y-1.5 mb-5">
+                {channels.map((ch) => {
+                  const Icon = getIconComponent(ch.iconKey);
+                  const colorCls = getColorClass(ch.color);
+                  const isEditing = editingId === ch.id;
+
+                  if (isEditing) {
+                    return (
+                      <div key={ch.id} className="p-3 bg-gray-50 rounded-xl space-y-2.5">
+                        <input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        />
+                        <div className="flex flex-wrap gap-1">
+                          {iconKeys.map((ik) => {
+                            const Ic = iconMap[ik];
+                            return (
+                              <button
+                                key={ik}
+                                onClick={() => setEditIcon(ik)}
+                                className={`p-1.5 rounded-md transition-colors ${
+                                  editIcon === ik ? "bg-gray-900 text-white" : "bg-white text-gray-400 hover:text-gray-600 border border-gray-200"
+                                }`}
+                              >
+                                <Ic className="w-3.5 h-3.5" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex gap-1.5">
+                          {colorOptions.map((co) => (
+                            <button
+                              key={co.key}
+                              onClick={() => setEditColor(co.key)}
+                              className={`w-5 h-5 rounded-full ${co.bg} transition-all ${
+                                editColor === co.key ? "ring-2 ring-offset-1 ring-gray-900 scale-110" : "opacity-50 hover:opacity-80"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs text-gray-500 hover:bg-gray-200 rounded-lg transition-colors">
+                            キャンセル
+                          </button>
+                          <button onClick={confirmEdit} className="px-3 py-1 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors">
+                            保存
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={ch.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-xl transition-colors group">
+                      <Icon className={`w-4 h-4 ${colorCls}`} />
+                      <span className="text-sm text-gray-700 flex-1">{ch.name}</span>
+                      <button
+                        onClick={() => startEdit(ch)}
+                        className="p-1.5 text-gray-300 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteChannel(ch.id)}
+                        className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 新規追加フォーム */}
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-bold text-gray-500 mb-3">新規チャンネル追加</p>
+                <div className="space-y-3">
+                  <input
+                    value={newChName}
+                    onChange={(e) => setNewChName(e.target.value)}
+                    placeholder="例: お知らせ"
+                    className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
+                  />
+                  <div>
+                    <p className="text-[10px] text-gray-400 mb-1.5">アイコン</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {iconKeys.map((ik) => {
+                        const Ic = iconMap[ik];
+                        return (
+                          <button
+                            key={ik}
+                            onClick={() => setNewChIcon(ik)}
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              newChIcon === ik ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-400 hover:text-gray-600 border border-gray-200"
+                            }`}
+                          >
+                            <Ic className="w-4 h-4" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-400 mb-1.5">カラー</p>
+                    <div className="flex gap-2">
+                      {colorOptions.map((co) => (
+                        <button
+                          key={co.key}
+                          onClick={() => setNewChColor(co.key)}
+                          className={`w-6 h-6 rounded-full ${co.bg} transition-all ${
+                            newChColor === co.key ? "ring-2 ring-offset-2 ring-gray-900 scale-110" : "opacity-50 hover:opacity-80"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  {newChName.trim() && (
+                    <div className="bg-gray-50 rounded-xl p-3 flex items-center gap-2">
+                      <p className="text-[10px] text-gray-400">プレビュー:</p>
+                      {(() => {
+                        const PreviewIcon = getIconComponent(newChIcon);
+                        return <PreviewIcon className={`w-4 h-4 ${getColorClass(newChColor)}`} />;
+                      })()}
+                      <span className="text-sm font-medium text-gray-700">{newChName.trim()}</span>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleAddChannel}
+                    disabled={!newChName.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed w-full justify-center"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    追加
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 投稿フォーム */}
-        <div className="px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-          <div className="flex items-start gap-3">
-            <img
-              src="https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face"
-              alt=""
-              className="w-9 h-9 rounded-full object-cover border-2 border-white shadow flex-shrink-0 mt-0.5"
-            />
-            <div className="flex-1">
-              <textarea
-                value={newPost}
-                onChange={(e) => setNewPost(e.target.value)}
-                placeholder={`${activeChannelData.name}に投稿...`}
-                rows={2}
-                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all resize-none"
+        <div className="py-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-start gap-3">
+              <img
+                src="https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face"
+                alt=""
+                className="w-9 h-9 rounded-full object-cover border-2 border-white shadow flex-shrink-0 mt-0.5"
               />
-              <div className="flex items-center justify-between mt-2">
-                <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
-                  <ImageIcon className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={handlePost}
-                  disabled={!newPost.trim()}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  投稿
-                </button>
+              <div className="flex-1">
+                <textarea
+                  value={newPost}
+                  onChange={(e) => setNewPost(e.target.value)}
+                  placeholder={`${activeChannelData?.name ?? "チャンネル"}に投稿...`}
+                  rows={2}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent focus:bg-white transition-all resize-none"
+                />
+                <div className="flex items-center justify-between mt-2">
+                  <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+                    <ImageIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={handlePost}
+                    disabled={!newPost.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    投稿
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* 投稿一覧 */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="space-y-4 pb-8">
           {channelPosts.length > 0 ? (
-            <div className="divide-y divide-gray-100">
+            <>
               {channelPosts.map((post) => (
                 <div
                   key={post.id}
-                  className="px-4 sm:px-6 py-5 hover:bg-gray-50/50 transition-colors"
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-all"
                 >
                   <div className="flex gap-3">
                     <Link href={`/app/profile/${post.author.id}`}>
@@ -383,12 +674,17 @@ export default function BoardPage() {
                   </div>
                 </div>
               ))}
-            </div>
+            </>
           ) : (
-            <div className="text-center py-20">
-              <activeChannelData.icon
-                className={`w-10 h-10 mx-auto mb-3 ${activeChannelData.color} opacity-30`}
-              />
+            <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
+              {(() => {
+                const EmptyIcon = currentIcon;
+                return (
+                  <EmptyIcon
+                    className={`w-10 h-10 mx-auto mb-3 ${currentColor} opacity-30`}
+                  />
+                );
+              })()}
               <p className="text-sm text-gray-400">
                 まだ投稿がありません
               </p>
