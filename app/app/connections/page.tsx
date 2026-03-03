@@ -1,16 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Handshake,
   MapPin,
   CalendarDays,
   MessageSquare,
-  Filter,
   Plus,
-  Check,
+  Settings,
+  X,
+  RotateCcw,
+  Tag,
 } from "lucide-react";
+
+const STORAGE_KEY = "tetsujin-connection-tags";
+const DEFAULT_TAGS = ["コラボ可能性", "商談中", "紹介予定"];
 
 interface Connection {
   id: string;
@@ -79,14 +84,23 @@ const mockConnections: Connection[] = [
   },
 ];
 
-const allTags = [
-  "すべて",
-  "コラボ可能性",
-  "コラボ進行中",
-  "紹介候補",
-  "紹介予定",
-  "商談中",
-];
+function loadTags(): string[] {
+  if (typeof window === "undefined") return DEFAULT_TAGS;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEFAULT_TAGS;
+}
+
+function saveTags(tags: string[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tags));
+  } catch {}
+}
 
 function ConnectionCard({ connection }: { connection: Connection }) {
   return (
@@ -159,6 +173,42 @@ function ConnectionCard({ connection }: { connection: Connection }) {
 export default function ConnectionsPage() {
   const [activeTag, setActiveTag] = useState("すべて");
   const [showForm, setShowForm] = useState(false);
+  const [showTagManager, setShowTagManager] = useState(false);
+  const [customTags, setCustomTags] = useState<string[]>(DEFAULT_TAGS);
+  const [newTagInput, setNewTagInput] = useState("");
+
+  // localStorageからタグを読み込み（クライアントサイドのみ）
+  useEffect(() => {
+    setCustomTags(loadTags());
+  }, []);
+
+  const updateTags = useCallback((tags: string[]) => {
+    setCustomTags(tags);
+    saveTags(tags);
+  }, []);
+
+  const addTag = useCallback(() => {
+    const trimmed = newTagInput.trim();
+    if (!trimmed || customTags.includes(trimmed)) return;
+    updateTags([...customTags, trimmed]);
+    setNewTagInput("");
+  }, [newTagInput, customTags, updateTags]);
+
+  const removeTag = useCallback((tag: string) => {
+    const updated = customTags.filter((t) => t !== tag);
+    updateTags(updated);
+    // 削除されたタグがアクティブなら「すべて」に戻す
+    if (activeTag === tag) setActiveTag("すべて");
+  }, [customTags, activeTag, updateTags]);
+
+  const resetToDefault = useCallback(() => {
+    updateTags(DEFAULT_TAGS);
+    if (!DEFAULT_TAGS.includes(activeTag) && activeTag !== "すべて") {
+      setActiveTag("すべて");
+    }
+  }, [activeTag, updateTags]);
+
+  const allTags = ["すべて", ...customTags];
 
   const filtered =
     activeTag === "すべて"
@@ -187,25 +237,112 @@ export default function ConnectionsPage() {
           </div>
 
           {/* Status filter */}
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-            {allTags.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => setActiveTag(tag)}
-                className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  activeTag === tag
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 mt-4">
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide flex-1">
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setActiveTag(tag)}
+                  className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    activeTag === tag
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowTagManager(!showTagManager)}
+              className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                showTagManager
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700"
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              タグ管理
+            </button>
           </div>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* タグ管理パネル */}
+        {showTagManager && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 sm:p-8 mb-8">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-gray-500" />
+                <h2 className="text-base font-bold text-gray-900">タグ管理</h2>
+              </div>
+              <button
+                onClick={() => setShowTagManager(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* タグ一覧 */}
+            <div className="flex flex-wrap gap-2 mb-5">
+              {customTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-700 border border-gray-200"
+                >
+                  {tag}
+                  <button
+                    onClick={() => removeTag(tag)}
+                    className="p-0.5 rounded-full hover:bg-gray-300 transition-colors"
+                    title={`「${tag}」を削除`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              {customTags.length === 0 && (
+                <p className="text-sm text-gray-400">タグがありません</p>
+              )}
+            </div>
+
+            {/* 新規タグ追加 */}
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newTagInput}
+                onChange={(e) => setNewTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTag();
+                  }
+                }}
+                placeholder="新しいタグ名..."
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              />
+              <button
+                onClick={addTag}
+                disabled={!newTagInput.trim() || customTags.includes(newTagInput.trim())}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-4 h-4" />
+                追加
+              </button>
+            </div>
+
+            {/* デフォルトに戻す */}
+            <button
+              onClick={resetToDefault}
+              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              デフォルトに戻す
+            </button>
+          </div>
+        )}
+
         {/* Quick form */}
         {showForm && (
           <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-6 sm:p-8 mb-8">

@@ -214,18 +214,18 @@ export default function MyPage() {
               </p>
               <div className="flex items-center gap-4">
                 <Link
-                  href="/app/profile/1"
-                  className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  公開プロフィールを見る
-                </Link>
-                <Link
                   href="/app/mypage/profile-sheet"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
                 >
                   <FileUser className="w-3.5 h-3.5" />
                   プロフィールシート
+                </Link>
+                <Link
+                  href="/app/profile/1"
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  公開プロフィールを見る
                 </Link>
               </div>
             </div>
@@ -369,14 +369,22 @@ export default function MyPage() {
                     ? `${selectedDate} の出会い`
                     : `${formatMonth(viewYear, viewMonth)} の出会い`}
                 </h3>
-                {selectedDate && (
-                  <button
-                    onClick={() => setSelectedDate(null)}
+                <div className="flex items-center gap-3">
+                  {selectedDate && (
+                    <button
+                      onClick={() => setSelectedDate(null)}
+                      className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
+                    >
+                      月全体を表示
+                    </button>
+                  )}
+                  <Link
+                    href="/app/connections"
                     className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
                   >
-                    月全体を表示
-                  </button>
-                )}
+                    出会い管理 →
+                  </Link>
+                </div>
               </div>
 
               {visibleLogs.length > 0 ? (

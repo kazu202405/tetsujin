@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -75,10 +75,63 @@ export default function ProfileSheetPage() {
   const [mode, setMode] = useState<"edit" | "preview">("preview");
   const [data, setData] = useState<ProfileData>(initialData);
   const [themeIndex, setThemeIndex] = useState(0);
+  const [customColor, setCustomColor] = useState("#2a2a3e");
+  const [huePosition, setHuePosition] = useState(0);
+  const [useCustom, setUseCustom] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const hueBarRef = useRef<HTMLDivElement>(null);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const theme = themeColors[themeIndex];
+  // 外側クリックでカラーピッカーを閉じる
+  useEffect(() => {
+    if (!showColorPicker) return;
+    const handleClick = (e: MouseEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
+        setShowColorPicker(false);
+      }
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => window.removeEventListener("mousedown", handleClick);
+  }, [showColorPicker]);
+
+  const theme = useCustom
+    ? { name: "カスタム", primary: customColor }
+    : themeColors[themeIndex];
+
+  // HSL→HEX変換（S=60%, L=25%で白文字が映える濃色）
+  const hueToHex = useCallback((hue: number) => {
+    const h = hue / 360;
+    const s = 0.6;
+    const l = 0.25;
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const r = Math.round(hue2rgb(p, q, h + 1 / 3) * 255);
+    const g = Math.round(hue2rgb(p, q, h) * 255);
+    const b = Math.round(hue2rgb(p, q, h - 1 / 3) * 255);
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  }, []);
+
+  // バーのクリック/ドラッグで色選択
+  const pickColorFromBar = useCallback(
+    (clientX: number) => {
+      if (!hueBarRef.current) return;
+      const rect = hueBarRef.current.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      setHuePosition(x);
+      setCustomColor(hueToHex(Math.round(x * 360)));
+      setUseCustom(true);
+    },
+    [hueToHex]
+  );
 
   const update = (key: keyof ProfileData, value: string) => {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -163,9 +216,9 @@ export default function ProfileSheetPage() {
                   <Palette className="w-4 h-4" />
                 </button>
                 {showColorPicker && (
-                  <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 p-3 w-56 z-20">
+                  <div ref={colorPickerRef} className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 p-3 w-56 z-20">
                     <p className="text-xs font-bold text-gray-500 mb-2">
-                      テーマカラー
+                      プリセット
                     </p>
                     <div className="grid grid-cols-4 gap-1.5">
                       {themeColors.map((c, i) => (
@@ -173,10 +226,10 @@ export default function ProfileSheetPage() {
                           key={c.name}
                           onClick={() => {
                             setThemeIndex(i);
-                            setShowColorPicker(false);
+                            setUseCustom(false);
                           }}
                           className={`w-10 h-10 rounded-lg border-2 transition-all ${
-                            themeIndex === i
+                            !useCustom && themeIndex === i
                               ? "border-gray-900 scale-110"
                               : "border-transparent hover:scale-105"
                           }`}
@@ -184,6 +237,73 @@ export default function ProfileSheetPage() {
                           title={c.name}
                         />
                       ))}
+                    </div>
+
+                    {/* カスタムカラー: ドラッグ対応色相バー + HEX入力 */}
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <p className="text-xs font-bold text-gray-500 mb-2">
+                        カスタムカラー
+                      </p>
+                      {/* 色相バー（クリック＆ドラッグ対応） */}
+                      <div
+                        ref={hueBarRef}
+                        className="h-7 rounded-lg cursor-pointer relative select-none"
+                        style={{
+                          background:
+                            "linear-gradient(to right, hsl(0,60%,25%), hsl(30,60%,25%), hsl(60,60%,25%), hsl(90,60%,25%), hsl(120,60%,25%), hsl(150,60%,25%), hsl(180,60%,25%), hsl(210,60%,25%), hsl(240,60%,25%), hsl(270,60%,25%), hsl(300,60%,25%), hsl(330,60%,25%), hsl(360,60%,25%))",
+                        }}
+                        onMouseDown={(e) => {
+                          pickColorFromBar(e.clientX);
+                          const onMove = (ev: MouseEvent) => pickColorFromBar(ev.clientX);
+                          const onUp = () => {
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                          };
+                          window.addEventListener("mousemove", onMove);
+                          window.addEventListener("mouseup", onUp);
+                        }}
+                        onTouchStart={(e) => {
+                          pickColorFromBar(e.touches[0].clientX);
+                          const onMove = (ev: TouchEvent) => pickColorFromBar(ev.touches[0].clientX);
+                          const onEnd = () => {
+                            window.removeEventListener("touchmove", onMove);
+                            window.removeEventListener("touchend", onEnd);
+                          };
+                          window.addEventListener("touchmove", onMove);
+                          window.addEventListener("touchend", onEnd);
+                        }}
+                      >
+                        {/* インジケーター */}
+                        {useCustom && (
+                          <div
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-7 rounded border-2 border-white shadow-md pointer-events-none"
+                            style={{
+                              left: `${huePosition * 100}%`,
+                              backgroundColor: customColor,
+                            }}
+                          />
+                        )}
+                      </div>
+                      {/* HEX入力 + プレビュー */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <div
+                          className="w-6 h-6 rounded border border-gray-200 shrink-0"
+                          style={{ backgroundColor: useCustom ? customColor : theme.primary }}
+                        />
+                        <input
+                          type="text"
+                          value={useCustom ? customColor : theme.primary}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (/^#[0-9a-fA-F]{0,6}$/.test(v)) {
+                              setCustomColor(v);
+                              setUseCustom(true);
+                            }
+                          }}
+                          className="flex-1 px-2 py-1 text-xs font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400"
+                          placeholder="#2a2a3e"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
