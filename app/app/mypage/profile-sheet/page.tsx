@@ -32,11 +32,58 @@ const themeColors = [
   { name: "チャコール", primary: "#2d2d2d" },
 ];
 
+const genreOptions = [
+  "金融/生命保険/投資",
+  "コンサル/研修/講師",
+  "営業系/代理店/マッチング",
+  "イベント/企画",
+  "製造/加工/工場",
+  "飲食/BAR/カフェ",
+  "コーチング/ティーチング",
+  "起業・副業準備中",
+  "人材業/人事",
+  "占い/鑑定/スピリチュアル",
+  "インフラ関連",
+  "不動産/住宅関連",
+  "アパレル/コーディネート",
+  "広告/DX/促進",
+  "建築/現場/土木",
+  "AI/IT/SE",
+  "接骨/鍼灸/整体/マッサージ",
+  "福祉/看護",
+  "WEBデザイン/グラフィックデザイン",
+  "士業",
+  "エンタメ/アーティスト",
+  "教育/教室",
+  "カメラマン/動画撮影・編集",
+  "美容/予防/再生",
+  "SNS/メディア/記者",
+  "小売り/卸/物販",
+  "サービス業",
+  "トレーニング/ボディメイク",
+  "各種代行事業",
+  "清掃/メンテ",
+  "医療",
+  "トラベル/海外商品",
+  "オーダーメイド",
+  "生花/製菓",
+  "カウンセリング/ヒーリング",
+  "ウェディング関連",
+  "整備/修理/リメイク",
+  "補助金/サポート",
+  "自然/環境/動物",
+  "運送/倉庫",
+  "リユース/古物",
+  "スポット業務委託",
+  "インフルエンサー/アスリート",
+];
+
 interface ProfileData {
   memberNumber: string;
   nameKanji: string;
   nameFurigana: string;
   nickname: string;
+  genre: string;
   job: string;
   industry: string;
   location: string;
@@ -55,6 +102,7 @@ const initialData: ProfileData = {
   nameKanji: "田中 一郎",
   nameFurigana: "たなか いちろう",
   nickname: "いっちー、たなかさん",
+  genre: "コンサル/研修/講師",
   job: "経営コンサルタント\n（組織変革・事業再建）",
   industry: "コンサル",
   location: "大阪市、東京",
@@ -434,6 +482,23 @@ export default function ProfileSheetPage() {
                   プロフィール
                 </h3>
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      ジャンル
+                    </label>
+                    <select
+                      value={data.genre}
+                      onChange={(e) => update("genre", e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">選択してください</option>
+                      {genreOptions.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">
                       職業

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { Search, ChevronRight, Building2, User } from "lucide-react";
+import { Search, ChevronRight, Building2, User, ChevronDown, X } from "lucide-react";
 import {
   dashboardMembers,
   industryFilters,
@@ -51,6 +51,24 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("全員");
   const [memberTypeFilter, setMemberTypeFilter] = useState<"全て" | "法人" | "個人">("全て");
+  const [genreOpen, setGenreOpen] = useState(false);
+  const [genreSearch, setGenreSearch] = useState("");
+  const genreRef = useRef<HTMLDivElement>(null);
+
+  // ドロップダウン外クリックで閉じる
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (genreRef.current && !genreRef.current.contains(e.target as Node)) {
+        setGenreOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const filteredGenres = industryFilters.filter(
+    (g) => g === "全員" || g.includes(genreSearch)
+  );
 
   const filtered = dashboardMembers.filter((m) => {
     const matchesSearch =
@@ -90,23 +108,69 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* フィルタータグ */}
+          {/* フィルター */}
           <div className="flex items-center gap-3 mt-4">
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1">
-              {industryFilters.map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setActiveFilter(filter)}
-                  className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    activeFilter === filter
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  {filter}
-                </button>
-              ))}
+            {/* ジャンルドロップダウン */}
+            <div ref={genreRef} className="relative flex-1">
+              <button
+                onClick={() => { setGenreOpen(!genreOpen); setGenreSearch(""); }}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto ${
+                  activeFilter !== "全員"
+                    ? "bg-gray-900 text-white"
+                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span className="truncate">{activeFilter === "全員" ? "ジャンルで絞り込み" : activeFilter}</span>
+                {activeFilter !== "全員" ? (
+                  <X
+                    className="w-3.5 h-3.5 flex-shrink-0 hover:opacity-70"
+                    onClick={(e) => { e.stopPropagation(); setActiveFilter("全員"); setGenreOpen(false); }}
+                  />
+                ) : (
+                  <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${genreOpen ? "rotate-180" : ""}`} />
+                )}
+              </button>
+
+              {genreOpen && (
+                <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl border border-gray-200 shadow-lg z-20 overflow-hidden">
+                  {/* 検索入力 */}
+                  <div className="p-2 border-b border-gray-100">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="ジャンルを検索..."
+                        value={genreSearch}
+                        onChange={(e) => setGenreSearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  {/* ジャンルリスト */}
+                  <div className="max-h-60 overflow-y-auto py-1">
+                    {filteredGenres.map((genre) => (
+                      <button
+                        key={genre}
+                        onClick={() => { setActiveFilter(genre); setGenreOpen(false); }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                          activeFilter === genre
+                            ? "bg-gray-900 text-white"
+                            : "text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {genre}
+                      </button>
+                    ))}
+                    {filteredGenres.length === 0 && (
+                      <p className="px-4 py-3 text-sm text-gray-400 text-center">該当なし</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
+
             {/* 法人/個人フィルタ */}
             <div className="flex gap-1 flex-shrink-0 border-l border-gray-200 pl-3">
               {(["全て", "法人", "個人"] as const).map((type) => (
