@@ -1,11 +1,14 @@
-import type { Participant, Series, Event } from "./types";
+import type { MyProfile, Series, Event } from "./types";
 
 // --- 自分のプロフィール（主催者として使用） ---
-export const myProfile: Participant = {
+export const myProfile: MyProfile = {
   id: "1",
   name: "田中 一郎",
   photoUrl:
     "https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face",
+  company: "株式会社田中商事",
+  position: "代表取締役",
+  bio: "大阪で食品卸売業を営んでいます。異業種交流を通じて新しいビジネスチャンスを探しています。",
 };
 
 // --- シリーズモックデータ ---

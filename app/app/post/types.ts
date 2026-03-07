@@ -8,6 +8,12 @@ export interface Participant {
   role?: ParticipantRole;
 }
 
+export interface MyProfile extends Participant {
+  company: string;
+  position: string;
+  bio: string;
+}
+
 export interface PendingParticipant extends Participant {
   appliedAt: string;
   message?: string;

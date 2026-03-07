@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Users,
   CalendarDays,
   MapPin,
   X,
+  Search,
+  ChevronDown,
 } from "lucide-react";
 
 // --- Mock: メンバー一覧（簡易） ---
@@ -187,12 +189,56 @@ function heatColor(count: number): string {
   return "bg-amber-300 text-amber-900 font-bold";
 }
 
+const MAX_MATRIX_MEMBERS = 10;
+
 export default function MembersAdminPage() {
   const [selectedPair, setSelectedPair] = useState<{
     a: (typeof allMembers)[number];
     b: (typeof allMembers)[number];
     meetings: Meeting[];
   } | null>(null);
+
+  // マトリクスに表示するメンバーの選択（初期は先頭10人）
+  const [matrixMemberIds, setMatrixMemberIds] = useState<Set<string>>(
+    new Set(allMembers.slice(0, MAX_MATRIX_MEMBERS).map((m) => m.id))
+  );
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const pickerInputRef = useRef<HTMLInputElement>(null);
+
+  // ポップオーバー外クリックで閉じる
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+        setPickerSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const matrixMembers = allMembers.filter((m) => matrixMemberIds.has(m.id));
+
+  const toggleMember = (id: string) => {
+    setMatrixMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < MAX_MATRIX_MEMBERS) {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // ポップオーバー内の検索フィルタ
+  const pickerResults = allMembers.filter((m) => {
+    if (!pickerSearch) return true;
+    const q = pickerSearch.toLowerCase();
+    return m.name.toLowerCase().includes(q) || m.short.toLowerCase().includes(q);
+  });
 
   const countMap = buildMeetingCountMap();
 
@@ -250,74 +296,195 @@ export default function MembersAdminPage() {
         </div>
 
         {/* Matrix */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-8 overflow-x-auto">
-          <h2 className="text-base font-bold text-gray-900 mb-4">交流マトリクス</h2>
-          <p className="text-xs text-gray-400 mb-4">セルをクリックすると詳細を表示します</p>
-          <table className="w-full border-collapse min-w-[600px]">
-            <thead>
-              <tr>
-                <th className="p-1.5 text-[10px] text-gray-400 font-medium w-16" />
-                {allMembers.map((m) => (
-                  <th key={m.id} className="p-1 text-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <img
-                        src={m.photoUrl}
-                        alt={m.short}
-                        className="w-7 h-7 rounded-full object-cover"
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-bold text-gray-900">交流マトリクス</h2>
+            {/* コンパクトサマリー + 変更ボタン */}
+            <div className="relative" ref={pickerRef}>
+              <button
+                onClick={() => {
+                  setShowPicker(!showPicker);
+                  if (!showPicker) setTimeout(() => pickerInputRef.current?.focus(), 100);
+                }}
+                className="flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-lg hover:bg-gray-50 transition-colors group"
+              >
+                <div className="flex -space-x-1.5">
+                  {matrixMembers.slice(0, 5).map((m) => (
+                    <img
+                      key={m.id}
+                      src={m.photoUrl}
+                      alt={m.short}
+                      className="w-6 h-6 rounded-full object-cover border-2 border-white"
+                    />
+                  ))}
+                  {matrixMembers.length > 5 && (
+                    <span className="w-6 h-6 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-[9px] font-bold text-gray-500">
+                      +{matrixMembers.length - 5}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors">
+                  {matrixMemberIds.size}人
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showPicker ? "rotate-180" : ""}`} />
+              </button>
+
+              {/* ポップオーバー */}
+              {showPicker && (
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-20">
+                  {/* 検索 */}
+                  <div className="p-3 border-b border-gray-100">
+                    <div className="flex items-center gap-2 px-2.5 py-2 bg-gray-50 rounded-lg">
+                      <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <input
+                        ref={pickerInputRef}
+                        type="text"
+                        value={pickerSearch}
+                        onChange={(e) => setPickerSearch(e.target.value)}
+                        placeholder="名前で検索..."
+                        className="flex-1 bg-transparent text-sm outline-none placeholder-gray-400"
                       />
-                      <span className="text-[10px] text-gray-500 font-medium leading-tight">
-                        {m.short}
-                      </span>
+                      {pickerSearch && (
+                        <button onClick={() => setPickerSearch("")} className="p-0.5 text-gray-400 hover:text-gray-600">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {allMembers.map((row) => (
-                <tr key={row.id}>
-                  <td className="p-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <img
-                        src={row.photoUrl}
-                        alt={row.short}
-                        className="w-7 h-7 rounded-full object-cover"
-                      />
-                      <span className="text-[10px] text-gray-600 font-medium whitespace-nowrap">
-                        {row.short}
-                      </span>
-                    </div>
-                  </td>
-                  {allMembers.map((col) => {
-                    if (row.id === col.id) {
+                    <p className="text-[10px] text-gray-400 mt-2 px-0.5">
+                      {matrixMemberIds.size}/{MAX_MATRIX_MEMBERS}人選択中
+                    </p>
+                  </div>
+                  {/* メンバーリスト */}
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    {pickerResults.length > 0 ? pickerResults.map((m) => {
+                      const isSelected = matrixMemberIds.has(m.id);
+                      const isDisabled = !isSelected && matrixMemberIds.size >= MAX_MATRIX_MEMBERS;
                       return (
-                        <td key={col.id} className="p-1">
-                          <div className="w-full aspect-square rounded-lg bg-gray-100 flex items-center justify-center">
-                            <span className="text-[10px] text-gray-300">-</span>
-                          </div>
-                        </td>
-                      );
-                    }
-                    const count = countMap.get(pairKey(row.id, col.id)) || 0;
-                    return (
-                      <td key={col.id} className="p-1">
                         <button
-                          onClick={() => count > 0 && handleCellClick(row, col)}
-                          className={`w-full aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-all ${heatColor(count)} ${
-                            count > 0
-                              ? "cursor-pointer hover:ring-2 hover:ring-amber-400 hover:shadow-sm"
-                              : "cursor-default"
+                          key={m.id}
+                          onClick={() => !isDisabled && toggleMember(m.id)}
+                          disabled={isDisabled}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
+                            isDisabled
+                              ? "opacity-40 cursor-not-allowed"
+                              : "hover:bg-gray-50"
                           }`}
                         >
-                          {count || ""}
+                          <img
+                            src={m.photoUrl}
+                            alt={m.name}
+                            className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                          />
+                          <span className="text-sm text-gray-900 flex-1 truncate">{m.name}</span>
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+                            isSelected
+                              ? "bg-amber-500 border-amber-500"
+                              : "border-gray-300"
+                          }`}>
+                            {isSelected && (
+                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
                         </button>
+                      );
+                    }) : (
+                      <p className="px-3 py-4 text-xs text-gray-400 text-center">
+                        該当するメンバーがいません
+                      </p>
+                    )}
+                  </div>
+                  {/* フッター */}
+                  <div className="border-t border-gray-100 px-3 py-2.5 flex justify-end">
+                    <button
+                      onClick={() => { setShowPicker(false); setPickerSearch(""); }}
+                      className="px-3 py-1.5 text-xs font-bold text-gray-900 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      完了
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-400 mb-4">セルをクリックすると詳細を表示します</p>
+
+          {matrixMembers.length >= 2 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse min-w-[400px]">
+                <thead>
+                  <tr>
+                    <th className="p-1.5 text-[10px] text-gray-400 font-medium w-16" />
+                    {matrixMembers.map((m) => (
+                      <th key={m.id} className="p-1 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <img
+                            src={m.photoUrl}
+                            alt={m.short}
+                            className="w-7 h-7 rounded-full object-cover"
+                          />
+                          <span className="text-[10px] text-gray-500 font-medium leading-tight">
+                            {m.short}
+                          </span>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrixMembers.map((row) => (
+                    <tr key={row.id}>
+                      <td className="p-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <img
+                            src={row.photoUrl}
+                            alt={row.short}
+                            className="w-7 h-7 rounded-full object-cover"
+                          />
+                          <span className="text-[10px] text-gray-600 font-medium whitespace-nowrap">
+                            {row.short}
+                          </span>
+                        </div>
                       </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      {matrixMembers.map((col) => {
+                        if (row.id === col.id) {
+                          return (
+                            <td key={col.id} className="p-1">
+                              <div className="w-full aspect-square rounded-lg bg-gray-100 flex items-center justify-center">
+                                <span className="text-[10px] text-gray-300">-</span>
+                              </div>
+                            </td>
+                          );
+                        }
+                        const count = countMap.get(pairKey(row.id, col.id)) || 0;
+                        return (
+                          <td key={col.id} className="p-1">
+                            <button
+                              onClick={() => count > 0 && handleCellClick(row, col)}
+                              className={`w-full aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-all ${heatColor(count)} ${
+                                count > 0
+                                  ? "cursor-pointer hover:ring-2 hover:ring-amber-400 hover:shadow-sm"
+                                  : "cursor-default"
+                              }`}
+                            >
+                              {count || ""}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">2人以上のメンバーを選択してください</p>
+            </div>
+          )}
 
           {/* Legend */}
           <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-100">

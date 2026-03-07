@@ -7,11 +7,12 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import type { Event, ParticipantRole, ToastMessage } from "./types";
+import type { Event, MyProfile, ParticipantRole, ToastMessage } from "./types";
 import { myProfile, seriesList, initialEvents } from "./data";
 import EventCard from "./components/EventCard";
 import CreateForm from "./components/CreateForm";
 import ManagePanel from "./components/ManagePanel";
+import JoinModal from "./components/JoinModal";
 import HostSummary from "./components/HostSummary";
 import Toast from "./components/Toast";
 
@@ -48,6 +49,8 @@ export default function PostPage() {
   const [followedSeriesIds, setFollowedSeriesIds] = useState<Set<string>>(
     new Set(["s1"])
   );
+  const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
+  const [currentProfile, setCurrentProfile] = useState<MyProfile>(myProfile);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   // トースト通知
@@ -104,32 +107,40 @@ export default function PostPage() {
     setSelectedDate(null);
   };
 
-  const toggleJoin = (eventId: string) => {
-    setJoinedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(eventId)) {
+  // 参加ボタン: 未参加→モーダル表示、参加済み→直接取り消し
+  const handleJoinClick = (eventId: string) => {
+    if (joinedIds.has(eventId)) {
+      setJoinedIds((prev) => {
+        const next = new Set(prev);
         next.delete(eventId);
-        addToast("参加を取り消しました", "info");
-      } else {
-        next.add(eventId);
-        addToast("参加しました");
-      }
-      return next;
-    });
+        return next;
+      });
+      addToast("参加を取り消しました", "info");
+    } else {
+      setJoiningEventId(eventId);
+    }
+  };
+
+  // モーダルから参加確定
+  const confirmJoin = (eventId: string, comment: string, editedProfile: MyProfile) => {
+    setCurrentProfile(editedProfile);
+    setJoinedIds((prev) => new Set(prev).add(eventId));
+    setJoiningEventId(null);
+    addToast("参加を申請しました");
   };
 
   const toggleFollowSeries = (seriesId: string) => {
+    const wasFollowed = followedSeriesIds.has(seriesId);
     setFollowedSeriesIds((prev) => {
       const next = new Set(prev);
       if (next.has(seriesId)) {
         next.delete(seriesId);
-        addToast("フォローを解除しました", "info");
       } else {
         next.add(seriesId);
-        addToast("シリーズをフォローしました");
       }
       return next;
     });
+    addToast(wasFollowed ? "フォローを解除しました" : "シリーズをフォローしました", wasFollowed ? "info" : "success");
   };
 
   // 参加申請を承認
@@ -443,7 +454,7 @@ export default function PostPage() {
             {/* 作成フォーム */}
             {showCreate && (
               <CreateForm
-                myProfile={myProfile}
+                myProfile={currentProfile}
                 seriesList={seriesList}
                 onClose={() => setShowCreate(false)}
                 onCreate={handleCreate}
@@ -480,7 +491,7 @@ export default function PostPage() {
                     followedSeriesIds={followedSeriesIds}
                     managingEventId={managingEventId}
                     allEvents={events}
-                    onToggleJoin={toggleJoin}
+                    onToggleJoin={handleJoinClick}
                     onSetManagingEventId={setManagingEventId}
                     onToggleFollowSeries={toggleFollowSeries}
                   />
@@ -516,6 +527,20 @@ export default function PostPage() {
             onTransferOwnership={transferOwnership}
             onEditEvent={editEvent}
             onDeleteEvent={deleteEvent}
+          />
+        );
+      })()}
+
+      {/* 参加申請モーダル */}
+      {joiningEventId && (() => {
+        const joiningEvent = events.find((e) => e.id === joiningEventId);
+        if (!joiningEvent) return null;
+        return (
+          <JoinModal
+            event={joiningEvent}
+            profile={currentProfile}
+            onClose={() => setJoiningEventId(null)}
+            onConfirm={confirmJoin}
           />
         );
       })()}

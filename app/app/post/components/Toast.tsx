@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Check, X, Info } from "lucide-react";
 import type { ToastMessage } from "../types";
 
@@ -26,10 +26,13 @@ function ToastItem({
   toast: ToastMessage;
   onRemove: (id: string) => void;
 }) {
+  const onRemoveRef = useRef(onRemove);
+  onRemoveRef.current = onRemove;
+
   useEffect(() => {
-    const timer = setTimeout(() => onRemove(toast.id), 3000);
+    const timer = setTimeout(() => onRemoveRef.current(toast.id), 3000);
     return () => clearTimeout(timer);
-  }, [toast.id, onRemove]);
+  }, [toast.id]);
 
   const styles = {
     success: "bg-green-600 text-white",
@@ -45,7 +48,7 @@ function ToastItem({
 
   return (
     <div
-      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium animate-in slide-in-from-right ${styles[toast.type]}`}
+      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium ${styles[toast.type]}`}
     >
       {icons[toast.type]}
       {toast.text}
