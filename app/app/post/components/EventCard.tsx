@@ -15,8 +15,7 @@ import {
   ChevronUp,
   AlertCircle,
 } from "lucide-react";
-import type { Event, Series, ParticipantRole } from "../types";
-import ManagePanel from "./ManagePanel";
+import type { Event, Series } from "../types";
 
 interface EventCardProps {
   event: Event;
@@ -28,18 +27,6 @@ interface EventCardProps {
   onToggleJoin: (eventId: string) => void;
   onSetManagingEventId: (id: string | null) => void;
   onToggleFollowSeries: (seriesId: string) => void;
-  onApprove: (eventId: string, participantId: string) => void;
-  onReject: (eventId: string, participantId: string) => void;
-  onApproveAll: (eventId: string) => void;
-  onRemove: (eventId: string, participantId: string) => void;
-  onChangeRole: (
-    eventId: string,
-    participantId: string,
-    role: ParticipantRole
-  ) => void;
-  onTransferOwnership: (eventId: string, newOwnerId: string) => void;
-  onEditEvent: (eventId: string, updates: Partial<Event>) => void;
-  onDeleteEvent: (eventId: string) => void;
 }
 
 export default function EventCard({
@@ -52,14 +39,6 @@ export default function EventCard({
   onToggleJoin,
   onSetManagingEventId,
   onToggleFollowSeries,
-  onApprove,
-  onReject,
-  onApproveAll,
-  onRemove,
-  onChangeRole,
-  onTransferOwnership,
-  onEditEvent,
-  onDeleteEvent,
 }: EventCardProps) {
   const [expandedSeries, setExpandedSeries] = useState(false);
 
@@ -322,21 +301,6 @@ export default function EventCard({
         </div>
       </div>
 
-      {/* 管理パネル */}
-      {event.isHost && isManaging && (
-        <ManagePanel
-          event={event}
-          onClose={() => onSetManagingEventId(null)}
-          onApprove={onApprove}
-          onReject={onReject}
-          onApproveAll={onApproveAll}
-          onRemove={onRemove}
-          onChangeRole={onChangeRole}
-          onTransferOwnership={onTransferOwnership}
-          onEditEvent={onEditEvent}
-          onDeleteEvent={onDeleteEvent}
-        />
-      )}
     </div>
   );
 }

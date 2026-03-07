@@ -11,6 +11,7 @@ import type { Event, ParticipantRole, ToastMessage } from "./types";
 import { myProfile, seriesList, initialEvents } from "./data";
 import EventCard from "./components/EventCard";
 import CreateForm from "./components/CreateForm";
+import ManagePanel from "./components/ManagePanel";
 import HostSummary from "./components/HostSummary";
 import Toast from "./components/Toast";
 
@@ -482,14 +483,6 @@ export default function PostPage() {
                     onToggleJoin={toggleJoin}
                     onSetManagingEventId={setManagingEventId}
                     onToggleFollowSeries={toggleFollowSeries}
-                    onApprove={approveParticipant}
-                    onReject={rejectParticipant}
-                    onApproveAll={approveAllParticipants}
-                    onRemove={removeParticipant}
-                    onChangeRole={changeRole}
-                    onTransferOwnership={transferOwnership}
-                    onEditEvent={editEvent}
-                    onDeleteEvent={deleteEvent}
                   />
                 ))}
               </div>
@@ -506,6 +499,26 @@ export default function PostPage() {
           </div>
         </div>
       </div>
+
+      {/* 管理モーダル */}
+      {managingEventId && (() => {
+        const managingEvent = events.find((e) => e.id === managingEventId);
+        if (!managingEvent) return null;
+        return (
+          <ManagePanel
+            event={managingEvent}
+            onClose={() => setManagingEventId(null)}
+            onApprove={approveParticipant}
+            onReject={rejectParticipant}
+            onApproveAll={approveAllParticipants}
+            onRemove={removeParticipant}
+            onChangeRole={changeRole}
+            onTransferOwnership={transferOwnership}
+            onEditEvent={editEvent}
+            onDeleteEvent={deleteEvent}
+          />
+        );
+      })()}
 
       {/* トースト通知 */}
       <Toast toasts={toasts} onRemove={removeToast} />

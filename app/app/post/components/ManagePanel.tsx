@@ -76,10 +76,37 @@ export default function ManagePanel({
     event.capacity !== null && event.participants.length >= event.capacity;
 
   return (
-    <div className="mt-4 pt-4 border-t border-gray-200">
-      {/* タブ切り替え */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      {/* オーバーレイ */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* モーダル本体 */}
+      <div className="relative w-full sm:max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-5 sm:p-6">
+        {/* ヘッダー */}
+        <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+          <img
+            src={event.organizer.photoUrl}
+            alt={event.organizer.name}
+            className="w-8 h-8 rounded-full object-cover border-2 border-white shadow"
+          />
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold text-gray-900 truncate">{event.title}</h3>
+            <p className="text-[11px] text-gray-400">{event.date} {event.time}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        {/* タブ切り替え */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
           <button
             onClick={() => setTab("participants")}
             className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${
@@ -119,12 +146,6 @@ export default function ManagePanel({
             </button>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
-        >
-          <X className="w-4 h-4 text-gray-400" />
-        </button>
       </div>
 
       {/* 参加者タブ */}
@@ -560,6 +581,7 @@ export default function ManagePanel({
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
