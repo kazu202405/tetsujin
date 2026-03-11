@@ -130,6 +130,23 @@ export default function ProfileSheetPage() {
   const hueBarRef = useRef<HTMLDivElement>(null);
   const colorPickerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const cardWrapperRef = useRef<HTMLDivElement>(null);
+  const [cardScale, setCardScale] = useState(1);
+
+  // カード表示をビューポート幅に合わせてスケーリング
+  useEffect(() => {
+    const wrapper = cardWrapperRef.current;
+    if (!wrapper) return;
+    const updateScale = () => {
+      const availableWidth = wrapper.clientWidth;
+      const scale = Math.min(1, availableWidth / 595);
+      setCardScale(scale);
+    };
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, [mode]);
 
   // 外側クリックでカラーピッカーを閉じる
   useEffect(() => {
@@ -626,15 +643,28 @@ export default function ProfileSheetPage() {
 
           {/* ===== プレビューカード（A4サイズ 595×842px @72dpi） ===== */}
           <div
+            ref={cardWrapperRef}
             className={
               mode === "edit" ? "" : "col-span-full flex justify-center"
             }
           >
             <div
-              ref={cardRef}
-              className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
-              style={{ width: 595, height: 842 }}
+              style={{
+                width: 595 * cardScale,
+                height: 842 * cardScale,
+                overflow: "hidden",
+              }}
             >
+              <div
+                ref={cardRef}
+                className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
+                style={{
+                  width: 595,
+                  height: 842,
+                  transform: `scale(${cardScale})`,
+                  transformOrigin: "top left",
+                }}
+              >
               {/* メインコンテンツ: 左右2カラム */}
               <div className="flex flex-1 min-h-0">
                 {/* ===== 左カラム ===== */}
@@ -774,6 +804,7 @@ export default function ProfileSheetPage() {
                   )}
                 </div>
               )}
+              </div>
             </div>
           </div>
         </div>
