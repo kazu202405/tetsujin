@@ -357,6 +357,7 @@ export default function BoardPage() {
   const [replyTarget, setReplyTarget] = useState<{ commentId: string; authorName: string } | null>(null);
   const [replyText, setReplyText] = useState("");
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
+  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
   // 新規追加フォーム
   const [newChName, setNewChName] = useState("");
@@ -378,6 +379,18 @@ export default function BoardPage() {
   const updateChannels = useCallback((next: ChannelData[]) => {
     setChannels(next);
     saveChannels(next);
+  }, []);
+
+  // @メンション部分をハイライト表示
+  const renderMentionText = useCallback((text: string) => {
+    const parts = text.split(/(@\S+)/g);
+    return parts.map((part, i) =>
+      part.startsWith("@") ? (
+        <span key={i} className="text-amber-600 font-bold">{part}</span>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
   }, []);
 
   const channelPosts = useMemo(
@@ -451,6 +464,27 @@ export default function BoardPage() {
       prev.map((p) => (p.id === postId ? { ...p, comments: p.comments + 1 } : p))
     );
     setNewComment("");
+  };
+
+  // コメント追加（スレッド非展開時、入力欄から直接）
+  const handleAddCommentDirect = (postId: string) => {
+    const text = (commentInputs[postId] ?? "").trim();
+    if (!text) return;
+    const comment: Comment = {
+      id: `c${Date.now()}`,
+      author: currentUser,
+      content: text,
+      postedAt: new Date().toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(/\//g, "-"),
+      replies: [],
+    };
+    setCommentsMap((prev) => ({
+      ...prev,
+      [postId]: [...(prev[postId] ?? []), comment],
+    }));
+    setPosts((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, comments: p.comments + 1 } : p))
+    );
+    setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
   };
 
   // 返信追加
@@ -854,189 +888,216 @@ export default function BoardPage() {
                         </button>
                       </div>
 
-                      {/* 返信テキストリンク */}
-                      {post.comments > 0 && expandedPostId !== post.id && (
-                        <button
-                          onClick={() => toggleComments(post.id)}
-                          className="mt-2 text-xs text-gray-400 hover:text-amber-600 transition-colors"
-                        >
-                          返信 {post.comments}件を表示
-                        </button>
-                      )}
-                      {expandedPostId === post.id && (
-                        <button
-                          onClick={() => toggleComments(post.id)}
-                          className="mt-2 text-xs text-amber-600 hover:text-amber-700 transition-colors"
-                        >
-                          返信を閉じる
-                        </button>
-                      )}
-
-                      {/* コメントスレッド */}
-                      {expandedPostId === post.id && (
-                        <div className="mt-4 pt-4 border-t border-gray-100">
-                          {/* コメント一覧 */}
-                          <div className="space-y-3">
-                            {(commentsMap[post.id] ?? []).map((comment) => (
-                              <div key={comment.id}>
-                                {/* 親コメント */}
-                                <div className="flex gap-2.5">
-                                  <Link href={`/app/profile/${comment.author.id}`}>
-                                    <img
-                                      src={comment.author.photoUrl}
-                                      alt={comment.author.name}
-                                      className="w-7 h-7 rounded-full object-cover border border-gray-200 flex-shrink-0 hover:ring-2 hover:ring-amber-300 transition-all"
-                                    />
-                                  </Link>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="bg-gray-50 rounded-xl px-3 py-2">
-                                      <div className="flex items-center gap-1.5 mb-0.5">
-                                        <Link
-                                          href={`/app/profile/${comment.author.id}`}
-                                          className="text-xs font-bold text-gray-800 hover:text-amber-700 transition-colors"
-                                        >
-                                          {comment.author.name}
-                                        </Link>
-                                        <span className="text-[10px] text-gray-400">{comment.author.roleTitle}</span>
-                                      </div>
-                                      <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{comment.content}</p>
-                                    </div>
-                                    <div className="flex items-center gap-3 mt-1 ml-1">
-                                      <span className="text-[10px] text-gray-300">{comment.postedAt}</span>
-                                      <button
-                                        onClick={() => {
-                                          if (replyTarget?.commentId === comment.id) {
-                                            setReplyTarget(null);
-                                            setReplyText("");
-                                          } else {
-                                            setReplyTarget({ commentId: comment.id, authorName: comment.author.name });
-                                            setReplyText("");
-                                            // 返信入力を開いたら返信一覧も展開
-                                            setExpandedReplies((prev) => new Set(prev).add(comment.id));
-                                          }
-                                        }}
-                                        className={`inline-flex items-center gap-1 text-[10px] font-medium transition-colors ${
-                                          replyTarget?.commentId === comment.id
-                                            ? "text-amber-600"
-                                            : "text-gray-400 hover:text-gray-600"
-                                        }`}
-                                      >
-                                        返信{comment.replies.length > 0 && ` ${comment.replies.length}件`}
-                                      </button>
-                                    </div>
-
-                                    {/* 返信一覧（折りたたみ） */}
-                                    {comment.replies.length > 0 && !expandedReplies.has(comment.id) && (
-                                      <button
-                                        onClick={() => setExpandedReplies((prev) => new Set(prev).add(comment.id))}
-                                        className="mt-1.5 ml-2 inline-flex items-center gap-1.5 text-[11px] text-amber-600 hover:text-amber-700 font-medium transition-colors"
-                                      >
-                                        <CornerDownRight className="w-3 h-3" />
-                                        返信 {comment.replies.length}件を表示
-                                      </button>
-                                    )}
-                                    {comment.replies.length > 0 && expandedReplies.has(comment.id) && (
-                                      <div className="mt-2 space-y-2 ml-2">
-                                        {comment.replies.map((reply) => (
-                                          <div key={reply.id} className="flex gap-2">
-                                            <CornerDownRight className="w-3 h-3 text-gray-300 flex-shrink-0 mt-2" />
-                                            <Link href={`/app/profile/${reply.author.id}`}>
-                                              <img
-                                                src={reply.author.photoUrl}
-                                                alt={reply.author.name}
-                                                className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0 hover:ring-2 hover:ring-amber-300 transition-all"
-                                              />
-                                            </Link>
-                                            <div className="flex-1 min-w-0">
-                                              <div className="bg-gray-50/70 rounded-lg px-2.5 py-1.5">
-                                                <div className="flex items-center gap-1.5 mb-0.5">
-                                                  <Link
-                                                    href={`/app/profile/${reply.author.id}`}
-                                                    className="text-[11px] font-bold text-gray-800 hover:text-amber-700 transition-colors"
-                                                  >
-                                                    {reply.author.name}
-                                                  </Link>
-                                                  <span className="text-[10px] text-gray-400">{reply.author.roleTitle}</span>
-                                                </div>
-                                                <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{reply.content}</p>
-                                              </div>
-                                              <span className="text-[10px] text-gray-300 ml-1 mt-0.5 block">{reply.postedAt}</span>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-
-                                    {/* 返信入力欄 */}
-                                    {replyTarget?.commentId === comment.id && (
-                                      <div className="mt-2 ml-2 flex gap-2 items-start">
-                                        <CornerDownRight className="w-3 h-3 text-gray-300 flex-shrink-0 mt-2.5" />
-                                        <img
-                                          src={currentUser.photoUrl}
-                                          alt=""
-                                          className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0 mt-0.5"
-                                        />
-                                        <div className="flex-1 flex gap-1.5">
-                                          <input
-                                            value={replyText}
-                                            onChange={(e) => setReplyText(e.target.value)}
-                                            onKeyDown={(e) => {
-                                              if (e.key === "Enter" && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleAddReply(post.id, comment.id);
-                                              }
-                                            }}
-                                            placeholder={`${replyTarget.authorName}さんに返信...`}
-                                            className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
-                                            autoFocus
+                      {/* コメントスレッド（展開式） */}
+                      {post.comments > 0 && (
+                        <div className="mt-3">
+                          {expandedPostId !== post.id ? (
+                            <button
+                              onClick={() => toggleComments(post.id)}
+                              className="text-xs text-gray-400 hover:text-amber-600 transition-colors"
+                            >
+                              コメント {post.comments}件を表示
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => toggleComments(post.id)}
+                                className="text-xs text-amber-600 hover:text-amber-700 transition-colors mb-3"
+                              >
+                                コメントを閉じる
+                              </button>
+                              <div className="pt-3 border-t border-gray-100">
+                                <div className="space-y-3">
+                                  {(commentsMap[post.id] ?? []).map((comment) => (
+                                    <div key={comment.id}>
+                                      {/* 親コメント */}
+                                      <div className="flex gap-2.5">
+                                        <Link href={`/app/profile/${comment.author.id}`}>
+                                          <img
+                                            src={comment.author.photoUrl}
+                                            alt={comment.author.name}
+                                            className="w-7 h-7 rounded-full object-cover border border-gray-200 flex-shrink-0 hover:ring-2 hover:ring-amber-300 transition-all"
                                           />
-                                          <button
-                                            onClick={() => handleAddReply(post.id, comment.id)}
-                                            disabled={!replyText.trim()}
-                                            className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30"
-                                          >
-                                            <Send className="w-3.5 h-3.5" />
-                                          </button>
+                                        </Link>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="bg-gray-50 rounded-xl px-3 py-2">
+                                            <div className="flex items-center gap-1.5 mb-0.5">
+                                              <Link
+                                                href={`/app/profile/${comment.author.id}`}
+                                                className="text-xs font-bold text-gray-800 hover:text-amber-700 transition-colors"
+                                              >
+                                                {comment.author.name}
+                                              </Link>
+                                              <span className="text-[10px] text-gray-400">{comment.author.roleTitle}</span>
+                                            </div>
+                                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{comment.content}</p>
+                                          </div>
+                                          <div className="flex items-center gap-3 mt-1 ml-1">
+                                            <span className="text-[10px] text-gray-300">{comment.postedAt}</span>
+                                            <button
+                                              onClick={() => {
+                                                if (replyTarget?.commentId === comment.id) {
+                                                  setReplyTarget(null);
+                                                  setReplyText("");
+                                                } else {
+                                                  setReplyTarget({ commentId: comment.id, authorName: comment.author.name });
+                                                  setReplyText(`@${comment.author.name} `);
+                                                  setExpandedReplies((prev) => new Set(prev).add(comment.id));
+                                                }
+                                              }}
+                                              className={`inline-flex items-center gap-1 text-[10px] font-medium transition-colors ${
+                                                replyTarget?.commentId === comment.id
+                                                  ? "text-amber-600"
+                                                  : "text-gray-400 hover:text-gray-600"
+                                              }`}
+                                            >
+                                              返信{comment.replies.length > 0 && ` ${comment.replies.length}件`}
+                                            </button>
+                                          </div>
+
+                                          {/* 返信一覧（折りたたみ） */}
+                                          {comment.replies.length > 0 && !expandedReplies.has(comment.id) && (
+                                            <button
+                                              onClick={() => setExpandedReplies((prev) => new Set(prev).add(comment.id))}
+                                              className="mt-1.5 ml-2 inline-flex items-center gap-1.5 text-[11px] text-amber-600 hover:text-amber-700 font-medium transition-colors"
+                                            >
+                                              <CornerDownRight className="w-3 h-3" />
+                                              返信 {comment.replies.length}件を表示
+                                            </button>
+                                          )}
+                                          {comment.replies.length > 0 && expandedReplies.has(comment.id) && (
+                                            <div className="mt-2 space-y-2 ml-2">
+                                              {comment.replies.map((reply) => (
+                                                <div key={reply.id} className="flex gap-2">
+                                                  <CornerDownRight className="w-3 h-3 text-gray-300 flex-shrink-0 mt-2" />
+                                                  <Link href={`/app/profile/${reply.author.id}`}>
+                                                    <img
+                                                      src={reply.author.photoUrl}
+                                                      alt={reply.author.name}
+                                                      className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0 hover:ring-2 hover:ring-amber-300 transition-all"
+                                                    />
+                                                  </Link>
+                                                  <div className="flex-1 min-w-0">
+                                                    <div className="bg-gray-50/70 rounded-lg px-2.5 py-1.5">
+                                                      <div className="flex items-center gap-1.5 mb-0.5">
+                                                        <Link
+                                                          href={`/app/profile/${reply.author.id}`}
+                                                          className="text-[11px] font-bold text-gray-800 hover:text-amber-700 transition-colors"
+                                                        >
+                                                          {reply.author.name}
+                                                        </Link>
+                                                        <span className="text-[10px] text-gray-400">{reply.author.roleTitle}</span>
+                                                      </div>
+                                                      <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{renderMentionText(reply.content)}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 mt-0.5 ml-1">
+                                                      <span className="text-[10px] text-gray-300">{reply.postedAt}</span>
+                                                      <button
+                                                        onClick={() => {
+                                                          setReplyTarget({ commentId: comment.id, authorName: reply.author.name });
+                                                          setReplyText(`@${reply.author.name} `);
+                                                          setExpandedReplies((prev) => new Set(prev).add(comment.id));
+                                                        }}
+                                                        className="text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-colors"
+                                                      >
+                                                        返信
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+
+                                          {/* 返信入力欄 */}
+                                          {replyTarget?.commentId === comment.id && (
+                                            <div className="mt-2 ml-2 flex gap-2 items-start">
+                                              <CornerDownRight className="w-3 h-3 text-gray-300 flex-shrink-0 mt-2.5" />
+                                              <img
+                                                src={currentUser.photoUrl}
+                                                alt=""
+                                                className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0 mt-0.5"
+                                              />
+                                              <div className="flex-1 flex gap-1.5">
+                                                <input
+                                                  value={replyText}
+                                                  onChange={(e) => setReplyText(e.target.value)}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === "Enter" && !e.shiftKey) {
+                                                      e.preventDefault();
+                                                      handleAddReply(post.id, comment.id);
+                                                    }
+                                                  }}
+                                                  placeholder={`${replyTarget.authorName}さんに返信...`}
+                                                  className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
+                                                  autoFocus
+                                                />
+                                                <button
+                                                  onClick={() => handleAddReply(post.id, comment.id)}
+                                                  disabled={!replyText.trim()}
+                                                  className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30"
+                                                >
+                                                  <Send className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
-                                    )}
-                                  </div>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
-                            ))}
-                          </div>
-
-                          {/* 新規コメント入力 */}
-                          <div className="mt-3 flex gap-2.5 items-start">
-                            <img
-                              src={currentUser.photoUrl}
-                              alt=""
-                              className="w-7 h-7 rounded-full object-cover border border-gray-200 flex-shrink-0 mt-0.5"
-                            />
-                            <div className="flex-1 flex gap-1.5">
-                              <input
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleAddComment(post.id);
-                                  }
-                                }}
-                                placeholder="コメントを追加..."
-                                className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
-                              />
-                              <button
-                                onClick={() => handleAddComment(post.id)}
-                                disabled={!newComment.trim()}
-                                className="p-2 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30"
-                              >
-                                <Send className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
+                            </>
+                          )}
                         </div>
                       )}
+
+                      {/* コメント入力欄（常に表示） */}
+                      <div className={`flex gap-2.5 items-start ${post.comments > 0 ? "mt-3 pt-3 border-t border-gray-100" : "mt-3"}`}>
+                        <img
+                          src={currentUser.photoUrl}
+                          alt=""
+                          className="w-7 h-7 rounded-full object-cover border border-gray-200 flex-shrink-0 mt-0.5"
+                        />
+                        <div className="flex-1 flex gap-1.5">
+                          <input
+                            value={expandedPostId === post.id ? newComment : (commentInputs[post.id] ?? "")}
+                            onChange={(e) => {
+                              if (expandedPostId === post.id) {
+                                setNewComment(e.target.value);
+                              } else {
+                                setCommentInputs((prev) => ({ ...prev, [post.id]: e.target.value }));
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                if (expandedPostId === post.id) {
+                                  handleAddComment(post.id);
+                                } else {
+                                  handleAddCommentDirect(post.id);
+                                }
+                              }
+                            }}
+                            placeholder="コメントを追加..."
+                            className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
+                          />
+                          <button
+                            onClick={() => {
+                              if (expandedPostId === post.id) {
+                                handleAddComment(post.id);
+                              } else {
+                                handleAddCommentDirect(post.id);
+                              }
+                            }}
+                            disabled={expandedPostId === post.id ? !newComment.trim() : !(commentInputs[post.id] ?? "").trim()}
+                            className="p-2 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
