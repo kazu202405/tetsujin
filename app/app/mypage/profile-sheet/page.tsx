@@ -403,7 +403,7 @@ export default function ProfileSheetPage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24">
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_595px] gap-8">
           {/* 編集フォーム */}
           {mode === "edit" && (

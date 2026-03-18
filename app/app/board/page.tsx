@@ -815,7 +815,7 @@ export default function BoardPage() {
         </div>
 
         {/* 投稿一覧 */}
-        <div className="space-y-4 pb-8">
+        <div className="space-y-4 pb-24">
           {channelPosts.length > 0 ? (
             <>
               {channelPosts.map((post) => (

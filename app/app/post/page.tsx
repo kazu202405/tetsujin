@@ -334,7 +334,7 @@ export default function PostPage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24">
         {/* 2カラムレイアウト */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* 左カラム: カレンダー + サマリー */}

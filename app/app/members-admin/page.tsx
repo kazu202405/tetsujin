@@ -276,7 +276,7 @@ export default function MembersAdminPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24">
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
@@ -412,7 +412,10 @@ export default function MembersAdminPage() {
           <p className="text-xs text-gray-400 mb-4">セルをクリックすると詳細を表示します</p>
 
           {matrixMembers.length >= 2 ? (
-            <div className="overflow-x-auto">
+            <div className="relative">
+              {/* 右側フェードインジケーター */}
+              <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-10 sm:hidden" />
+            <div className="overflow-x-auto -mx-2 px-2">
               <table className="w-full border-collapse min-w-[400px]">
                 <thead>
                   <tr>
@@ -478,6 +481,7 @@ export default function MembersAdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
             </div>
           ) : (
             <div className="text-center py-12">

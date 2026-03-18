@@ -13,6 +13,8 @@ import {
   Eye,
   FileUser,
   Search,
+  GitBranch,
+  ShieldCheck,
 } from "lucide-react";
 
 // --- Mock: my profile ---
@@ -180,18 +182,34 @@ export default function MyPage() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900">マイページ</h1>
-          <Link
-            href="/app/settings"
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            設定
-          </Link>
+          <h1 className="text-xl font-bold text-gray-900 flex-shrink-0">マイページ</h1>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/app/tree"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-gray-300 hover:text-gray-900 transition-colors lg:hidden"
+            >
+              <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
+              紹介ツリー
+            </Link>
+            <Link
+              href="/app/settings"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-gray-300 hover:text-gray-900 transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5 flex-shrink-0" />
+              設定
+            </Link>
+            <Link
+              href="/app/admin"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-gray-300 hover:text-gray-900 transition-colors lg:hidden"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" />
+              管理
+            </Link>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24">
         {/* Profile card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 mb-8">
           <div className="flex flex-col sm:flex-row items-start gap-6">
@@ -323,6 +341,7 @@ export default function MyPage() {
               </Link>
             </div>
           </div>
+
         </div>
 
         {/* Calendar + Tab content */}
