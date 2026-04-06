@@ -22,6 +22,7 @@ import {
   Users,
   ChevronDown,
   ChevronUp,
+  X,
 } from "lucide-react";
 
 // ============================================================
@@ -962,7 +963,7 @@ function ParticipationTab() {
 type ReferralSort = "count" | "retention" | "idle";
 
 function ReferralTab() {
-  const [expandedReferrer, setExpandedReferrer] = useState<string | null>(null);
+  const [modalReferrer, setModalReferrer] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<ReferralSort>("count");
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -1007,21 +1008,25 @@ function ReferralTab() {
       arr.push(r);
       map.set(r.referrerId, arr);
     });
-    return Array.from(map.entries())
-      .map(([referrerId, records]) => {
+    // 全メンバーをベースにして、紹介0人の人も含める
+    return allMembers.map((member) => {
+        const records = map.get(member.id) || [];
         const activeCount = records.filter((r) => getReferredStatus(r.referredId) === "active").length;
         const idleDaysList = records.map((r) => {
           const last = getLastActivityDate(r.referredId);
           return last ? daysFromNow(last) : 999;
         });
-        const maxIdle = Math.max(...idleDaysList);
+        const maxIdle = idleDaysList.length > 0 ? Math.max(...idleDaysList) : 0;
+        const selfLast = getLastActivityDate(member.id);
+        const selfIdleDays = selfLast ? daysFromNow(selfLast) : 999;
         return {
-          referrer: allMembers.find((m) => m.id === referrerId)!,
+          referrer: member,
           records: records.sort((a, b) => b.joinedAt.localeCompare(a.joinedAt)),
           count: records.length,
           activeCount,
-          retentionRate: Math.round((activeCount / records.length) * 100),
+          retentionRate: records.length > 0 ? Math.round((activeCount / records.length) * 100) : 0,
           maxIdle,
+          selfIdleDays,
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1032,7 +1037,7 @@ function ReferralTab() {
     const dir = sortAsc ? 1 : -1;
     if (sortBy === "count") sorted.sort((a, b) => dir * (a.count - b.count));
     else if (sortBy === "retention") sorted.sort((a, b) => dir * (a.retentionRate - b.retentionRate) || b.count - a.count);
-    else if (sortBy === "idle") sorted.sort((a, b) => dir * (a.maxIdle - b.maxIdle));
+    else if (sortBy === "idle") sorted.sort((a, b) => dir * (a.selfIdleDays - b.selfIdleDays));
     return sorted;
   }, [referrerStatsBase, sortBy, sortAsc]);
 
@@ -1104,111 +1109,161 @@ function ReferralTab() {
         </div>
         <div className="space-y-2">
           {referrerStats.map((rs, i) => {
-            const isExpanded = expandedReferrer === rs.referrer.id;
             return (
-              <div key={rs.referrer.id}>
-                <button
-                  onClick={() => setExpandedReferrer(isExpanded ? null : rs.referrer.id)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left ${
-                    isExpanded ? "bg-amber-50 ring-1 ring-amber-200" : "hover:bg-gray-50"
-                  }`}
-                >
-                  <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                    i === 0 ? "bg-amber-100 text-amber-700" :
-                    i === 1 ? "bg-gray-100 text-gray-600" :
-                    i === 2 ? "bg-orange-50 text-orange-600" :
-                    "bg-gray-50 text-gray-400"
-                  }`}>
-                    {i + 1}
-                  </span>
-                  <img src={rs.referrer.photoUrl} alt={rs.referrer.name} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-gray-900">{rs.referrer.name}</p>
-                      {(() => {
-                        const st = memberActivities.find((a) => a.memberId === rs.referrer.id)?.status;
-                        if (!st) return null;
-                        const cfg = activityStatusConfig[st];
-                        return (
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${cfg.bg} ${cfg.color}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                            {cfg.label}
-                          </span>
-                        );
-                      })()}
-                    </div>
-                    <p className="text-[11px] text-gray-500">{rs.referrer.job}</p>
+              <div
+                key={rs.referrer.id}
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all"
+              >
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                  i === 0 ? "bg-amber-100 text-amber-700" :
+                  i === 1 ? "bg-gray-100 text-gray-600" :
+                  i === 2 ? "bg-orange-50 text-orange-600" :
+                  "bg-gray-50 text-gray-400"
+                }`}>
+                  {i + 1}
+                </span>
+                <img src={rs.referrer.photoUrl} alt={rs.referrer.name} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-gray-900">{rs.referrer.name}</p>
+                    {(() => {
+                      const st = memberActivities.find((a) => a.memberId === rs.referrer.id)?.status;
+                      if (!st) return null;
+                      const cfg = activityStatusConfig[st];
+                      return (
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${cfg.bg} ${cfg.color}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                          {cfg.label}
+                        </span>
+                      );
+                    })()}
                   </div>
-                  <div className="flex items-center gap-4 flex-shrink-0">
-                    <div className={`text-center ${sortBy === "count" ? "" : "hidden sm:block"}`}>
-                      <span className="text-sm font-bold text-gray-900">{rs.count}</span>
-                      <span className="text-[10px] text-gray-400 ml-0.5">人</span>
-                      <p className="text-[9px] text-gray-400">紹介</p>
+                  <p className="text-[11px] text-gray-500">{rs.referrer.job}</p>
+                </div>
+                <div className="flex items-center flex-shrink-0">
+                  {rs.count > 0 ? (
+                    <button
+                      onClick={() => setModalReferrer(rs.referrer.id)}
+                      className="w-14 text-center hover:bg-amber-50 rounded-lg py-1 transition-colors cursor-pointer"
+                    >
+                      <span className="text-sm font-bold text-amber-600">{rs.count}</span>
+                      <span className="text-[10px] text-amber-600 ml-0.5">人</span>
+                      <p className="text-[9px] text-amber-500">紹介</p>
+                    </button>
+                  ) : (
+                    <div className="w-14 text-center py-1">
+                      <span className="text-sm font-bold text-gray-300">0</span>
+                      <span className="text-[10px] text-gray-300 ml-0.5">人</span>
+                      <p className="text-[9px] text-gray-300">紹介</p>
                     </div>
-                    <div className={`text-center ${sortBy === "retention" ? "" : "hidden sm:block"}`}>
+                  )}
+                  <div className={`w-14 text-center ${sortBy === "retention" ? "" : "hidden sm:block"}`}>
+                    {rs.count > 0 ? (
                       <span className={`text-sm font-bold ${rs.retentionRate >= 80 ? "text-green-600" : rs.retentionRate >= 50 ? "text-amber-600" : "text-red-500"}`}>
                         {rs.retentionRate}%
                       </span>
-                      <p className="text-[9px] text-gray-400">定着</p>
-                    </div>
-                    <div className={`text-center ${sortBy === "idle" ? "" : "hidden sm:block"}`}>
-                      <span className={`text-sm font-bold ${rs.maxIdle <= 14 ? "text-green-600" : rs.maxIdle <= 30 ? "text-amber-600" : "text-red-500"}`}>
-                        {rs.maxIdle >= 999 ? "—" : `${rs.maxIdle}日前`}
-                      </span>
-                      <p className="text-[9px] text-gray-400">最終活動</p>
-                    </div>
+                    ) : (
+                      <span className="text-sm font-bold text-gray-300">-</span>
+                    )}
+                    <p className="text-[9px] text-gray-400">定着</p>
                   </div>
-                  {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                </button>
-                {isExpanded && (
-                  <div className="ml-10 mt-1 mb-2 pl-4 border-l-2 border-amber-200 space-y-2">
-                    {rs.records.map((r) => {
-                      const status = getReferredStatus(r.referredId);
-                      const cfg = activityStatusConfig[status];
-                      const firstEvent = getFirstEventDate(r.referredId);
-                      const daysToFirst = firstEvent ? daysBetween(r.joinedAt, firstEvent) : null;
-                      const lastActivity = getLastActivityDate(r.referredId);
-                      const idleDays = lastActivity ? daysFromNow(lastActivity) : null;
-                      return (
-                        <Link
-                          key={r.referredId}
-                          href={`/app/profile/${r.referredId}`}
-                          className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 hover:border-amber-200 transition-colors"
-                        >
-                          <img src={r.referredPhotoUrl} alt={r.referredName} className="w-9 h-9 rounded-full object-cover" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <p className="text-sm font-medium text-gray-900">{r.referredName}</p>
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${cfg.bg} ${cfg.color}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                                {cfg.label}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-gray-500">{r.referredJob}</p>
-                          </div>
-                          <div className="flex-shrink-0 text-right space-y-0.5">
-                            <p className="text-[10px] text-gray-400">入会 {r.joinedAt}</p>
-                            {daysToFirst !== null ? (
-                              <p className="text-[10px] text-gray-500">
-                                初参加まで <span className={`font-bold ${daysToFirst <= 30 ? "text-green-600" : daysToFirst <= 60 ? "text-amber-600" : "text-red-500"}`}>{daysToFirst}日</span>
-                              </p>
-                            ) : (
-                              <p className="text-[10px] text-red-400 font-bold">イベント未参加</p>
-                            )}
-                            {idleDays !== null && idleDays > 14 && (
-                              <p className="text-[10px] text-red-400">最終活動 {idleDays}日前</p>
-                            )}
-                          </div>
-                        </Link>
-                      );
-                    })}
+                  <div className={`w-16 text-center ${sortBy === "idle" ? "" : "hidden sm:block"}`}>
+                    <span className={`text-sm font-bold ${rs.selfIdleDays >= 999 ? "text-gray-300" : rs.selfIdleDays <= 14 ? "text-green-600" : rs.selfIdleDays <= 30 ? "text-amber-600" : "text-red-500"}`}>
+                      {rs.selfIdleDays >= 999 ? "—" : `${rs.selfIdleDays}日前`}
+                    </span>
+                    <p className="text-[9px] text-gray-400">最終活動</p>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* 紹介メンバー詳細モーダル */}
+      {modalReferrer && (() => {
+        const rs = referrerStats.find((r) => r.referrer.id === modalReferrer);
+        if (!rs) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setModalReferrer(null)}>
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* ヘッダー */}
+              <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex items-center gap-3 z-10">
+                <img src={rs.referrer.photoUrl} alt={rs.referrer.name} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-gray-900">{rs.referrer.name}</p>
+                  <p className="text-[11px] text-gray-500">{rs.referrer.job}</p>
+                </div>
+                <div className="flex items-center gap-3 mr-2">
+                  <div className="text-center">
+                    <span className="text-sm font-bold text-amber-600">{rs.count}</span>
+                    <span className="text-[10px] text-amber-600 ml-0.5">人紹介</span>
+                  </div>
+                  <div className="text-center">
+                    <span className={`text-sm font-bold ${rs.retentionRate >= 80 ? "text-green-600" : rs.retentionRate >= 50 ? "text-amber-600" : "text-red-500"}`}>
+                      {rs.retentionRate}%
+                    </span>
+                    <span className="text-[10px] text-gray-400 ml-0.5">定着</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setModalReferrer(null)}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              {/* 紹介メンバー一覧 */}
+              <div className="p-4 overflow-y-auto max-h-[calc(80vh-72px)] space-y-2">
+                {rs.records.map((r) => {
+                  const status = getReferredStatus(r.referredId);
+                  const cfg = activityStatusConfig[status];
+                  const firstEvent = getFirstEventDate(r.referredId);
+                  const daysToFirst = firstEvent ? daysBetween(r.joinedAt, firstEvent) : null;
+                  const lastActivity = getLastActivityDate(r.referredId);
+                  const idleDays = lastActivity ? daysFromNow(lastActivity) : null;
+                  return (
+                    <Link
+                      key={r.referredId}
+                      href={`/app/profile/${r.referredId}`}
+                      className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-amber-200 hover:bg-amber-50/50 transition-colors"
+                    >
+                      <img src={r.referredPhotoUrl} alt={r.referredName} className="w-9 h-9 rounded-full object-cover" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="text-sm font-medium text-gray-900">{r.referredName}</p>
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${cfg.bg} ${cfg.color}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                            {cfg.label}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500">{r.referredJob}</p>
+                      </div>
+                      <div className="flex-shrink-0 text-right space-y-0.5">
+                        <p className="text-[10px] text-gray-400">入会 {r.joinedAt}</p>
+                        {daysToFirst !== null ? (
+                          <p className="text-[10px] text-gray-500">
+                            初参加まで <span className={`font-bold ${daysToFirst <= 30 ? "text-green-600" : daysToFirst <= 60 ? "text-amber-600" : "text-red-500"}`}>{daysToFirst}日</span>
+                          </p>
+                        ) : (
+                          <p className="text-[10px] text-red-400 font-bold">イベント未参加</p>
+                        )}
+                        {idleDays !== null && idleDays > 14 && (
+                          <p className="text-[10px] text-red-400">最終活動 {idleDays}日前</p>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }
