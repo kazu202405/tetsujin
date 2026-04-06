@@ -370,25 +370,34 @@ function ApplicationsTab() {
 // ============================================================
 // タブ2: アクティブ状況
 // ============================================================
+type ActivitySort = "status" | "referral" | "retention" | "idle";
+
+// 紹介者IDから紹介者名を引く
+function getReferrerName(memberId: string): string | null {
+  const rec = referralRecords.find((r) => r.referredId === memberId);
+  if (!rec) return null;
+  return allMembers.find((m) => m.id === rec.referrerId)?.short || null;
+}
+
+// 紹介経由かどうか
+function isReferred(memberId: string): boolean {
+  return referralRecords.some((r) => r.referredId === memberId);
+}
+
 function ActivityTab() {
   const [filterStatus, setFilterStatus] = useState<ActivityStatus | "all">("all");
   const [search, setSearch] = useState("");
+  const [referredOnly, setReferredOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<ActivitySort>("status");
+  const [sortAsc, setSortAsc] = useState(false);
 
-  const enriched = memberActivities.map((a) => ({
-    ...a,
-    member: allMembers.find((m) => m.id === a.memberId)!,
-  }));
-
-  const filtered = enriched.filter((item) => {
-    const matchStatus = filterStatus === "all" || item.status === filterStatus;
-    const matchSearch = !search || item.member.name.includes(search) || item.member.job.includes(search);
-    return matchStatus && matchSearch;
-  });
-
-  const counts = {
-    active: memberActivities.filter((a) => a.status === "active").length,
-    dormant: memberActivities.filter((a) => a.status === "dormant").length,
-    inactive: memberActivities.filter((a) => a.status === "inactive").length,
+  const handleSortClick = (key: ActivitySort) => {
+    if (sortBy === key) {
+      setSortAsc((prev) => !prev);
+    } else {
+      setSortBy(key);
+      setSortAsc(false);
+    }
   };
 
   // 日数計算
@@ -400,10 +409,108 @@ function ActivityTab() {
     return `${days}日前`;
   }
 
+  function daysFromNow(dateStr: string): number {
+    return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  function getLastActivityDate(memberId: string): number {
+    const a = memberActivities.find((x) => x.memberId === memberId);
+    if (!a) return 999;
+    const latest = [a.lastLoginAt, a.lastEventAt, a.lastPostAt].sort((x, y) => y.localeCompare(x))[0];
+    return daysFromNow(latest);
+  }
+
+  // 紹介者ごとの定着率マップ
+  const referrerRetention = useMemo(() => {
+    const map = new Map<string, { count: number; activeCount: number; rate: number }>();
+    const grouped = new Map<string, string[]>();
+    referralRecords.forEach((r) => {
+      const arr = grouped.get(r.referrerId) || [];
+      arr.push(r.referredId);
+      grouped.set(r.referrerId, arr);
+    });
+    grouped.forEach((referredIds, referrerId) => {
+      const activeCount = referredIds.filter((id) => {
+        const a = memberActivities.find((x) => x.memberId === id);
+        return a?.status === "active";
+      }).length;
+      map.set(referrerId, {
+        count: referredIds.length,
+        activeCount,
+        rate: Math.round((activeCount / referredIds.length) * 100),
+      });
+    });
+    return map;
+  }, []);
+
+  // 紹介者の定着率を取得
+  function getReferrerRetentionRate(memberId: string): number | null {
+    const rec = referralRecords.find((r) => r.referredId === memberId);
+    if (!rec) return null;
+    return referrerRetention.get(rec.referrerId)?.rate ?? null;
+  }
+
+  const enriched = memberActivities.map((a) => ({
+    ...a,
+    member: allMembers.find((m) => m.id === a.memberId)!,
+    referrerName: getReferrerName(a.memberId),
+    isReferred: isReferred(a.memberId),
+    idleDays: getLastActivityDate(a.memberId),
+    referrerRate: getReferrerRetentionRate(a.memberId),
+  }));
+
+  // フィルター
+  const filtered = enriched.filter((item) => {
+    const matchStatus = filterStatus === "all" || item.status === filterStatus;
+    const matchSearch = !search || item.member.name.includes(search) || item.member.job.includes(search);
+    const matchReferred = !referredOnly || item.isReferred;
+    return matchStatus && matchSearch && matchReferred;
+  });
+
+  // ソート
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    const dir = sortAsc ? 1 : -1;
+    if (sortBy === "status") {
+      const order: Record<ActivityStatus, number> = { active: 0, dormant: 1, inactive: 2 };
+      arr.sort((a, b) => dir * (order[a.status] - order[b.status]));
+    } else if (sortBy === "idle") {
+      arr.sort((a, b) => dir * (a.idleDays - b.idleDays));
+    } else if (sortBy === "referral") {
+      // 紹介経由を上に、紹介者名でグルーピング
+      arr.sort((a, b) => {
+        const aRef = a.isReferred ? 1 : 0;
+        const bRef = b.isReferred ? 1 : 0;
+        return dir * (aRef - bRef) || (a.referrerName || "").localeCompare(b.referrerName || "");
+      });
+    } else if (sortBy === "retention") {
+      // 紹介された人の紹介者の定着率でソート
+      arr.sort((a, b) => {
+        const recA = referralRecords.find((r) => r.referredId === a.memberId);
+        const recB = referralRecords.find((r) => r.referredId === b.memberId);
+        const rateA = recA ? (referrerRetention.get(recA.referrerId)?.rate ?? -1) : -1;
+        const rateB = recB ? (referrerRetention.get(recB.referrerId)?.rate ?? -1) : -1;
+        return dir * (rateA - rateB);
+      });
+    }
+    return arr;
+  }, [filtered, sortBy, sortAsc, referrerRetention]);
+
+  const counts = {
+    active: memberActivities.filter((a) => a.status === "active").length,
+    dormant: memberActivities.filter((a) => a.status === "dormant").length,
+    inactive: memberActivities.filter((a) => a.status === "inactive").length,
+  };
+
+  // 紹介経由の定着率サマリー
+  const referredMembers = memberActivities.filter((a) => isReferred(a.memberId));
+  const referredActive = referredMembers.filter((a) => a.status === "active").length;
+  const referredRetentionRate = referredMembers.length > 0 ? Math.round((referredActive / referredMembers.length) * 100) : 0;
+
   return (
     <>
-      {/* 統計 */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      {/* 統計カード */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
         {([
           { key: "active" as const, label: "アクティブ", color: "text-green-600", bg: "bg-green-50", dot: "bg-green-500" },
           { key: "dormant" as const, label: "活動減少", color: "text-amber-600", bg: "bg-amber-50", dot: "bg-amber-400" },
@@ -421,14 +528,36 @@ function ActivityTab() {
               <span className="text-xs text-gray-500">{stat.label}</span>
             </div>
             <p className={`text-2xl font-bold ${stat.color}`}>{counts[stat.key]}</p>
-            <p className="text-[11px] text-gray-400 mt-1">
-              / {memberActivities.length}人中
-            </p>
+            <p className="text-[11px] text-gray-400 mt-1">/ {memberActivities.length}人中</p>
           </button>
         ))}
       </div>
 
-      {/* 判定基準の説明 */}
+      {/* 紹介経由メンバーの定着率（コンパクト） */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <p className="text-xs font-bold text-gray-700">紹介経由の定着率</p>
+            <span className={`text-base font-bold ${referredRetentionRate >= 60 ? "text-green-600" : referredRetentionRate >= 40 ? "text-amber-600" : "text-red-500"}`}>
+              {referredRetentionRate}%
+            </span>
+            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full rounded-full bg-green-500" style={{ width: `${referredRetentionRate}%` }} />
+            </div>
+            <span className="text-[11px] text-gray-400">{referredActive}/{referredMembers.length}人がアクティブ</span>
+          </div>
+          <button
+            onClick={() => setReferredOnly(!referredOnly)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              referredOnly ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+          >
+            紹介経由のみ
+          </button>
+        </div>
+      </div>
+
+      {/* 判定基準 */}
       <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-6">
         <p className="text-xs font-bold text-gray-600 mb-2">判定基準</p>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-gray-500">
@@ -438,21 +567,47 @@ function ActivityTab() {
         </div>
       </div>
 
-      {/* 検索 */}
-      <div className="relative mb-6">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="名前・職種で検索..."
-          className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-        />
+      {/* 検索 + ソート */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="名前・職種で検索..."
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          />
+        </div>
+        <div className="flex gap-1.5">
+          {([
+            { key: "status" as ActivitySort, label: "ステータス" },
+            { key: "idle" as ActivitySort, label: "最終活動" },
+            { key: "referral" as ActivitySort, label: "紹介者" },
+            { key: "retention" as ActivitySort, label: "定着率" },
+          ]).map((opt) => {
+            const isActive = sortBy === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => handleSortClick(opt.key)}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                  isActive ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                }`}
+              >
+                {opt.label}
+                {isActive && (
+                  <span className="text-[10px] opacity-70">{sortAsc ? "↑" : "↓"}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* メンバーリスト */}
       <div className="space-y-3">
-        {filtered.map((item) => {
+        {sorted.map((item) => {
           const cfg = activityStatusConfig[item.status];
           return (
             <div key={item.memberId} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -461,7 +616,7 @@ function ActivityTab() {
                   <img src={item.member.photoUrl} alt={item.member.name} className="w-12 h-12 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100" />
                 </Link>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <Link href={`/app/profile/${item.memberId}`} className="text-sm font-bold text-gray-900 hover:text-amber-700 transition-colors">
                       {item.member.name}
                     </Link>
@@ -469,25 +624,45 @@ function ActivityTab() {
                       <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                       {cfg.label}
                     </span>
+                    {item.referrerName && (
+                      <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-full text-[10px] font-bold text-blue-600">
+                        紹介: {item.referrerName}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 mb-3">{item.member.job}・{item.member.industry}</p>
 
-                  {/* アクティビティ指標 */}
+                  {/* 紹介者・定着率・最終活動 */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="bg-gray-50 rounded-lg p-2.5">
-                      <p className="text-[10px] text-gray-400 mb-0.5">最終ログイン</p>
-                      <p className="text-xs font-bold text-gray-700">{daysAgo(item.lastLoginAt)}</p>
-                      <p className="text-[10px] text-gray-400">月{item.loginCount30d}回</p>
+                      <p className="text-[10px] text-gray-400 mb-0.5">紹介者</p>
+                      {item.referrerName ? (
+                        <p className="text-xs font-bold text-gray-700">{item.referrerName}</p>
+                      ) : (
+                        <p className="text-xs text-gray-300">—</p>
+                      )}
                     </div>
                     <div className="bg-gray-50 rounded-lg p-2.5">
-                      <p className="text-[10px] text-gray-400 mb-0.5">最終イベント参加</p>
-                      <p className="text-xs font-bold text-gray-700">{daysAgo(item.lastEventAt)}</p>
-                      <p className="text-[10px] text-gray-400">直近90日: {item.eventCount90d}回</p>
+                      <p className="text-[10px] text-gray-400 mb-0.5">紹介者の定着率</p>
+                      {item.referrerRate !== null ? (
+                        <p className={`text-xs font-bold ${
+                          item.referrerRate >= 80 ? "text-green-600" :
+                          item.referrerRate >= 50 ? "text-amber-600" :
+                          "text-red-500"
+                        }`}>{item.referrerRate}%</p>
+                      ) : (
+                        <p className="text-xs text-gray-300">—</p>
+                      )}
                     </div>
                     <div className="bg-gray-50 rounded-lg p-2.5">
-                      <p className="text-[10px] text-gray-400 mb-0.5">最終投稿</p>
-                      <p className="text-xs font-bold text-gray-700">{daysAgo(item.lastPostAt)}</p>
-                      <p className="text-[10px] text-gray-400">月{item.postCount30d}件</p>
+                      <p className="text-[10px] text-gray-400 mb-0.5">最終活動</p>
+                      <p className={`text-xs font-bold ${
+                        item.idleDays <= 7 ? "text-green-600" :
+                        item.idleDays <= 30 ? "text-amber-600" :
+                        "text-red-500"
+                      }`}>
+                        {item.idleDays === 0 ? "今日" : `${item.idleDays}日前`}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -495,6 +670,12 @@ function ActivityTab() {
             </div>
           );
         })}
+        {sorted.length === 0 && (
+          <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
+            <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-400">該当するメンバーはいません</p>
+          </div>
+        )}
       </div>
     </>
   );
@@ -794,12 +975,10 @@ function ReferralTab() {
     }
   };
 
-  // 紹介された人のアクティブ状態を取得
   function getReferredStatus(referredId: string): ActivityStatus {
     return memberActivities.find((a) => a.memberId === referredId)?.status || "inactive";
   }
 
-  // 紹介された人の初イベント参加日を取得
   function getFirstEventDate(memberId: string): string | null {
     const events = eventParticipations
       .filter((e) => e.participantIds.includes(memberId))
@@ -807,14 +986,12 @@ function ReferralTab() {
     return events.length > 0 ? events[0].date : null;
   }
 
-  // 最終活動日を取得
   function getLastActivityDate(memberId: string): string | null {
     const a = memberActivities.find((x) => x.memberId === memberId);
     if (!a) return null;
     return [a.lastLoginAt, a.lastEventAt, a.lastPostAt].sort((x, y) => y.localeCompare(x))[0];
   }
 
-  // 日数差の計算
   function daysBetween(dateA: string, dateB: string): number {
     return Math.floor((new Date(dateB).getTime() - new Date(dateA).getTime()) / (1000 * 60 * 60 * 24));
   }
@@ -823,7 +1000,6 @@ function ReferralTab() {
     return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
   }
 
-  // 紹介者ごとに集計（定着率・放置日数込み）
   const referrerStatsBase = useMemo(() => {
     const map = new Map<string, ReferralRecord[]>();
     referralRecords.forEach((r) => {
@@ -834,14 +1010,11 @@ function ReferralTab() {
     return Array.from(map.entries())
       .map(([referrerId, records]) => {
         const activeCount = records.filter((r) => getReferredStatus(r.referredId) === "active").length;
-        // 紹介メンバーの最大放置日数（最も放置されてる人の日数）
         const idleDaysList = records.map((r) => {
           const last = getLastActivityDate(r.referredId);
           return last ? daysFromNow(last) : 999;
         });
         const maxIdle = Math.max(...idleDaysList);
-        // 紹介メンバーの平均放置日数
-        const avgIdle = Math.round(idleDaysList.reduce((s, d) => s + d, 0) / idleDaysList.length);
         return {
           referrer: allMembers.find((m) => m.id === referrerId)!,
           records: records.sort((a, b) => b.joinedAt.localeCompare(a.joinedAt)),
@@ -849,13 +1022,11 @@ function ReferralTab() {
           activeCount,
           retentionRate: Math.round((activeCount / records.length) * 100),
           maxIdle,
-          avgIdle,
         };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ソート適用
   const referrerStats = useMemo(() => {
     const sorted = [...referrerStatsBase];
     const dir = sortAsc ? 1 : -1;
@@ -870,93 +1041,34 @@ function ReferralTab() {
   const totalActive = referralRecords.filter((r) => getReferredStatus(r.referredId) === "active").length;
   const overallRetention = Math.round((totalActive / totalReferrals) * 100);
 
-  // 四半期別の紹介数（棒グラフ用）
-  const quarterData = useMemo(() => {
-    const quarters = [
-      { label: "2024 Q1", start: "2024-01", end: "2024-03" },
-      { label: "Q2", start: "2024-04", end: "2024-06" },
-      { label: "Q3", start: "2024-07", end: "2024-09" },
-      { label: "Q4", start: "2024-10", end: "2024-12" },
-      { label: "2025 Q1", start: "2025-01", end: "2025-03" },
-      { label: "Q2", start: "2025-04", end: "2025-06" },
-      { label: "Q3", start: "2025-07", end: "2025-09" },
-      { label: "Q4", start: "2025-10", end: "2025-12" },
-      { label: "2026 Q1", start: "2026-01", end: "2026-03" },
-    ];
-    return quarters.map((q) => ({
-      ...q,
-      count: referralRecords.filter((r) => r.joinedAt >= q.start && r.joinedAt <= q.end + "-31").length,
-    }));
-  }, []);
-
-  const maxQuarterCount = Math.max(...quarterData.map((q) => q.count), 1);
-
   return (
     <>
-      {/* ヘッドライン: 全体定着率 + トレンド */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
-        {/* 全体サマリー */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <p className="text-xs text-gray-500 mb-4">紹介メンバーの全体像</p>
-          <div className="flex items-end gap-3 mb-4">
-            <p className="text-4xl font-bold text-gray-900">{totalReferrals}<span className="text-lg font-normal text-gray-400 ml-1">人</span></p>
-            <p className="text-sm text-gray-500 pb-1">が紹介で入会</p>
-          </div>
-          {/* 定着率バー */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-bold text-gray-700">定着率</span>
-              <span className={`text-lg font-bold ${overallRetention >= 60 ? "text-green-600" : overallRetention >= 40 ? "text-amber-600" : "text-red-500"}`}>
-                {overallRetention}%
-              </span>
-            </div>
-            <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+      {/* ヘッドライン: 全体定着率 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-8">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <p className="text-xs font-bold text-gray-700">紹介入会 {totalReferrals}人</p>
+            <span className="text-gray-300">|</span>
+            <p className="text-xs text-gray-500">定着率</p>
+            <span className={`text-base font-bold ${overallRetention >= 60 ? "text-green-600" : overallRetention >= 40 ? "text-amber-600" : "text-red-500"}`}>
+              {overallRetention}%
+            </span>
+            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
               <div className="h-full rounded-full bg-green-500" style={{ width: `${overallRetention}%` }} />
             </div>
-            <p className="text-[11px] text-gray-400 mt-1.5">{totalActive}人がアクティブ / {totalReferrals - totalActive}人が活動減少・長期不在</p>
+            <span className="text-[11px] text-gray-400">{totalActive}/{totalReferrals}人がアクティブ</span>
           </div>
-          {/* ステータス内訳ドット */}
-          <div className="flex gap-4 mt-4 pt-4 border-t border-gray-100">
+          <div className="flex gap-3">
             {(["active", "dormant", "inactive"] as const).map((s) => {
               const count = referralRecords.filter((r) => getReferredStatus(r.referredId) === s).length;
               const cfg = activityStatusConfig[s];
               return (
                 <div key={s} className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
-                  <span className="text-[11px] text-gray-600">{cfg.label} {count}人</span>
+                  <span className="text-[11px] text-gray-600">{cfg.label} {count}</span>
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        {/* 紹介トレンド */}
-        <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-1">
-            <Activity className="w-4 h-4 text-gray-400" />
-            <h2 className="text-base font-bold text-gray-900">紹介トレンド</h2>
-          </div>
-          <p className="text-xs text-gray-400 mb-5">四半期ごとの紹介数推移</p>
-
-          <div className="flex items-end gap-2 h-32">
-            {quarterData.map((q) => (
-              <div key={q.label} className="flex-1 flex flex-col items-center gap-1.5">
-                <span className="text-[11px] font-bold text-gray-700">
-                  {q.count > 0 ? q.count : ""}
-                </span>
-                <div className="w-full flex justify-center">
-                  <div
-                    className={`w-full max-w-[32px] rounded-t-lg transition-all ${
-                      q.count > 0 ? "bg-amber-400" : "bg-gray-100"
-                    }`}
-                    style={{
-                      height: q.count > 0 ? `${Math.max((q.count / maxQuarterCount) * 100, 12)}%` : "4px",
-                    }}
-                  />
-                </div>
-                <span className="text-[9px] text-gray-400 leading-tight text-center whitespace-nowrap">{q.label}</span>
-              </div>
-            ))}
           </div>
         </div>
       </div>
@@ -980,15 +1092,11 @@ function ReferralTab() {
                   key={opt.key}
                   onClick={() => handleSortClick(opt.key)}
                   className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    isActive
-                      ? "bg-gray-900 text-white"
-                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    isActive ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                   }`}
                 >
                   {opt.label}
-                  {isActive && (
-                    <span className="text-[10px] opacity-70">{sortAsc ? "↑" : "↓"}</span>
-                  )}
+                  {isActive && <span className="text-[10px] opacity-70">{sortAsc ? "↑" : "↓"}</span>}
                 </button>
               );
             })}
@@ -1013,52 +1121,45 @@ function ReferralTab() {
                   }`}>
                     {i + 1}
                   </span>
-
                   <img src={rs.referrer.photoUrl} alt={rs.referrer.name} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 flex-shrink-0" />
-
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-900">{rs.referrer.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-gray-900">{rs.referrer.name}</p>
+                      {(() => {
+                        const st = memberActivities.find((a) => a.memberId === rs.referrer.id)?.status;
+                        if (!st) return null;
+                        const cfg = activityStatusConfig[st];
+                        return (
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${cfg.bg} ${cfg.color}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                            {cfg.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
                     <p className="text-[11px] text-gray-500">{rs.referrer.job}</p>
                   </div>
-
-                  {/* 指標エリア：ソートに応じてプライマリ表示を変更 */}
                   <div className="flex items-center gap-4 flex-shrink-0">
-                    {/* 紹介数 */}
                     <div className={`text-center ${sortBy === "count" ? "" : "hidden sm:block"}`}>
                       <span className="text-sm font-bold text-gray-900">{rs.count}</span>
                       <span className="text-[10px] text-gray-400 ml-0.5">人</span>
                       <p className="text-[9px] text-gray-400">紹介</p>
                     </div>
-
-                    {/* 定着率 */}
                     <div className={`text-center ${sortBy === "retention" ? "" : "hidden sm:block"}`}>
-                      <span className={`text-sm font-bold ${
-                        rs.retentionRate >= 80 ? "text-green-600" :
-                        rs.retentionRate >= 50 ? "text-amber-600" :
-                        "text-red-500"
-                      }`}>
+                      <span className={`text-sm font-bold ${rs.retentionRate >= 80 ? "text-green-600" : rs.retentionRate >= 50 ? "text-amber-600" : "text-red-500"}`}>
                         {rs.retentionRate}%
                       </span>
                       <p className="text-[9px] text-gray-400">定着</p>
                     </div>
-
-                    {/* 最終活動 */}
                     <div className={`text-center ${sortBy === "idle" ? "" : "hidden sm:block"}`}>
-                      <span className={`text-sm font-bold ${
-                        rs.maxIdle <= 14 ? "text-green-600" :
-                        rs.maxIdle <= 30 ? "text-amber-600" :
-                        "text-red-500"
-                      }`}>
+                      <span className={`text-sm font-bold ${rs.maxIdle <= 14 ? "text-green-600" : rs.maxIdle <= 30 ? "text-amber-600" : "text-red-500"}`}>
                         {rs.maxIdle >= 999 ? "—" : `${rs.maxIdle}日前`}
                       </span>
                       <p className="text-[9px] text-gray-400">最終活動</p>
                     </div>
                   </div>
-
                   {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                 </button>
-
-                {/* 展開: 紹介メンバーの詳細（ステータス・初参加・放置日数） */}
                 {isExpanded && (
                   <div className="ml-10 mt-1 mb-2 pl-4 border-l-2 border-amber-200 space-y-2">
                     {rs.records.map((r) => {
@@ -1068,7 +1169,6 @@ function ReferralTab() {
                       const daysToFirst = firstEvent ? daysBetween(r.joinedAt, firstEvent) : null;
                       const lastActivity = getLastActivityDate(r.referredId);
                       const idleDays = lastActivity ? daysFromNow(lastActivity) : null;
-
                       return (
                         <Link
                           key={r.referredId}
@@ -1087,9 +1187,7 @@ function ReferralTab() {
                             <p className="text-[11px] text-gray-500">{r.referredJob}</p>
                           </div>
                           <div className="flex-shrink-0 text-right space-y-0.5">
-                            <p className="text-[10px] text-gray-400">
-                              入会 {r.joinedAt}
-                            </p>
+                            <p className="text-[10px] text-gray-400">入会 {r.joinedAt}</p>
                             {daysToFirst !== null ? (
                               <p className="text-[10px] text-gray-500">
                                 初参加まで <span className={`font-bold ${daysToFirst <= 30 ? "text-green-600" : daysToFirst <= 60 ? "text-amber-600" : "text-red-500"}`}>{daysToFirst}日</span>
@@ -1098,9 +1196,7 @@ function ReferralTab() {
                               <p className="text-[10px] text-red-400 font-bold">イベント未参加</p>
                             )}
                             {idleDays !== null && idleDays > 14 && (
-                              <p className="text-[10px] text-red-400">
-                                最終活動 {idleDays}日前
-                              </p>
+                              <p className="text-[10px] text-red-400">最終活動 {idleDays}日前</p>
                             )}
                           </div>
                         </Link>
