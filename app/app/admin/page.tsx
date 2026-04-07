@@ -495,13 +495,6 @@ function ActivityTab() {
     inactive: memberActivities.filter((a) => a.status === "inactive").length,
   };
 
-  // 会員サマリー
-  const totalMembers = allMembers.length;
-  const referralCount = referralRecords.length;
-  const referralRate = Math.round((referralCount / totalMembers) * 100);
-  // モック: 今月の増減
-  const newThisMonth = 2 as number;
-  const leftThisMonth = 0 as number;
 
   return (
     <>
@@ -542,44 +535,65 @@ function ActivityTab() {
         ))}
       </div>
 
-      {/* 会員ヘッドライン */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <p className="text-xs font-bold text-gray-700">総会員数</p>
-              <span className="text-base font-bold text-gray-900">{totalMembers}人</span>
+      {/* 入会・退会推移（直近6ヶ月） */}
+      {(() => {
+        const monthlyData = [
+          { month: "11月", joined: 1, left: 0 },
+          { month: "12月", joined: 2, left: 1 },
+          { month: "1月", joined: 1, left: 0 },
+          { month: "2月", joined: 3, left: 0 },
+          { month: "3月", joined: 0, left: 1 },
+          { month: "4月", joined: 2, left: 0 },
+        ];
+        const maxVal = Math.max(...monthlyData.map((d) => Math.max(d.joined, d.left)), 1);
+        return (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-gray-700">入会・退会推移</p>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-green-400" />
+                  <span className="text-[11px] text-gray-500">入会</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-red-400" />
+                  <span className="text-[11px] text-gray-500">退会</span>
+                </div>
+              </div>
             </div>
-            <span className="text-gray-200">|</span>
-            <div className="flex items-center gap-1.5">
-              <p className="text-xs text-gray-500">今月</p>
-              {newThisMonth > 0 && (
-                <span className="text-sm font-bold text-green-600">+{newThisMonth}</span>
-              )}
-              {leftThisMonth > 0 && (
-                <span className="text-sm font-bold text-red-500">-{leftThisMonth}</span>
-              )}
-              {newThisMonth === 0 && leftThisMonth === 0 && (
-                <span className="text-sm font-bold text-gray-400">±0</span>
-              )}
-            </div>
-            <span className="text-gray-200">|</span>
-            <div className="flex items-center gap-1.5">
-              <p className="text-xs text-gray-500">紹介経由</p>
-              <span className="text-sm font-bold text-amber-600">{referralRate}%</span>
-              <span className="text-[11px] text-gray-400">({referralCount}/{totalMembers}人)</span>
+            <div className="flex items-end gap-2 h-24">
+              {monthlyData.map((d) => (
+                <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full flex items-end justify-center gap-1 h-16">
+                    <div
+                      className="w-3 rounded-t bg-green-400 transition-all"
+                      style={{ height: `${(d.joined / maxVal) * 100}%`, minHeight: d.joined > 0 ? 4 : 0 }}
+                    />
+                    <div
+                      className="w-3 rounded-t bg-red-400 transition-all"
+                      style={{ height: `${(d.left / maxVal) * 100}%`, minHeight: d.left > 0 ? 4 : 0 }}
+                    />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] text-gray-400">{d.month}</p>
+                    <p className="text-[10px] font-bold text-gray-600">
+                      {d.joined > 0 ? `+${d.joined}` : ""}{d.joined > 0 && d.left > 0 ? " " : ""}{d.left > 0 ? `-${d.left}` : ""}{d.joined === 0 && d.left === 0 ? "—" : ""}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* 判定基準 */}
       <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-6">
         <p className="text-xs font-bold text-gray-600 mb-2">判定基準</p>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-gray-500">
-          <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />アクティブ：30日以内にログイン＆90日以内にイベント参加</span>
-          <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />活動減少：ログインはあるが、イベント参加や投稿が減少傾向</span>
-          <span><span className="inline-block w-2 h-2 rounded-full bg-red-400 mr-1" />長期不在：30日以上ログインなし</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />アクティブ：30日以内にログインまたはイベント参加</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />活動減少：60日以内にログインまたはイベント参加</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-red-400 mr-1" />長期不在：60日以上ログイン＆イベント参加なし</span>
         </div>
       </div>
 
