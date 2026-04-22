@@ -22,3 +22,11 @@ npm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 個人情報を含むデータファイル（絶対にgitに上げない）
+data/raw/
+data/processed/
+*.xlsx
+*.xls
+!data/README.md
+public/members-db.json

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   CheckCircle,
@@ -23,17 +23,20 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Database,
 } from "lucide-react";
 
 // ============================================================
 // タブ定義
 // ============================================================
-type AdminTab = "applications" | "activity" | "participation";
+type AdminTab = "applications" | "activity" | "participation" | "members-db" | "members-db-raw";
 
 const tabs: { id: AdminTab; label: string; icon: typeof Clock }[] = [
   { id: "applications", label: "入会申請", icon: ClipboardList },
   { id: "activity", label: "メンバーの状況", icon: Activity },
   { id: "participation", label: "参加状況", icon: CalendarDays },
+  { id: "members-db", label: "会員DB", icon: Database },
+  { id: "members-db-raw", label: "生会員DB", icon: Database },
 ];
 
 // ============================================================
@@ -107,12 +110,12 @@ const memberActivities: MemberActivity[] = [
   { memberId: "1", lastLoginAt: "2026-04-05", lastEventAt: "2026-03-28", lastPostAt: "2026-04-04", loginCount30d: 18, eventCount90d: 5, postCount30d: 8, status: "active" },
   { memberId: "3", lastLoginAt: "2026-04-06", lastEventAt: "2026-04-01", lastPostAt: "2026-04-05", loginCount30d: 22, eventCount90d: 6, postCount30d: 12, status: "active" },
   { memberId: "10", lastLoginAt: "2026-04-04", lastEventAt: "2026-03-28", lastPostAt: "2026-04-02", loginCount30d: 15, eventCount90d: 4, postCount30d: 5, status: "active" },
-  { memberId: "2", lastLoginAt: "2026-04-03", lastEventAt: "2026-03-15", lastPostAt: "2026-03-30", loginCount30d: 12, eventCount90d: 3, postCount30d: 3, status: "active" },
-  { memberId: "8", lastLoginAt: "2026-03-18", lastEventAt: "2026-02-20", lastPostAt: "2026-03-10", loginCount30d: 4, eventCount90d: 1, postCount30d: 0, status: "dormant" },
+  { memberId: "2", lastLoginAt: "2026-04-03", lastEventAt: "2026-03-15", lastPostAt: "2026-03-30", loginCount30d: 12, eventCount90d: 3, postCount30d: 3, status: "dormant" },
+  { memberId: "8", lastLoginAt: "2026-03-18", lastEventAt: "2026-02-20", lastPostAt: "2026-03-10", loginCount30d: 4, eventCount90d: 1, postCount30d: 0, status: "inactive" },
   { memberId: "5", lastLoginAt: "2026-04-05", lastEventAt: "2026-03-28", lastPostAt: "2026-04-03", loginCount30d: 14, eventCount90d: 4, postCount30d: 3, status: "active" },
-  { memberId: "6", lastLoginAt: "2026-03-20", lastEventAt: "2026-02-15", lastPostAt: "2026-03-10", loginCount30d: 4, eventCount90d: 1, postCount30d: 0, status: "dormant" },
-  { memberId: "7", lastLoginAt: "2026-03-15", lastEventAt: "2026-02-15", lastPostAt: "2026-03-05", loginCount30d: 3, eventCount90d: 1, postCount30d: 0, status: "dormant" },
-  { memberId: "4", lastLoginAt: "2026-04-02", lastEventAt: "2026-03-15", lastPostAt: "2026-03-28", loginCount30d: 8, eventCount90d: 2, postCount30d: 1, status: "active" },
+  { memberId: "6", lastLoginAt: "2026-03-20", lastEventAt: "2026-02-15", lastPostAt: "2026-03-10", loginCount30d: 4, eventCount90d: 1, postCount30d: 0, status: "inactive" },
+  { memberId: "7", lastLoginAt: "2026-03-15", lastEventAt: "2026-02-15", lastPostAt: "2026-03-05", loginCount30d: 3, eventCount90d: 1, postCount30d: 0, status: "inactive" },
+  { memberId: "4", lastLoginAt: "2026-04-02", lastEventAt: "2026-03-15", lastPostAt: "2026-03-28", loginCount30d: 8, eventCount90d: 2, postCount30d: 1, status: "dormant" },
   { memberId: "9", lastLoginAt: "2026-02-01", lastEventAt: "2025-12-20", lastPostAt: "2026-01-15", loginCount30d: 0, eventCount90d: 0, postCount30d: 0, status: "inactive" },
 ];
 
@@ -175,17 +178,20 @@ const referralRecords: ReferralRecord[] = [
 // ============================================================
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("applications");
+  // 会員DBタブは情報量が多いのでコンテナを広めに
+  const containerMaxWidth =
+    activeTab === "members-db" || activeTab === "members-db-raw" ? "max-w-7xl" : "max-w-5xl";
 
   return (
     <div className="min-h-screen">
       {/* ヘッダー */}
       <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className={`${containerMaxWidth} mx-auto px-4 sm:px-6 lg:px-8 py-4`}>
           <h1 className="text-xl font-bold text-gray-900">管理画面</h1>
           <p className="text-sm text-gray-500 mt-0.5">コミュニティの運営・分析</p>
         </div>
         {/* タブナビ */}
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={`${containerMaxWidth} mx-auto px-4 sm:px-6 lg:px-8`}>
           <div className="flex gap-1 overflow-x-auto -mb-px">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -209,10 +215,12 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24">
+      <div className={`${containerMaxWidth} mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24`}>
         {activeTab === "applications" && <ApplicationsTab />}
         {activeTab === "activity" && <ActivityTab />}
         {activeTab === "participation" && <ParticipationTab />}
+        {activeTab === "members-db" && <MembersDbTab />}
+        {activeTab === "members-db-raw" && <MembersDbRawTab />}
 
       </div>
     </div>
@@ -406,8 +414,7 @@ function ActivityTab() {
   function getLastActivityDate(memberId: string): number {
     const a = memberActivities.find((x) => x.memberId === memberId);
     if (!a) return 999;
-    const latest = [a.lastLoginAt, a.lastEventAt, a.lastPostAt].sort((x, y) => y.localeCompare(x))[0];
-    return daysFromNow(latest);
+    return daysFromNow(a.lastEventAt);
   }
 
   // 紹介者ごとの定着率マップ
@@ -591,9 +598,9 @@ function ActivityTab() {
       <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-6">
         <p className="text-xs font-bold text-gray-600 mb-2">判定基準</p>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-gray-500">
-          <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />アクティブ：30日以内にログインまたはイベント参加</span>
-          <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />活動減少：60日以内にログインまたはイベント参加</span>
-          <span><span className="inline-block w-2 h-2 rounded-full bg-red-400 mr-1" />長期不在：60日以上ログイン＆イベント参加なし</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />アクティブ：30日以内にイベント参加</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />活動減少：60日以内にイベント参加</span>
+          <span><span className="inline-block w-2 h-2 rounded-full bg-red-400 mr-1" />長期不在：60日以上イベント参加なし</span>
         </div>
       </div>
 
@@ -1042,6 +1049,635 @@ function ParticipationTab() {
             ))}
         </div>
       )}
+    </>
+  );
+}
+
+// ============================================================
+// タブ4: 会員DB（統合データビューア）
+// ============================================================
+// データソース: public/members-db.json（ローカル専用、gitignore）
+// Vercel環境ではCSVが無いため allMembers をフォールバック表示
+interface MemberDbRow {
+  id: string;
+  member_no: number | string | null;  // 実データは number、フォールバック("00A"等)は string
+  name: string;
+  nickname: string | null;
+  referrer: string | null;
+  start_month: string | null;
+  first_renewal: string | null;
+  price: number | null;
+  referral_fee: number | null;
+  job: string | null;
+  grip: string | null;
+  frequency: string | null;
+  email: string | null;
+  phone: string | null;
+  gender: string | null;
+  age_range: string | null;
+  membership_type: string | null;
+  payment_method: string | null;
+  contact_submitted_at: string | null;
+  source: "both" | "member_only" | "contact_only";
+  is_withdrawn: boolean;
+  import_sheet: string | null;
+}
+
+type MembersDbFilter = "all" | "both" | "member_only" | "contact_only" | "withdrawn";
+type MembersDbSortKey = "member_no" | "name" | "start_month" | "price" | "contact_submitted_at";
+
+const sortKeyLabels: Record<MembersDbSortKey, string> = {
+  member_no: "会員番号",
+  name: "氏名",
+  start_month: "スタート月",
+  price: "料金",
+  contact_submitted_at: "フォーム送信日",
+};
+
+// フィルタ・ソート・検索の共通state管理
+// 両タブで同じ挙動にしつつ、showWithdrawnの初期値だけ切替可能
+function useMembersDbView(rows: MemberDbRow[] | null, defaults?: { showWithdrawn?: boolean }) {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<MembersDbFilter>("all");
+  const [membershipFilter, setMembershipFilter] = useState<"all" | "法人" | "個人">("all");
+  const [sortKey, setSortKey] = useState<MembersDbSortKey>("member_no");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [showWithdrawn, setShowWithdrawn] = useState(defaults?.showWithdrawn ?? false);
+
+  const counts = useMemo(() => {
+    if (!rows) return { total: 0, both: 0, member_only: 0, contact_only: 0, withdrawn: 0 };
+    return rows.reduce(
+      (acc, r) => {
+        acc.total++;
+        acc[r.source]++;
+        if (r.is_withdrawn) acc.withdrawn++;
+        return acc;
+      },
+      { total: 0, both: 0, member_only: 0, contact_only: 0, withdrawn: 0 },
+    );
+  }, [rows]);
+
+  const filtered = useMemo(() => {
+    if (!rows) return [];
+    const result = rows
+      .filter((r) => {
+        if (filter === "all") return true;
+        if (filter === "withdrawn") return r.is_withdrawn;
+        return r.source === filter;
+      })
+      .filter((r) => (filter === "withdrawn" || showWithdrawn ? true : !r.is_withdrawn))
+      .filter((r) => (membershipFilter === "all" ? true : r.membership_type === membershipFilter))
+      .filter((r) => {
+        if (!search.trim()) return true;
+        const s = search.toLowerCase();
+        return (
+          r.name.toLowerCase().includes(s) ||
+          (r.nickname?.toLowerCase().includes(s) ?? false) ||
+          (r.email?.toLowerCase().includes(s) ?? false) ||
+          (r.phone?.includes(search) ?? false) ||
+          (r.job?.toLowerCase().includes(s) ?? false) ||
+          (r.referrer?.toLowerCase().includes(s) ?? false) ||
+          (r.member_no != null && String(r.member_no).includes(search))
+        );
+      });
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...result].sort((a, b) => {
+      const av = a[sortKey] as string | number | null;
+      const bv = b[sortKey] as string | number | null;
+      // nullは常に末尾（sort方向に関わらず既知の値を優先）
+      if (av == null && bv == null) return a.name.localeCompare(b.name, "ja");
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), "ja") * dir;
+    });
+  }, [rows, search, filter, membershipFilter, sortKey, sortDir, showWithdrawn]);
+
+  // ヘッダークリックでソート切替（同じキーなら昇降反転、違うキーなら昇順）
+  const toggleSort = (key: MembersDbSortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  return {
+    search, setSearch,
+    filter, setFilter,
+    membershipFilter, setMembershipFilter,
+    sortKey, setSortKey,
+    sortDir, setSortDir,
+    showWithdrawn, setShowWithdrawn,
+    toggleSort,
+    counts, filtered,
+  };
+}
+
+// 会員DBデータのフェッチ（ローカル: 実データ / Vercel: allMembersフォールバック）
+function useMembersDb() {
+  const [rows, setRows] = useState<MemberDbRow[] | null>(null);
+  const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "fallback">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/members-db.json")
+      .then((res) => {
+        if (!res.ok) throw new Error("not found");
+        return res.json();
+      })
+      .then((data: MemberDbRow[]) => {
+        if (cancelled) return;
+        setRows(data);
+        setLoadStatus("loaded");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Vercel等でCSVが無い場合: 既存allMembersを暫定表示（空を避ける）
+        // ダミー番号は実データ(1〜450番)と衝突しないよう "00A"〜"00J" を使用
+        const fallback: MemberDbRow[] = allMembers.map((m, i) => ({
+          id: m.id,
+          member_no: `00${String.fromCharCode(65 + i)}`,
+          name: m.name,
+          nickname: m.short,
+          referrer: null,
+          start_month: null,
+          first_renewal: null,
+          price: null,
+          referral_fee: null,
+          job: m.job,
+          grip: null,
+          frequency: null,
+          email: null,
+          phone: null,
+          gender: null,
+          age_range: null,
+          membership_type: m.memberType,
+          payment_method: null,
+          contact_submitted_at: null,
+          source: "both",
+          is_withdrawn: false,
+          import_sheet: null,
+        }));
+        setRows(fallback);
+        setLoadStatus("fallback");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  return { rows, loadStatus };
+}
+
+// ソート可能なテーブルヘッダーセル（クリックで昇降切替）
+function SortableHeaderCell({
+  label,
+  sortKey,
+  view,
+  align = "left",
+}: {
+  label: string;
+  sortKey: MembersDbSortKey;
+  view: ReturnType<typeof useMembersDbView>;
+  align?: "left" | "right" | "center";
+}) {
+  const isActive = view.sortKey === sortKey;
+  const alignCls = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
+  return (
+    <button
+      onClick={() => view.toggleSort(sortKey)}
+      className={`flex items-center gap-1 ${alignCls} hover:text-gray-900 transition-colors ${
+        isActive ? "text-amber-700" : "text-gray-600"
+      }`}
+      title={isActive ? (view.sortDir === "asc" ? "昇順（クリックで降順）" : "降順（クリックで昇順）") : "クリックでソート"}
+    >
+      <span>{label}</span>
+      <span className={`text-[10px] leading-none ${isActive ? "" : "text-gray-300"}`}>
+        {isActive ? (view.sortDir === "asc" ? "↑" : "↓") : "⇅"}
+      </span>
+    </button>
+  );
+}
+
+// 検索/フィルタ/ソートの共通ツールバー
+function MembersDbToolbar({
+  view,
+  sortKeys,
+}: {
+  view: ReturnType<typeof useMembersDbView>;
+  sortKeys: MembersDbSortKey[];
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4 space-y-3">
+      {/* 検索 + 退会者トグル */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={view.search}
+            onChange={(e) => view.setSearch(e.target.value)}
+            placeholder="氏名・メール・電話・職業・紹介者・会員番号で検索"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+        </div>
+        {view.filter !== "withdrawn" && (
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={view.showWithdrawn}
+              onChange={(e) => view.setShowWithdrawn(e.target.checked)}
+              className="w-4 h-4 accent-amber-500"
+            />
+            退会者を表示
+          </label>
+        )}
+      </div>
+
+      {/* 枠フィルタ + ソート */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-sm">
+        {/* 枠 */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-gray-500 whitespace-nowrap">枠:</span>
+          <div className="flex gap-1">
+            {(["all", "法人", "個人"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => view.setMembershipFilter(t)}
+                className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${
+                  view.membershipFilter === t
+                    ? "bg-gray-900 text-white border-gray-900"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+                }`}
+              >
+                {t === "all" ? "全て" : t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ソート */}
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <span className="text-xs font-bold text-gray-500 whitespace-nowrap">並び順:</span>
+          <select
+            value={view.sortKey}
+            onChange={(e) => view.setSortKey(e.target.value as MembersDbSortKey)}
+            className="px-2 py-1 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+          >
+            {sortKeys.map((k) => (
+              <option key={k} value={k}>{sortKeyLabels[k]}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => view.setSortDir(view.sortDir === "asc" ? "desc" : "asc")}
+            className="px-3 py-1 text-xs font-bold rounded-md border border-gray-200 bg-white hover:border-gray-400 transition-colors whitespace-nowrap"
+            title={view.sortDir === "asc" ? "昇順（クリックで降順）" : "降順（クリックで昇順）"}
+          >
+            {view.sortDir === "asc" ? "↑ 昇順" : "↓ 降順"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MembersDbTab() {
+  const { rows, loadStatus } = useMembersDb();
+  const view = useMembersDbView(rows);
+  const [detailRow, setDetailRow] = useState<MemberDbRow | null>(null);
+
+  const { filter, counts, filtered } = view;
+
+  const sourceLabel: Record<MemberDbRow["source"], { label: string; cls: string }> = {
+    both: { label: "両方", cls: "bg-green-50 text-green-700 border-green-200" },
+    member_only: { label: "名簿のみ", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    contact_only: { label: "連絡先のみ", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  };
+
+  if (loadStatus === "loading") {
+    return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
+  }
+
+  return (
+    <>
+      {/* ステータスバナー（fallback時のみ表示） */}
+      {loadStatus === "fallback" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+          <p className="text-sm text-amber-800">
+            <span className="font-bold">⚠ デモ表示中</span> — 実データ（入会者名簿 / 連絡先情報）を読み込むには、ローカル環境で
+            <code className="mx-1 px-1.5 py-0.5 bg-amber-100 rounded text-xs">node scripts/build-members-db.mjs</code>
+            を実行してください。
+          </p>
+        </div>
+      )}
+
+      {/* 統計カード（クリックでフィルタ切替、全て排他的） */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        {[
+          { key: "all" as MembersDbFilter, label: "全員", count: counts.total, color: "text-gray-900" },
+          { key: "both" as MembersDbFilter, label: "両方", count: counts.both, color: "text-green-600" },
+          { key: "member_only" as MembersDbFilter, label: "名簿のみ", count: counts.member_only, color: "text-amber-600" },
+          { key: "contact_only" as MembersDbFilter, label: "連絡先のみ", count: counts.contact_only, color: "text-blue-600" },
+          { key: "withdrawn" as MembersDbFilter, label: "退会者", count: counts.withdrawn, color: "text-red-500" },
+        ].map((stat) => (
+          <button
+            key={stat.key}
+            onClick={() => view.setFilter(stat.key)}
+            className={`bg-white rounded-xl border shadow-sm p-4 text-left transition-all ${
+              filter === stat.key ? "border-gray-900 ring-1 ring-gray-900" : "border-gray-100 hover:border-gray-300"
+            }`}
+          >
+            <p className="text-xs text-gray-500 mb-1">{stat.label}</p>
+            <p className={`text-2xl font-bold ${stat.color}`}>{stat.count}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* 検索・フィルタ・ソート ツールバー */}
+      <MembersDbToolbar view={view} sortKeys={["member_no", "name", "start_month", "price"]} />
+
+      {/* 一覧 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <div className="min-w-[820px]">
+            {/* ヘッダー行（ソート可能カラムはクリックで切替） */}
+            <div className="grid grid-cols-[60px_2fr_60px_100px_100px_1.2fr_80px_70px] gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-600">
+              <SortableHeaderCell label="番号" sortKey="member_no" view={view} />
+              <SortableHeaderCell label="氏名" sortKey="name" view={view} />
+              <div>枠</div>
+              <SortableHeaderCell label="スタート" sortKey="start_month" view={view} />
+              <SortableHeaderCell label="料金" sortKey="price" view={view} align="right" />
+              <div>紹介者</div>
+              <div>出典</div>
+              <div className="text-right">状態</div>
+            </div>
+            {/* 行 */}
+            <div className="max-h-[calc(100vh-400px)] overflow-y-auto">
+              {filtered.length === 0 && (
+                <div className="text-center text-gray-400 py-12 text-sm">該当するメンバーがいません</div>
+              )}
+              {filtered.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => setDetailRow(r)}
+                  className="w-full grid grid-cols-[60px_2fr_60px_100px_100px_1.2fr_80px_70px] gap-2 px-4 py-3 border-b border-gray-100 text-sm text-left hover:bg-amber-50 transition-colors items-center"
+                >
+                  <div className="text-gray-500 font-mono text-xs">{r.member_no ?? "—"}</div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-900 truncate">{r.name}</p>
+                    {r.nickname && <p className="text-[11px] text-gray-400 truncate">{r.nickname}</p>}
+                    {r.job && <p className="text-[11px] text-gray-500 truncate mt-0.5">{r.job}</p>}
+                  </div>
+                  <div>
+                    {r.membership_type ? (
+                      <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded border ${
+                        r.membership_type === "法人"
+                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                          : "bg-gray-50 text-gray-600 border-gray-200"
+                      }`}>
+                        {r.membership_type}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">—</span>
+                    )}
+                  </div>
+                  <div className="text-gray-600 text-xs truncate">{r.start_month || "—"}</div>
+                  <div className="text-right text-gray-700 text-xs font-mono">
+                    {r.price != null ? `¥${r.price.toLocaleString()}` : "—"}
+                  </div>
+                  <div className="text-gray-600 text-xs truncate">{r.referrer || "—"}</div>
+                  <div>
+                    <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded border ${sourceLabel[r.source].cls}`}>
+                      {sourceLabel[r.source].label}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    {r.is_withdrawn ? (
+                      <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded bg-red-50 text-red-600 border border-red-200">退会</span>
+                    ) : (
+                      <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded bg-green-50 text-green-600 border border-green-200">現役</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-500">
+          {filtered.length}件 表示中（全{counts.total}件中）
+        </div>
+      </div>
+
+      {/* 詳細モーダル */}
+      {detailRow && <MemberDbDetailModal row={detailRow} onClose={() => setDetailRow(null)} />}
+    </>
+  );
+}
+
+function MemberDbDetailModal({ row, onClose }: { row: MemberDbRow; onClose: () => void }) {
+  const fields: { label: string; value: string | number | boolean | null; mono?: boolean }[] = [
+    { label: "会員番号", value: row.member_no, mono: true },
+    { label: "氏名", value: row.name },
+    { label: "呼び名", value: row.nickname },
+    { label: "メールアドレス", value: row.email, mono: true },
+    { label: "電話番号", value: row.phone, mono: true },
+    { label: "性別", value: row.gender },
+    { label: "年代", value: row.age_range },
+    { label: "職業", value: row.job },
+    { label: "紹介者", value: row.referrer },
+    { label: "スタート月", value: row.start_month },
+    { label: "１回目更新", value: row.first_renewal },
+    { label: "料金", value: row.price != null ? `¥${row.price.toLocaleString()}` : null },
+    { label: "紹介料", value: row.referral_fee != null ? `¥${row.referral_fee.toLocaleString()}` : null },
+    { label: "グリップ", value: row.grip },
+    { label: "参加頻度", value: row.frequency },
+    { label: "法人・個人", value: row.membership_type },
+    { label: "支払方法", value: row.payment_method },
+    { label: "フォーム送信日", value: row.contact_submitted_at ? new Date(row.contact_submitted_at).toLocaleString("ja-JP") : null },
+    { label: "データ出典", value: row.source === "both" ? "両方" : row.source === "member_only" ? "名簿のみ" : "連絡先のみ" },
+    { label: "退会", value: row.is_withdrawn ? "はい" : "いいえ" },
+    { label: "名簿シート", value: row.import_sheet },
+    { label: "ID", value: row.id, mono: true },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">{row.name}</h3>
+            <p className="text-xs text-gray-500">会員詳細</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+            {fields.map((f) => (
+              <div key={f.label} className="border-b border-gray-100 pb-2">
+                <p className="text-[11px] text-gray-400 mb-0.5">{f.label}</p>
+                <p className={`text-sm text-gray-900 break-words ${f.mono ? "font-mono" : ""}`}>
+                  {f.value == null || f.value === "" ? <span className="text-gray-300">—</span> : String(f.value)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// タブ5: 生会員DB（全フィールド一覧・横スクロール）
+// ============================================================
+// 会員DBタブが「よく使うカラムのみ」なのに対し、こちらは全22フィールドを一度に表示。
+// データ取得ロジックは useMembersDb() を共有。
+function MembersDbRawTab() {
+  const { rows, loadStatus } = useMembersDb();
+  // 生データビューなので退会者もデフォルトで表示（全件が見える状態が期待値）
+  const view = useMembersDbView(rows, { showWithdrawn: true });
+  const { filter, counts, filtered } = view;
+
+  if (loadStatus === "loading") {
+    return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
+  }
+
+  // 全カラム定義（表示順・幅・値の取得関数・ソートキー）
+  const columns: { label: string; width: string; align?: "left" | "right" | "center"; sortKey?: MembersDbSortKey; render: (r: MemberDbRow) => React.ReactNode }[] = [
+    { label: "番号", width: "60px", sortKey: "member_no", render: (r) => <span className="font-mono text-xs text-gray-500">{r.member_no ?? "—"}</span> },
+    { label: "氏名", width: "140px", sortKey: "name", render: (r) => <span className="font-bold text-gray-900">{r.name}</span> },
+    { label: "呼び名", width: "100px", render: (r) => r.nickname || <span className="text-gray-300">—</span> },
+    { label: "枠", width: "60px", render: (r) => r.membership_type ? (
+      <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded border ${
+        r.membership_type === "法人" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-600 border-gray-200"
+      }`}>{r.membership_type}</span>
+    ) : <span className="text-gray-300">—</span> },
+    { label: "性別", width: "50px", render: (r) => r.gender || <span className="text-gray-300">—</span> },
+    { label: "年代", width: "70px", render: (r) => r.age_range || <span className="text-gray-300">—</span> },
+    { label: "職業", width: "200px", render: (r) => r.job || <span className="text-gray-300">—</span> },
+    { label: "紹介者", width: "110px", render: (r) => r.referrer || <span className="text-gray-300">—</span> },
+    { label: "スタート月", width: "90px", sortKey: "start_month", render: (r) => r.start_month || <span className="text-gray-300">—</span> },
+    { label: "1回目更新", width: "90px", render: (r) => r.first_renewal || <span className="text-gray-300">—</span> },
+    { label: "料金", width: "80px", align: "right", sortKey: "price", render: (r) => r.price != null ? <span className="font-mono text-xs">¥{r.price.toLocaleString()}</span> : <span className="text-gray-300">—</span> },
+    { label: "紹介料", width: "80px", align: "right", render: (r) => r.referral_fee != null ? <span className="font-mono text-xs">¥{r.referral_fee.toLocaleString()}</span> : <span className="text-gray-300">—</span> },
+    { label: "グリップ", width: "90px", render: (r) => r.grip || <span className="text-gray-300">—</span> },
+    { label: "参加頻度", width: "100px", render: (r) => r.frequency || <span className="text-gray-300">—</span> },
+    { label: "メール", width: "220px", render: (r) => <span className="text-xs">{r.email || <span className="text-gray-300">—</span>}</span> },
+    { label: "電話", width: "130px", render: (r) => <span className="font-mono text-xs">{r.phone || <span className="text-gray-300">—</span>}</span> },
+    { label: "支払方法", width: "100px", render: (r) => r.payment_method || <span className="text-gray-300">—</span> },
+    { label: "フォーム送信日", width: "150px", sortKey: "contact_submitted_at", render: (r) => r.contact_submitted_at ? (
+      <span className="text-xs">{new Date(r.contact_submitted_at).toLocaleDateString("ja-JP")}</span>
+    ) : <span className="text-gray-300">—</span> },
+    { label: "出典", width: "90px", render: (r) => {
+      const label = r.source === "both" ? "両方" : r.source === "member_only" ? "名簿のみ" : "連絡先のみ";
+      const cls = r.source === "both" ? "bg-green-50 text-green-700 border-green-200"
+        : r.source === "member_only" ? "bg-amber-50 text-amber-700 border-amber-200"
+        : "bg-blue-50 text-blue-700 border-blue-200";
+      return <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded border ${cls}`}>{label}</span>;
+    } },
+    { label: "状態", width: "70px", render: (r) => r.is_withdrawn ? (
+      <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-50 text-red-600 border border-red-200">退会</span>
+    ) : (
+      <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold rounded bg-green-50 text-green-600 border border-green-200">現役</span>
+    ) },
+    { label: "名簿シート", width: "100px", render: (r) => r.import_sheet || <span className="text-gray-300">—</span> },
+    { label: "ID", width: "280px", render: (r) => <span className="font-mono text-[10px] text-gray-400">{r.id}</span> },
+  ];
+
+  const gridTemplate = columns.map((c) => c.width).join(" ");
+  const minWidth = columns.reduce((sum, c) => sum + (parseInt(c.width) || 0), 0) + columns.length * 8;
+
+  return (
+    <>
+      {loadStatus === "fallback" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+          <p className="text-sm text-amber-800">
+            <span className="font-bold">⚠ デモ表示中</span> — 実データを読み込むには、ローカル環境で
+            <code className="mx-1 px-1.5 py-0.5 bg-amber-100 rounded text-xs">node scripts/build-members-db.mjs</code>
+            を実行してください。
+          </p>
+        </div>
+      )}
+
+      {/* 統計カード */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        {[
+          { key: "all" as MembersDbFilter, label: "全員", count: counts.total, color: "text-gray-900" },
+          { key: "both" as MembersDbFilter, label: "両方", count: counts.both, color: "text-green-600" },
+          { key: "member_only" as MembersDbFilter, label: "名簿のみ", count: counts.member_only, color: "text-amber-600" },
+          { key: "contact_only" as MembersDbFilter, label: "連絡先のみ", count: counts.contact_only, color: "text-blue-600" },
+          { key: "withdrawn" as MembersDbFilter, label: "退会者", count: counts.withdrawn, color: "text-red-500" },
+        ].map((stat) => (
+          <button
+            key={stat.key}
+            onClick={() => view.setFilter(stat.key)}
+            className={`bg-white rounded-xl border shadow-sm p-4 text-left transition-all ${
+              filter === stat.key ? "border-gray-900 ring-1 ring-gray-900" : "border-gray-100 hover:border-gray-300"
+            }`}
+          >
+            <p className="text-xs text-gray-500 mb-1">{stat.label}</p>
+            <p className={`text-2xl font-bold ${stat.color}`}>{stat.count}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* 検索・フィルタ・ソート ツールバー（生DBは contact_submitted_at もソート可） */}
+      <MembersDbToolbar view={view} sortKeys={["member_no", "name", "start_month", "price", "contact_submitted_at"]} />
+
+      {/* 全カラムテーブル（横スクロール） */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-auto max-h-[calc(100vh-280px)]">
+          <div style={{ minWidth: `${minWidth}px` }}>
+            {/* ヘッダー行（sticky、ソート可能カラムはクリックで切替） */}
+            <div
+              className="grid gap-2 px-4 py-3 bg-gray-100 border-b border-gray-200 text-xs font-bold text-gray-700 sticky top-0 z-10"
+              style={{ gridTemplateColumns: gridTemplate }}
+            >
+              {columns.map((c) => {
+                const alignCls = c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "";
+                if (c.sortKey) {
+                  return (
+                    <div key={c.label} className={alignCls}>
+                      <SortableHeaderCell label={c.label} sortKey={c.sortKey} view={view} align={c.align} />
+                    </div>
+                  );
+                }
+                return <div key={c.label} className={alignCls}>{c.label}</div>;
+              })}
+            </div>
+            {/* 行 */}
+            {filtered.length === 0 && (
+              <div className="text-center text-gray-400 py-12 text-sm">該当するメンバーがいません</div>
+            )}
+            {filtered.map((r) => (
+              <div
+                key={r.id}
+                className="grid gap-2 px-4 py-2.5 border-b border-gray-100 text-sm text-gray-700 hover:bg-amber-50 transition-colors items-center"
+                style={{ gridTemplateColumns: gridTemplate }}
+              >
+                {columns.map((c) => (
+                  <div
+                    key={c.label}
+                    className={`truncate ${c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}`}
+                    title={typeof c.render(r) === "string" ? String(c.render(r)) : undefined}
+                  >
+                    {c.render(r)}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-xs text-gray-500">
+          {filtered.length}件 表示中（全{counts.total}件中）・全{columns.length}カラム
+        </div>
+      </div>
     </>
   );
 }

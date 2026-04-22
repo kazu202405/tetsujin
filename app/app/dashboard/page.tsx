@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Search, ChevronRight, Building2, User, ChevronDown, X } from "lucide-react";
 import {
@@ -9,12 +9,24 @@ import {
   DashboardMember,
 } from "@/lib/dashboard-data";
 
-function MemberCard({ member }: { member: DashboardMember }) {
-  return (
-    <Link
-      href={`/app/profile/${member.id}`}
-      className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 group"
-    >
+// members-db.json (ローカル専用) の型
+interface MembersDbRecord {
+  id: string;
+  name: string;
+  nickname: string | null;
+  job: string | null;
+  referrer: string | null;
+  membership_type: string | null;
+  is_withdrawn: boolean;
+  source: "both" | "member_only" | "contact_only";
+}
+
+// 実データ用: DashboardMember + プロフィールページ対応フラグ
+type MemberCardData = DashboardMember & { hasProfile: boolean };
+
+function MemberCard({ member }: { member: MemberCardData }) {
+  const content = (
+    <>
       <img
         src={member.photoUrl}
         alt={member.name}
@@ -22,12 +34,14 @@ function MemberCard({ member }: { member: DashboardMember }) {
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold text-gray-900 truncate group-hover:text-amber-700 transition-colors">
+          <h3 className={`text-sm font-bold text-gray-900 truncate transition-colors ${member.hasProfile ? "group-hover:text-amber-700" : ""}`}>
             {member.name}
           </h3>
-          <span className="text-[11px] text-gray-400 flex-shrink-0">
-            {member.jobTitle}
-          </span>
+          {member.jobTitle && (
+            <span className="text-[11px] text-gray-400 flex-shrink-0 truncate">
+              {member.jobTitle}
+            </span>
+          )}
           <span
             className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
               member.memberType === "法人"
@@ -38,13 +52,78 @@ function MemberCard({ member }: { member: DashboardMember }) {
             {member.memberType}
           </span>
         </div>
-        <p className="text-xs text-gray-500 truncate mt-0.5">
-          {member.headline}
-        </p>
+        {member.headline && (
+          <p className="text-xs text-gray-500 truncate mt-0.5">
+            {member.headline}
+          </p>
+        )}
       </div>
-      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-amber-500 transition-colors flex-shrink-0" />
-    </Link>
+      {member.hasProfile && (
+        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-amber-500 transition-colors flex-shrink-0" />
+      )}
+    </>
   );
+
+  if (member.hasProfile) {
+    return (
+      <Link
+        href={`/app/profile/${member.id}`}
+        className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 group"
+      >
+        {content}
+      </Link>
+    );
+  }
+  // プロフィール詳細のないメンバー（CSV由来）はクリック不可
+  return (
+    <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      {content}
+    </div>
+  );
+}
+
+// CSV由来の業種キーワード → industryFilters 枠にマッピング
+function inferIndustry(job: string | null): string {
+  if (!job) return "その他";
+  const j = job.toLowerCase();
+  const rules: { keywords: string[]; label: string }[] = [
+    { keywords: ["it", "エンジニア", "システム", "web", "アプリ", "ai", "se", "プログラ"], label: "AI/IT/SE" },
+    { keywords: ["飲食", "レストラン", "カフェ", "居酒屋", "bar", "バー"], label: "飲食/BAR/カフェ" },
+    { keywords: ["不動産", "住宅", "賃貸", "マンション"], label: "不動産/住宅関連" },
+    { keywords: ["医師", "看護", "クリニック", "歯科", "治療", "整骨", "鍼灸"], label: "医療" },
+    { keywords: ["保険", "fp", "ファイナンシャル", "投資", "銀行", "金融"], label: "金融/生命保険/投資" },
+    { keywords: ["デザイン", "クリエイ", "カメラマン", "映像", "動画"], label: "WEBデザイン" },
+    { keywords: ["人材", "採用", "人事"], label: "人材業/人事" },
+    { keywords: ["物販", "ec", "小売", "卸", "通販"], label: "小売り/卸/物販" },
+    { keywords: ["コンサル", "講師", "研修", "スクール"], label: "コンサル/研修/講師" },
+    { keywords: ["税理士", "弁護士", "行政書士", "社労士", "司法書士"], label: "士業" },
+    { keywords: ["美容", "エステ", "ネイル", "ヘア"], label: "美容" },
+    { keywords: ["製造", "工場", "メーカー"], label: "製造業" },
+  ];
+  for (const rule of rules) {
+    if (rule.keywords.some((k) => j.includes(k))) return rule.label;
+  }
+  return "その他";
+}
+
+// CSVデータ → ダッシュボード表示形式に変換
+function csvToDashboard(row: MembersDbRecord): MemberCardData {
+  return {
+    id: row.id,
+    slug: row.id,
+    name: row.name,
+    photoUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(row.name)}&backgroundColor=fbbf24,f59e0b,d97706&textColor=ffffff`,
+    roleTitle: "",
+    jobTitle: row.job || "",
+    headline: row.nickname ? `"${row.nickname}"` : "",
+    trustScore: 0,
+    recommendationCount: 0,
+    contextTags: [],
+    referrer: row.referrer || "",
+    industry: inferIndustry(row.job),
+    memberType: row.membership_type === "法人" ? "法人" : "個人",
+    hasProfile: false, // CSV由来はプロフィール詳細なし
+  };
 }
 
 export default function DashboardPage() {
@@ -53,6 +132,7 @@ export default function DashboardPage() {
   const [memberTypeFilter, setMemberTypeFilter] = useState<"全て" | "法人" | "個人">("全て");
   const [genreOpen, setGenreOpen] = useState(false);
   const [genreSearch, setGenreSearch] = useState("");
+  const [realMembers, setRealMembers] = useState<MemberCardData[] | null>(null);
   const genreRef = useRef<HTMLDivElement>(null);
 
   // ドロップダウン外クリックで閉じる
@@ -66,11 +146,32 @@ export default function DashboardPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // members-db.json をローカル環境でのみ読み込み（Vercelではハードコードのまま）
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/members-db.json")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data: MembersDbRecord[]) => {
+        if (cancelled) return;
+        // 退会者を除外、現役のみ表示
+        const active = data.filter((r) => !r.is_withdrawn);
+        setRealMembers(active.map(csvToDashboard));
+      })
+      .catch(() => { /* ファイル無し → ハードコードのまま */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  // 実データがあればそれを、無ければハードコードを使う（型を揃えてhasProfileを付与）
+  const sourceMembers: MemberCardData[] = useMemo(() => {
+    if (realMembers) return realMembers;
+    return dashboardMembers.map((m) => ({ ...m, hasProfile: true }));
+  }, [realMembers]);
+
   const filteredGenres = industryFilters.filter(
     (g) => g === "全員" || g.includes(genreSearch)
   );
 
-  const filtered = dashboardMembers.filter((m) => {
+  const filtered = sourceMembers.filter((m) => {
     const matchesSearch =
       !searchQuery ||
       m.name.includes(searchQuery) ||
