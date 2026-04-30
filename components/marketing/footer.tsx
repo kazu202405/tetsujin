@@ -52,7 +52,7 @@ export function MarketingFooter() {
                 </a>
               </li>
               <li><Link href="/contact" className="hover:text-white transition-colors">お問い合わせ</Link></li>
-              <li><Link href="/app/dashboard" className="hover:text-white transition-colors">会員ログイン</Link></li>
+              <li><Link href="/app/mypage" className="hover:text-white transition-colors">会員ログイン</Link></li>
             </ul>
           </div>
         </div>

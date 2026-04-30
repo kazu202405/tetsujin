@@ -1,3 +1,5 @@
+import { SocialLink } from "./social-links";
+
 export interface Tag {
   id: string;
   name: string;
@@ -20,11 +22,7 @@ export interface Member {
   tags: Tag[];
   status: "draft" | "published" | "private";
   allowDirectContact: boolean;
-  contactLinks: {
-    line?: string;
-    site?: string;
-    sns?: string;
-  };
+  socialLinks: SocialLink[];
   createdAt: string;
   updatedAt: string;
 }

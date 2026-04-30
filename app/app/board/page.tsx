@@ -28,6 +28,7 @@ import {
   CornerDownRight,
   type LucideIcon,
 } from "lucide-react";
+import { markBoardVisited } from "@/lib/board-data";
 
 // アイコンマップ（文字列キー → コンポーネント）
 const iconMap: Record<string, LucideIcon> = {
@@ -370,9 +371,10 @@ export default function BoardPage() {
   const [editIcon, setEditIcon] = useState("");
   const [editColor, setEditColor] = useState("");
 
-  // localStorage読み込み（クライアントのみ）
+  // localStorage読み込み（クライアントのみ）+ 訪問記録（未読バッジ消去）
   useEffect(() => {
     setChannels(loadChannels());
+    markBoardVisited();
   }, []);
 
   // チャンネル変更時にlocalStorageへ保存

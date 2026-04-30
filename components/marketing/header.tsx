@@ -104,7 +104,7 @@ export function MarketingHeader() {
               新規登録
             </Link>
             <Link
-              href="/app/dashboard"
+              href="/app/mypage"
               className="hidden sm:inline-flex items-center px-5 py-2 text-sm font-bold text-white bg-[var(--tetsu-pink)] rounded-full hover:bg-[var(--tetsu-pink-light)] transition-colors shadow-sm"
             >
               ログイン
@@ -177,7 +177,7 @@ export function MarketingHeader() {
               新規登録
             </Link>
             <Link
-              href="/app/dashboard"
+              href="/app/mypage"
               onClick={() => setIsOpen(false)}
               className="block text-center px-5 py-2.5 text-sm font-bold text-white bg-[var(--tetsu-pink)] rounded-full hover:bg-[var(--tetsu-pink-light)] transition-colors mt-2"
             >

@@ -19,7 +19,15 @@
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__ide__getDiagnostics",
       "mcp__plugin_playwright_playwright__browser_resize",
-      "mcp__plugin_playwright_playwright__browser_fill_form"
+      "mcp__plugin_playwright_playwright__browser_fill_form",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git check-ignore *)",
+      "Bash(node scripts/inspect-xlsx.mjs)",
+      "Bash(node scripts/analyze-xlsx.mjs)",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "Bash(git diff *)",
+      "Bash(git add *)"
     ]
   }
 }

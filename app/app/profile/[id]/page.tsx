@@ -18,6 +18,8 @@ import {
   Quote,
 } from "lucide-react";
 import { getMemberProfile } from "@/lib/dashboard-data";
+import { SocialLinksSection } from "@/components/app/social-links-section";
+import { CURRENT_USER_ID, isConnectedWithMe } from "@/lib/connections-data";
 
 export default function ProfilePage({
   params,
@@ -36,7 +38,7 @@ export default function ProfilePage({
       <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <Link
-            href="/app/dashboard"
+            href="/app/members"
             className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -261,6 +263,14 @@ export default function ProfilePage({
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* SNS・リンク */}
+            <SocialLinksSection
+              viewerMode={{
+                links: profile.socialLinks,
+                isConnected: isConnectedWithMe(id),
+                isOwner: id === CURRENT_USER_ID,
+              }}
+            />
             {/* Referral chain */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
               <h2 className="text-sm font-bold text-gray-900 mb-4">

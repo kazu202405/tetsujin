@@ -1,4 +1,5 @@
 import { members } from "./mock-data";
+import { SocialLink } from "./social-links";
 
 export interface DashboardMember {
   id: string;
@@ -237,6 +238,7 @@ export interface MemberProfile extends DashboardMember {
   servicesSummary: string;
   referralChain: string[];
   recommendations: Recommendation[];
+  socialLinks: SocialLink[];
 }
 
 const storyMap: Record<string, { storyOrigin: string; storyNow: string; profileStory: ProfileStory; servicesSummary: string }> = {
@@ -410,6 +412,28 @@ const recommendationsMap: Record<string, Recommendation[]> = {
   ],
 };
 
+// id 7-10 は dashboardMembers のみで Member 型を持たないので、SNSリンクをここで定義する
+const extraSocialLinksMap: Record<string, SocialLink[]> = {
+  "7": [
+    { id: "s7-1", platform: "instagram", url: "https://www.instagram.com/ogawa_design_studio", visibility: "public" },
+    { id: "s7-2", platform: "website", url: "https://ogawa-design.example.com", visibility: "public" },
+    { id: "s7-3", platform: "x", url: "https://x.com/ogawa_risa_d", visibility: "connections" },
+  ],
+  "8": [
+    { id: "s8-1", platform: "line", url: "https://line.me/ti/p/example-morita", visibility: "connections" },
+    { id: "s8-2", platform: "facebook", url: "https://www.facebook.com/morita.shun", visibility: "public" },
+    { id: "s8-3", platform: "website", url: "https://morita-talent.example.com", visibility: "public" },
+  ],
+  "9": [
+    { id: "s9-1", platform: "instagram", url: "https://www.instagram.com/fujita_mai_local", visibility: "public" },
+    { id: "s9-2", platform: "website", url: "https://fujita-ec.example.com", visibility: "public" },
+  ],
+  "10": [
+    { id: "s10-1", platform: "instagram", url: "https://www.instagram.com/honda_kappou", visibility: "public" },
+    { id: "s10-2", platform: "line", url: "https://line.me/ti/p/example-honda", visibility: "connections" },
+  ],
+};
+
 const referralChainMap: Record<string, string[]> = {
   "1": ["創設メンバー"],
   "2": ["創設メンバー", "田中 一郎"],
@@ -507,10 +531,15 @@ export function getMemberProfile(id: string): MemberProfile | undefined {
 
   const story = storyMap[id] || { storyOrigin: "", storyNow: "", servicesSummary: "", profileStory: { origin: "", turning: "", now: "", passion: "", values: "", coreValues: ["", "", ""] as [string, string, string], childhood: "", lookingFor: "", endorsements: [] } };
 
+  // SNSリンク：id 1-6 は mock-data.ts の members、id 7-10 は extraSocialLinksMap から
+  const socialLinks =
+    members.find((m) => m.id === id)?.socialLinks ?? extraSocialLinksMap[id] ?? [];
+
   return {
     ...member,
     ...story,
     referralChain: referralChainMap[id] || [],
     recommendations: recommendationsMap[id] || [],
+    socialLinks,
   };
 }
