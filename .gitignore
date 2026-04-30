@@ -30,3 +30,7 @@ data/processed/
 *.xls
 !data/README.md
 public/members-db.json
+
+# 作業用メモ・ツール出力
+.playwright-mcp/
+z copy.md
