@@ -23,6 +23,9 @@ export interface Member {
   status: "draft" | "published" | "private";
   allowDirectContact: boolean;
   socialLinks: SocialLink[];
+  // 退会フラグ（運営側で立てる、id は欠番保持で再利用しない）
+  isWithdrawn?: boolean;
+  withdrawnAt?: string;
   createdAt: string;
   updatedAt: string;
 }

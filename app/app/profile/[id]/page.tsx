@@ -16,10 +16,12 @@ import {
   Zap,
   Clock,
   Quote,
+  UserX,
 } from "lucide-react";
 import { getMemberProfile } from "@/lib/dashboard-data";
 import { SocialLinksSection } from "@/components/app/social-links-section";
 import { CURRENT_USER_ID, isConnectedWithMe } from "@/lib/connections-data";
+import { useIsWithdrawn } from "@/lib/withdrawal-data";
 
 export default function ProfilePage({
   params,
@@ -29,8 +31,46 @@ export default function ProfilePage({
   const { id } = use(params);
   const profile = getMemberProfile(id);
   const [showRecs, setShowRecs] = useState(false);
+  const isWithdrawn = useIsWithdrawn(id, profile?.isWithdrawn);
 
   if (!profile) return notFound();
+
+  // 退会済みメンバー：名前と業種のみ表示、他はマスク
+  if (isWithdrawn) {
+    return (
+      <div className="min-h-screen">
+        <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <Link
+              href="/app/members"
+              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              メンバー一覧に戻る
+            </Link>
+          </div>
+        </div>
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gray-100 flex items-center justify-center">
+              <UserX className="w-9 h-9 text-gray-400" />
+            </div>
+            <h1
+              className="text-2xl font-bold text-gray-600 mb-2"
+              style={{ fontFamily: "'Noto Serif JP', serif" }}
+            >
+              {profile.name}
+            </h1>
+            <p className="text-xs text-gray-400 mb-6">{profile.industry}</p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-50 text-gray-500 text-sm">
+              <UserX className="w-4 h-4" />
+              このメンバーは退会済みです
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

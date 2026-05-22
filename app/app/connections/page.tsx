@@ -13,6 +13,8 @@ import {
   RotateCcw,
   Tag,
 } from "lucide-react";
+import { MemberLink, MemberNameWithStatus } from "@/components/app/member-link";
+import { dashboardMembers } from "@/lib/dashboard-data";
 
 const STORAGE_KEY = "tetsujin-connection-tags";
 const DEFAULT_TAGS = ["コラボ可能性", "商談中", "紹介予定"];
@@ -103,24 +105,32 @@ function saveTags(tags: string[]) {
 }
 
 function ConnectionCard({ connection }: { connection: Connection }) {
+  const mockMember = dashboardMembers.find((m) => m.id === connection.person.id);
+  const mockWithdrawn = mockMember?.isWithdrawn;
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-6">
       {/* Person */}
       <div className="flex items-center gap-3 mb-4">
-        <Link href={`/app/profile/${connection.person.id}`}>
+        <MemberLink memberId={connection.person.id} mockWithdrawn={mockWithdrawn}>
           <img
             src={connection.person.photoUrl}
             alt={connection.person.name}
             className="w-12 h-12 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 hover:ring-amber-300 transition-all"
           />
-        </Link>
+        </MemberLink>
         <div className="min-w-0 flex-1">
-          <Link
-            href={`/app/profile/${connection.person.id}`}
+          <MemberLink
+            memberId={connection.person.id}
+            mockWithdrawn={mockWithdrawn}
             className="text-base font-bold text-gray-900 hover:text-amber-700 transition-colors"
           >
-            {connection.person.name}
-          </Link>
+            <MemberNameWithStatus
+              memberId={connection.person.id}
+              name={connection.person.name}
+              mockWithdrawn={mockWithdrawn}
+            />
+          </MemberLink>
           <p className="text-sm text-gray-500">{connection.person.roleTitle}</p>
         </div>
       </div>

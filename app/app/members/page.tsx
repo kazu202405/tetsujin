@@ -8,6 +8,7 @@ import {
   industryFilters,
   DashboardMember,
 } from "@/lib/dashboard-data";
+import { useWithdrawnIds } from "@/lib/withdrawal-data";
 
 function MemberCard({ member }: { member: DashboardMember }) {
   return (
@@ -70,7 +71,11 @@ export default function MembersPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const sourceMembers = dashboardMembers;
+  const withdrawnIds = useWithdrawnIds();
+  // 退会者は一覧から除外（mock の isWithdrawn or localStorage）
+  const sourceMembers = dashboardMembers.filter(
+    (m) => !m.isWithdrawn && !withdrawnIds.has(m.id)
+  );
 
   const filteredGenres = industryFilters.filter(
     (g) => g === "全員" || g.includes(genreSearch)

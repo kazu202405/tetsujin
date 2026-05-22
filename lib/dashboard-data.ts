@@ -15,6 +15,9 @@ export interface DashboardMember {
   referrer: string;
   industry: string;
   memberType: "法人" | "個人";
+  // 退会者は名前残しでクリック不可（id 欠番保持）
+  isWithdrawn?: boolean;
+  withdrawnAt?: string;
 }
 
 export const dashboardMembers: DashboardMember[] = [
@@ -116,6 +119,9 @@ export const dashboardMembers: DashboardMember[] = [
     referrer: "中村 明子",
     industry: "小売り/卸/物販",
     memberType: "個人",
+    // demo: Q2 依頼主回答後に対象を差し替え予定
+    isWithdrawn: true,
+    withdrawnAt: "2026-04-15",
   },
   {
     id: "10",

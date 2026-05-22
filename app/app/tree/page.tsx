@@ -3,12 +3,46 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Shield, Users, ChevronDown, ChevronRight } from "lucide-react";
-import { referralTree, TreeNode } from "@/lib/dashboard-data";
+import { referralTree, TreeNode, dashboardMembers } from "@/lib/dashboard-data";
+import { useIsWithdrawn } from "@/lib/withdrawal-data";
 
 function TreeNodeCard({ node, depth }: { node: TreeNode; depth: number }) {
   const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children.length > 0;
   const isRoot = node.id === "0";
+  const mockMember = dashboardMembers.find((m) => m.id === node.id);
+  const isWithdrawn = useIsWithdrawn(node.id, mockMember?.isWithdrawn);
+
+  const cardContent = (
+    <>
+      <img
+        src={node.photoUrl}
+        alt={node.name}
+        className={`w-9 h-9 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 ${
+          isWithdrawn ? "grayscale opacity-60" : ""
+        }`}
+      />
+      <div className="min-w-0">
+        <p
+          className={`text-sm font-bold truncate transition-colors ${
+            isWithdrawn ? "text-gray-500" : "text-gray-900 group-hover:text-amber-700"
+          }`}
+        >
+          {node.name}
+          {isWithdrawn && (
+            <span className="ml-1 text-[10px] text-gray-400 font-normal">（退会）</span>
+          )}
+        </p>
+        <p className="text-[11px] text-gray-500 truncate">{node.roleTitle}</p>
+      </div>
+      {!isWithdrawn && (
+        <div className="flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 flex-shrink-0">
+          <Shield className="w-3 h-3 text-amber-500" />
+          <span className="text-[11px] font-bold text-amber-700">{node.trustScore}</span>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <li className="relative">
@@ -22,18 +56,19 @@ function TreeNodeCard({ node, depth }: { node: TreeNode; depth: number }) {
               <Users className="w-4 h-4" />
               <span className="text-sm font-bold">{node.name}</span>
             </div>
+          ) : isWithdrawn ? (
+            <span
+              className="inline-flex items-center gap-3 px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 cursor-not-allowed"
+              title="退会済みメンバー"
+            >
+              {cardContent}
+            </span>
           ) : (
-            <Link href={`/app/profile/${node.id}`}
-              className="inline-flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-amber-200 transition-all group">
-              <img src={node.photoUrl} alt={node.name} className="w-9 h-9 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100" />
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-900 group-hover:text-amber-700 transition-colors truncate">{node.name}</p>
-                <p className="text-[11px] text-gray-500 truncate">{node.roleTitle}</p>
-              </div>
-              <div className="flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 flex-shrink-0">
-                <Shield className="w-3 h-3 text-amber-500" />
-                <span className="text-[11px] font-bold text-amber-700">{node.trustScore}</span>
-              </div>
+            <Link
+              href={`/app/profile/${node.id}`}
+              className="inline-flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-amber-200 transition-all group"
+            >
+              {cardContent}
             </Link>
           )}
           {hasChildren && (

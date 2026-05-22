@@ -21,6 +21,8 @@ import { SocialLinksSection } from "@/components/app/social-links-section";
 import { members } from "@/lib/mock-data";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
 import { useNotifications } from "@/lib/notifications-data";
+import { MemberLink, MemberNameWithStatus } from "@/components/app/member-link";
+import { dashboardMembers } from "@/lib/dashboard-data";
 
 // --- Mock: my profile ---
 const myProfile = {
@@ -500,24 +502,41 @@ export default function MyPage() {
                       className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-all"
                     >
                       <div className="flex items-center gap-3 mb-3">
-                        <Link href={`/app/profile/${log.person.id}`}>
-                          <img
-                            src={log.person.photoUrl}
-                            alt={log.person.name}
-                            className="w-10 h-10 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 hover:ring-amber-300 transition-all"
-                          />
-                        </Link>
-                        <div className="min-w-0 flex-1">
-                          <Link
-                            href={`/app/profile/${log.person.id}`}
-                            className="text-sm font-bold text-gray-900 hover:text-amber-700 transition-colors"
-                          >
-                            {log.person.name}
-                          </Link>
-                          <p className="text-xs text-gray-500">
-                            {log.person.roleTitle}
-                          </p>
-                        </div>
+                        {(() => {
+                          const mockWithdrawn = dashboardMembers.find(
+                            (m) => m.id === log.person.id
+                          )?.isWithdrawn;
+                          return (
+                            <>
+                              <MemberLink
+                                memberId={log.person.id}
+                                mockWithdrawn={mockWithdrawn}
+                              >
+                                <img
+                                  src={log.person.photoUrl}
+                                  alt={log.person.name}
+                                  className="w-10 h-10 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 hover:ring-amber-300 transition-all"
+                                />
+                              </MemberLink>
+                              <div className="min-w-0 flex-1">
+                                <MemberLink
+                                  memberId={log.person.id}
+                                  mockWithdrawn={mockWithdrawn}
+                                  className="text-sm font-bold text-gray-900 hover:text-amber-700 transition-colors"
+                                >
+                                  <MemberNameWithStatus
+                                    memberId={log.person.id}
+                                    name={log.person.name}
+                                    mockWithdrawn={mockWithdrawn}
+                                  />
+                                </MemberLink>
+                                <p className="text-xs text-gray-500">
+                                  {log.person.roleTitle}
+                                </p>
+                              </div>
+                            </>
+                          );
+                        })()}
                         <span className="text-xs text-gray-400 flex-shrink-0">
                           {log.date}
                         </span>
