@@ -49,20 +49,45 @@ function excelSerialToISO(v) {
   return d.toISOString();
 }
 
-// スタート月の文字列正規化（"2026.1" 数値 → "2026.1" 文字列, Excelシリアル → "YYYY.M"）
-function normalizeStartMonth(v) {
-  if (v == null || v === "") return null;
-  if (typeof v === "number") {
-    // 数値には2パターンある:
-    //   (a) 2026.1 のようなYYYY.M表記 → そのまま
-    //   (b) 45555 のようなExcelシリアル値（>=40000） → 日付に変換
-    if (v >= 40000) {
-      const iso = excelSerialToISO(v);
-      if (iso) return iso.slice(0, 7).replace("-", "."); // "YYYY-MM" → "YYYY.M"
-    }
-    return String(v);
+// 全角数字 → 半角
+function toHalfWidth(s) {
+  return String(s).replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
+}
+
+// スタート月セル → { year, month }
+//   "2026.1"→{2026,1} / "9"→{null,9} / "2025.11.11."→{2025,11} / "３月"→{null,3} / "運営"→{null,null}
+function parseStartMonth(v) {
+  if (v == null || v === "") return { year: null, month: null };
+  // Excelシリアル日付（>=40000）
+  if (typeof v === "number" && v >= 40000) {
+    const iso = excelSerialToISO(v);
+    if (iso) return { year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) };
   }
-  return String(v).trim();
+  const s = toHalfWidth(v).trim().replace(/月/g, ".").replace(/[。.\s]+$/, "");
+  const nums = s.split(/[.\/年\s]+/).map((p) => Number(p)).filter((n) => Number.isFinite(n));
+  if (nums.length === 0) return { year: null, month: null };
+  if (nums.length === 1) {
+    const n = nums[0];
+    if (n >= 1 && n <= 12) return { year: null, month: n }; // 月のみ
+    if (n >= 2000) return { year: n, month: null }; // 年のみ
+    return { year: null, month: null };
+  }
+  let [y, mo] = nums;
+  if (y < 100 && mo >= 2000) [y, mo] = [mo, y]; // 念のため逆順を補正
+  return { year: Number.isFinite(y) ? y : null, month: mo >= 1 && mo <= 12 ? mo : null };
+}
+
+// 1回目更新セル → { status, fee }
+//   空=未更新（1年未到来） / 退会 / 返事待ち / 入金待ち / 数値=更新済（その金額で更新）
+function parseRenewal(v) {
+  if (v == null || String(v).trim() === "") return { status: "未更新", fee: null };
+  const s = String(v).trim();
+  if (s === "退会") return { status: "退会", fee: null };
+  if (s.includes("返事")) return { status: "返事待ち", fee: null };
+  if (s.includes("入金")) return { status: "入金待ち", fee: null };
+  const n = typeof v === "number" ? v : Number(toHalfWidth(s).replace(/[,，円\s]/g, ""));
+  if (Number.isFinite(n)) return { status: "更新済", fee: n };
+  return { status: s, fee: null }; // 想定外テキストはそのまま状態として保持
 }
 
 function stringOrNull(v) {
@@ -122,8 +147,9 @@ for (const sheetName of sheetsToProcess) {
     const name = stringOrNull(r[col.name]);
     if (!name) continue;
 
-    const firstRenewalVal = r[col.firstRenewal];
-    const isWithdrawn = typeof firstRenewalVal === "string" && firstRenewalVal.trim() === "退会";
+    const firstRenewalVal = col.firstRenewal >= 0 ? r[col.firstRenewal] : null;
+    const renewal = parseRenewal(firstRenewalVal);
+    const sm = col.startDate >= 0 ? parseStartMonth(r[col.startDate]) : { year: null, month: null };
 
     memberRecords.push({
       source: "member",
@@ -133,16 +159,16 @@ for (const sheetName of sheetsToProcess) {
       name_normalized: normalizeName(name),
       nickname: col.nick >= 0 ? stringOrNull(r[col.nick]) : null,
       referrer: col.referrer >= 0 ? stringOrNull(r[col.referrer]) : null,
-      start_month: col.startDate >= 0 ? normalizeStartMonth(r[col.startDate]) : null,
-      first_renewal: col.firstRenewal >= 0
-        ? (typeof firstRenewalVal === "string" ? firstRenewalVal.trim() : firstRenewalVal != null ? String(firstRenewalVal) : null)
-        : null,
+      start_year: sm.year,
+      start_month: sm.month,
+      renewal_status: renewal.status,
+      renewal_fee: renewal.fee,
       price: col.price >= 0 ? numberOrNull(r[col.price]) : null,
       referral_fee: col.referralFee >= 0 ? numberOrNull(r[col.referralFee]) : null,
       job: col.job >= 0 ? stringOrNull(r[col.job]) : null,
       grip: col.grip >= 0 ? stringOrNull(r[col.grip]) : null,
       frequency: col.frequency >= 0 ? stringOrNull(r[col.frequency]) : null,
-      is_withdrawn: isWithdrawn,
+      is_withdrawn: renewal.status === "退会",
     });
   }
 }
@@ -182,6 +208,7 @@ for (let i = contactHeaderIdx + 1; i < contactRows.length; i++) {
   if (!Array.isArray(r)) continue;
   const name = stringOrNull(r[cc.name]);
   if (!name) continue;
+  const sm = cc.startMonth >= 0 ? parseStartMonth(r[cc.startMonth]) : { year: null, month: null };
 
   contactRecords.push({
     source: "contact",
@@ -191,7 +218,8 @@ for (let i = contactHeaderIdx + 1; i < contactRows.length; i++) {
     name_normalized: normalizeName(name),
     job: cc.job >= 0 ? stringOrNull(r[cc.job]) : null,
     referrer: cc.referrer >= 0 ? stringOrNull(r[cc.referrer]) : null,
-    start_month: cc.startMonth >= 0 ? normalizeStartMonth(r[cc.startMonth]) : null,
+    start_year: sm.year,
+    start_month: sm.month,
     membership_type: cc.kind >= 0 ? stringOrNull(r[cc.kind]) : null,
     email: cc.email >= 0 ? normalizeEmail(r[cc.email]) || null : null,
     phone: cc.phone >= 0 ? normalizePhone(r[cc.phone]) || null : null,
@@ -247,6 +275,8 @@ for (const m of memberRecords) {
 
   if (matched) {
     usedContactIndices.add(contactRecords.indexOf(matched));
+    // スタート年月は対(year,month)で扱う。名簿側に月か年があれば名簿側、なければ連絡先側を採用
+    const sp = m.start_month != null || m.start_year != null ? m : matched;
     merged.push({
       id: randomUUID(),
       member_no: m.member_no,
@@ -254,8 +284,10 @@ for (const m of memberRecords) {
       name_normalized: m.name_normalized,
       nickname: m.nickname,
       referrer: m.referrer || matched.referrer,
-      start_month: m.start_month || matched.start_month,
-      first_renewal: m.first_renewal,
+      start_year: sp.start_year,
+      start_month: sp.start_month,
+      renewal_status: m.renewal_status,
+      renewal_fee: m.renewal_fee,
       price: m.price,
       referral_fee: m.referral_fee,
       job: m.job || matched.job,
@@ -281,8 +313,10 @@ for (const m of memberRecords) {
       name_normalized: m.name_normalized,
       nickname: m.nickname,
       referrer: m.referrer,
+      start_year: m.start_year,
       start_month: m.start_month,
-      first_renewal: m.first_renewal,
+      renewal_status: m.renewal_status,
+      renewal_fee: m.renewal_fee,
       price: m.price,
       referral_fee: m.referral_fee,
       job: m.job,
@@ -313,8 +347,10 @@ for (let idx = 0; idx < contactRecords.length; idx++) {
     name_normalized: c.name_normalized,
     nickname: null,
     referrer: c.referrer,
+    start_year: c.start_year,
     start_month: c.start_month,
-    first_renewal: null,
+    renewal_status: "未更新",
+    renewal_fee: null,
     price: null,
     referral_fee: null,
     job: c.job,
@@ -413,7 +449,7 @@ console.log(`  - うち退会者  : ${counts.withdrawn || 0}件`);
 // ============================================================
 const csvColumns = [
   "id", "member_no", "name", "name_normalized", "nickname",
-  "referrer", "start_month", "first_renewal", "price", "referral_fee",
+  "referrer", "start_year", "start_month", "renewal_status", "renewal_fee", "price", "referral_fee",
   "job", "grip", "frequency",
   "email", "phone", "gender", "age_range", "membership_type",
   "payment_method", "contact_submitted_at",

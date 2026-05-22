@@ -1064,8 +1064,10 @@ interface MemberDbRow {
   name: string;
   nickname: string | null;
   referrer: string | null;
-  start_month: string | null;
-  first_renewal: string | null;
+  start_year: number | null;
+  start_month: number | null;
+  renewal_status: string | null;
+  renewal_fee: number | null;
   price: number | null;
   referral_fee: number | null;
   job: string | null;
@@ -1084,14 +1086,32 @@ interface MemberDbRow {
 }
 
 type MembersDbFilter = "all" | "both" | "member_only" | "contact_only" | "withdrawn";
-type MembersDbSortKey = "member_no" | "name" | "start_month" | "price" | "contact_submitted_at";
+type MembersDbSortKey = "member_no" | "name" | "start_year" | "start_month" | "price" | "contact_submitted_at";
 
 const sortKeyLabels: Record<MembersDbSortKey, string> = {
   member_no: "会員番号",
   name: "氏名",
+  start_year: "スタート年",
   start_month: "スタート月",
-  price: "料金",
+  price: "入会時金額",
   contact_submitted_at: "フォーム送信日",
+};
+
+// スタート月の表示（年があれば「YYYY年M月」、月だけなら「M月」）
+function formatStartMonth(r: Pick<MemberDbRow, "start_year" | "start_month">): string | null {
+  if (r.start_year && r.start_month) return `${r.start_year}年${r.start_month}月`;
+  if (r.start_month) return `${r.start_month}月`;
+  if (r.start_year) return `${r.start_year}年`;
+  return null;
+}
+
+// 1回目更新ステータスの色（H列）
+const renewalStatusStyle: Record<string, string> = {
+  更新済: "bg-green-50 text-green-700 border-green-200",
+  退会: "bg-red-50 text-red-600 border-red-200",
+  未更新: "bg-gray-50 text-gray-500 border-gray-200",
+  返事待ち: "bg-amber-50 text-amber-700 border-amber-200",
+  入金待ち: "bg-amber-50 text-amber-700 border-amber-200",
 };
 
 // フィルタ・ソート・検索の共通state管理
@@ -1203,8 +1223,10 @@ function useMembersDb() {
           name: m.name,
           nickname: m.short,
           referrer: null,
+          start_year: null,
           start_month: null,
-          first_renewal: null,
+          renewal_status: "未更新",
+          renewal_fee: null,
           price: null,
           referral_fee: null,
           job: m.job,
@@ -1395,7 +1417,7 @@ function MembersDbTab() {
       </div>
 
       {/* 検索・フィルタ・ソート ツールバー */}
-      <MembersDbToolbar view={view} sortKeys={["member_no", "name", "start_month", "price"]} />
+      <MembersDbToolbar view={view} sortKeys={["member_no", "name", "start_year", "start_month", "price"]} />
 
       {/* 一覧 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -1442,7 +1464,7 @@ function MembersDbTab() {
                       <span className="text-gray-300 text-xs">—</span>
                     )}
                   </div>
-                  <div className="text-gray-600 text-xs truncate">{r.start_month || "—"}</div>
+                  <div className="text-gray-600 text-xs truncate">{formatStartMonth(r) || "—"}</div>
                   <div className="text-right text-gray-700 text-xs font-mono">
                     {r.price != null ? `¥${r.price.toLocaleString()}` : "—"}
                   </div>
@@ -1486,9 +1508,10 @@ function MemberDbDetailModal({ row, onClose }: { row: MemberDbRow; onClose: () =
     { label: "年代", value: row.age_range },
     { label: "職業", value: row.job },
     { label: "紹介者", value: row.referrer },
-    { label: "スタート月", value: row.start_month },
-    { label: "１回目更新", value: row.first_renewal },
-    { label: "料金", value: row.price != null ? `¥${row.price.toLocaleString()}` : null },
+    { label: "スタート月", value: formatStartMonth(row) },
+    { label: "１回目更新", value: row.renewal_status },
+    { label: "更新時金額", value: row.renewal_fee != null ? `¥${row.renewal_fee.toLocaleString()}` : null },
+    { label: "入会時金額", value: row.price != null ? `¥${row.price.toLocaleString()}` : null },
     { label: "紹介料", value: row.referral_fee != null ? `¥${row.referral_fee.toLocaleString()}` : null },
     { label: "グリップ", value: row.grip },
     { label: "参加頻度", value: row.frequency },
@@ -1562,9 +1585,13 @@ function MembersDbRawTab() {
     { label: "年代", width: "70px", render: (r) => r.age_range || <span className="text-gray-300">—</span> },
     { label: "職業", width: "200px", render: (r) => r.job || <span className="text-gray-300">—</span> },
     { label: "紹介者", width: "110px", render: (r) => r.referrer || <span className="text-gray-300">—</span> },
-    { label: "スタート月", width: "90px", sortKey: "start_month", render: (r) => r.start_month || <span className="text-gray-300">—</span> },
-    { label: "1回目更新", width: "90px", render: (r) => r.first_renewal || <span className="text-gray-300">—</span> },
-    { label: "料金", width: "80px", align: "right", sortKey: "price", render: (r) => r.price != null ? <span className="font-mono text-xs">¥{r.price.toLocaleString()}</span> : <span className="text-gray-300">—</span> },
+    { label: "スタート年", width: "70px", sortKey: "start_year", render: (r) => r.start_year != null ? <span className="text-xs">{r.start_year}</span> : <span className="text-gray-300">—</span> },
+    { label: "スタート月", width: "60px", sortKey: "start_month", render: (r) => r.start_month != null ? <span className="text-xs">{r.start_month}月</span> : <span className="text-gray-300">—</span> },
+    { label: "1回目更新", width: "80px", render: (r) => r.renewal_status ? (
+      <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded border ${renewalStatusStyle[r.renewal_status] || "bg-gray-50 text-gray-600 border-gray-200"}`}>{r.renewal_status}</span>
+    ) : <span className="text-gray-300">—</span> },
+    { label: "更新時金額", width: "80px", align: "right", render: (r) => r.renewal_fee != null ? <span className="font-mono text-xs">¥{r.renewal_fee.toLocaleString()}</span> : <span className="text-gray-300">—</span> },
+    { label: "入会時金額", width: "80px", align: "right", sortKey: "price", render: (r) => r.price != null ? <span className="font-mono text-xs">¥{r.price.toLocaleString()}</span> : <span className="text-gray-300">—</span> },
     { label: "紹介料", width: "80px", align: "right", render: (r) => r.referral_fee != null ? <span className="font-mono text-xs">¥{r.referral_fee.toLocaleString()}</span> : <span className="text-gray-300">—</span> },
     { label: "グリップ", width: "90px", render: (r) => r.grip || <span className="text-gray-300">—</span> },
     { label: "参加頻度", width: "100px", render: (r) => r.frequency || <span className="text-gray-300">—</span> },
@@ -1628,7 +1655,7 @@ function MembersDbRawTab() {
       </div>
 
       {/* 検索・フィルタ・ソート ツールバー（生DBは contact_submitted_at もソート可） */}
-      <MembersDbToolbar view={view} sortKeys={["member_no", "name", "start_month", "price", "contact_submitted_at"]} />
+      <MembersDbToolbar view={view} sortKeys={["member_no", "name", "start_year", "start_month", "price", "contact_submitted_at"]} />
 
       {/* 全カラムテーブル（横スクロール） */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
