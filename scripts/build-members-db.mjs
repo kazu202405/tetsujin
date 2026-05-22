@@ -430,6 +430,20 @@ while (changed && dedupPass < 5) {
 console.log(`  → ${beforeDedup} → ${merged.length}件（${beforeDedup - merged.length}件を統合）`);
 
 // ============================================================
+// 3-4. 列ずれ補正: membership_type(法人/個人欄)に金額が入っている行
+//      → price(入会時金額)へ移動し、membership_type は空にする
+// ============================================================
+let shiftedFee = 0;
+for (const r of merged) {
+  if (r.membership_type != null && /^\d+$/.test(String(r.membership_type).trim())) {
+    r.price = Number(r.membership_type); // K列(price)へ上書き
+    r.membership_type = null;
+    shiftedFee++;
+  }
+}
+console.log(`🔧 法人個人欄(T列)の金額を入会時金額(K列/price)へ移動: ${shiftedFee}件`);
+
+// ============================================================
 // 4. 件数サマリ
 // ============================================================
 const counts = merged.reduce((acc, r) => {
