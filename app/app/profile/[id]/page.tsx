@@ -39,7 +39,7 @@ export default function ProfilePage({
   if (isWithdrawn) {
     return (
       <div className="min-h-screen">
-        <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
+        <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <Link
               href="/app/members"
@@ -75,7 +75,7 @@ export default function ProfilePage({
   return (
     <div className="min-h-screen">
       {/* Header bar */}
-      <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
+      <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <Link
             href="/app/members"
@@ -309,6 +309,8 @@ export default function ProfilePage({
                 links: profile.socialLinks,
                 isConnected: isConnectedWithMe(id),
                 isOwner: id === CURRENT_USER_ID,
+                viewerId: CURRENT_USER_ID,
+                ownerId: id,
               }}
             />
             {/* Referral chain */}

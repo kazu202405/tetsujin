@@ -2,13 +2,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getDisclosureNotifications } from "./disclosure-data";
+import { CURRENT_USER_ID } from "./connections-data";
 
 export type NotificationType =
   | "board_unread"
   | "plan_renewal"
   | "event_reminder"
   | "connection_new"
-  | "comment_reply";
+  | "comment_reply"
+  | "disclosure_request"
+  | "disclosure_approved";
 
 export interface NotificationItem {
   id: string;
@@ -114,16 +118,31 @@ export interface UseNotificationsResult {
   markAllRead: () => void;
 }
 
+// 開示申請の更新イベント（disclosure-data.ts と同名）。クライアント側で購読して再計算する
+const DISCLOSURE_EVENT = "tetsujin-disclosure-update";
+
 export function useNotifications(): UseNotificationsResult {
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  // 開示申請から導出する動的通知（マウント後にクライアントで計算）
+  const [dynamic, setDynamic] = useState<NotificationItem[]>([]);
 
   // 初期ロード + 他コンポーネントからの更新を購読
   useEffect(() => {
-    setReadIds(getReadIds());
-    const handler = () => setReadIds(getReadIds());
-    window.addEventListener(EVENT_NAME, handler);
-    return () => window.removeEventListener(EVENT_NAME, handler);
+    const refresh = () => {
+      setReadIds(getReadIds());
+      setDynamic(getDisclosureNotifications(CURRENT_USER_ID));
+    };
+    refresh();
+    window.addEventListener(EVENT_NAME, refresh);
+    window.addEventListener(DISCLOSURE_EVENT, refresh);
+    return () => {
+      window.removeEventListener(EVENT_NAME, refresh);
+      window.removeEventListener(DISCLOSURE_EVENT, refresh);
+    };
   }, []);
+
+  // 静的mock + 動的（開示申請）をマージ
+  const all = [...mockNotifications, ...dynamic];
 
   const markRead = (id: string) => {
     const next = new Set(readIds);
@@ -133,13 +152,13 @@ export function useNotifications(): UseNotificationsResult {
   };
 
   const markAllRead = () => {
-    const next = new Set(mockNotifications.map((n) => n.id));
+    const next = new Set(all.map((n) => n.id));
     persistReadIds(next);
     setReadIds(next);
   };
 
   // createdAt 降順で整列
-  const sorted = [...mockNotifications].sort(
+  const sorted = [...all].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
   const notifications = sorted.map((n) => ({ ...n, read: readIds.has(n.id) }));
