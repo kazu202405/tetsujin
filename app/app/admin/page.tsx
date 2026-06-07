@@ -185,7 +185,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen">
       {/* ヘッダー */}
-      <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
+      <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
         <div className={`${containerMaxWidth} mx-auto px-4 sm:px-6 lg:px-8 py-4`}>
           <h1 className="text-xl font-bold text-gray-900">管理画面</h1>
           <p className="text-sm text-gray-500 mt-0.5">コミュニティの運営・分析</p>

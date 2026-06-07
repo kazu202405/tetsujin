@@ -563,7 +563,7 @@ export default function BoardPage() {
   return (
     <div className="min-h-screen">
       {/* ヘッダー */}
-      <div className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
+      <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold text-gray-900">掲示板</h1>
