@@ -9,8 +9,11 @@ import {
   DashboardMember,
 } from "@/lib/dashboard-data";
 import { useWithdrawnResolver } from "@/lib/withdrawal-data";
+import { useMemberRole } from "@/lib/member-roles";
+import { RoleBadge } from "@/components/app/role-badge";
 
 function MemberCard({ member }: { member: DashboardMember }) {
+  const role = useMemberRole(member.id);
   return (
     <Link
       href={`/app/profile/${member.id}`}
@@ -26,6 +29,7 @@ function MemberCard({ member }: { member: DashboardMember }) {
           <h3 className="text-sm font-bold text-gray-900 truncate transition-colors group-hover:text-amber-700">
             {member.name}
           </h3>
+          <RoleBadge role={role} />
           {member.jobTitle && (
             <span className="text-[11px] text-gray-400 flex-shrink-0 truncate">
               {member.jobTitle}
