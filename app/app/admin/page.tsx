@@ -26,12 +26,14 @@ import {
   Database,
   UserCog,
   RotateCcw,
+  StickyNote,
 } from "lucide-react";
 import {
   useWithdrawnResolver,
   useWithdrawalMeta,
   setMemberWithdrawn,
 } from "@/lib/withdrawal-data";
+import { useMemberNotes, setMemberNote } from "@/lib/member-notes";
 
 // ============================================================
 // タブ定義
@@ -1734,6 +1736,7 @@ function fmtDate(iso: string): string {
 function MemberManageTab() {
   const isWithdrawn = useWithdrawnResolver();
   const meta = useWithdrawalMeta();
+  const notes = useMemberNotes();
   const [search, setSearch] = useState("");
   // 退会モーダル対象 + 理由入力
   const [withdrawTarget, setWithdrawTarget] = useState<
@@ -1744,6 +1747,11 @@ function MemberManageTab() {
   const [reactivateTarget, setReactivateTarget] = useState<
     (typeof allMembers)[number] | null
   >(null);
+  // 備考（運営メモ）編集モーダル対象 + 下書き
+  const [noteTarget, setNoteTarget] = useState<
+    (typeof allMembers)[number] | null
+  >(null);
+  const [noteDraft, setNoteDraft] = useState("");
 
   const filtered = allMembers.filter(
     (m) => !search || m.name.includes(search) || m.job.includes(search)
@@ -1833,27 +1841,50 @@ function MemberManageTab() {
                     {info.reason && `・理由: ${info.reason}`}
                   </p>
                 )}
+                {notes[m.id] && (
+                  <p className="flex items-start gap-1 text-[11px] text-gray-600 mt-1 bg-amber-50/70 border border-amber-100 rounded-lg px-2 py-1 whitespace-pre-wrap break-words">
+                    <StickyNote className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <span>{notes[m.id]}</span>
+                  </p>
+                )}
               </div>
-              {withdrawn ? (
-                <button
-                  onClick={() => setReactivateTarget(m)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors flex-shrink-0"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  復帰させる
-                </button>
-              ) : (
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={() => {
-                    setWithdrawTarget(m);
-                    setReason("");
+                    setNoteTarget(m);
+                    setNoteDraft(notes[m.id] ?? "");
                   }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${
+                    notes[m.id]
+                      ? "border-amber-200 text-amber-600 bg-amber-50 hover:bg-amber-100"
+                      : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}
+                  title="運営メモ（備考）"
                 >
-                  <UserX className="w-3.5 h-3.5" />
-                  退会させる
+                  <StickyNote className="w-3.5 h-3.5" />
+                  備考
                 </button>
-              )}
+                {withdrawn ? (
+                  <button
+                    onClick={() => setReactivateTarget(m)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    復帰させる
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setWithdrawTarget(m);
+                      setReason("");
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                    退会させる
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -1949,6 +1980,55 @@ function MemberManageTab() {
                 className="px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition-colors"
               >
                 復帰させる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 備考（運営メモ）編集モーダル */}
+      {noteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setNoteTarget(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <StickyNote className="w-5 h-5 text-amber-500" />
+              </div>
+              <h2 className="text-base font-bold text-gray-900">
+                {noteTarget.name}さんの備考
+              </h2>
+            </div>
+            <p className="text-xs text-gray-500 leading-relaxed mb-3">
+              運営用のメモです（会費の受け渡し・連絡手段・対応履歴など）。会員には表示されません。
+            </p>
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              rows={4}
+              placeholder="例: 会費は手渡し。連絡はLINEのみ。"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent resize-none mb-5"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setNoteTarget(null)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                やめる
+              </button>
+              <button
+                onClick={() => {
+                  setMemberNote(noteTarget.id, noteDraft);
+                  setNoteTarget(null);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors"
+              >
+                保存
               </button>
             </div>
           </div>
