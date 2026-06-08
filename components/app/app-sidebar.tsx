@@ -7,7 +7,6 @@ import {
   CalendarSearch,
   // UtensilsCrossed,
   GitBranch,
-  MessageSquare,
   Users,
   User,
   UserCog,
@@ -152,15 +151,6 @@ export function AppSidebar() {
               </div>
               <span className="font-bold text-gray-700">
                 {communityStats.memberCount}人
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
-                <span>投稿</span>
-              </div>
-              <span className="font-bold text-gray-700">
-                {communityStats.recommendationCount}件
               </span>
             </div>
             <div className="flex items-center justify-between">

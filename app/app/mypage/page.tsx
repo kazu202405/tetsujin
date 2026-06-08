@@ -10,7 +10,6 @@ import {
   CalendarDays,
   MapPin,
   Clock,
-  Eye,
   FileUser,
   Search,
   GitBranch,
@@ -259,13 +258,6 @@ export default function MyPage() {
                 >
                   <FileUser className="w-3.5 h-3.5" />
                   プロフィールシート
-                </Link>
-                <Link
-                  href="/app/profile/1"
-                  className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700 transition-colors"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  公開プロフィールを見る
                 </Link>
               </div>
             </div>
