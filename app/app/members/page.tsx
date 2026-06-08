@@ -8,7 +8,7 @@ import {
   industryFilters,
   DashboardMember,
 } from "@/lib/dashboard-data";
-import { useWithdrawnIds } from "@/lib/withdrawal-data";
+import { useWithdrawnResolver } from "@/lib/withdrawal-data";
 
 function MemberCard({ member }: { member: DashboardMember }) {
   return (
@@ -71,10 +71,10 @@ export default function MembersPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const withdrawnIds = useWithdrawnIds();
-  // 退会者は一覧から除外（mock の isWithdrawn or localStorage）
+  const isWithdrawn = useWithdrawnResolver();
+  // 退会者は一覧から除外（退会状態は localStorage が正・admin の復帰も反映）
   const sourceMembers = dashboardMembers.filter(
-    (m) => !m.isWithdrawn && !withdrawnIds.has(m.id)
+    (m) => !isWithdrawn(m.id, m.isWithdrawn)
   );
 
   const filteredGenres = industryFilters.filter(

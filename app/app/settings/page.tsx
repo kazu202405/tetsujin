@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { User, Bell, CreditCard, LogOut, Check } from "lucide-react";
+import { User, Bell, CreditCard, Check, MessageCircle } from "lucide-react";
 
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
@@ -156,12 +156,8 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:justify-between">
-          <button className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-red-600 border border-red-200 hover:bg-red-50 transition-colors">
-            <LogOut className="w-4 h-4" />
-            退会する
-          </button>
+        {/* Save */}
+        <div className="flex justify-end">
           <button
             onClick={handleSave}
             className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-colors"
@@ -175,6 +171,25 @@ export default function SettingsPage() {
               "変更を保存"
             )}
           </button>
+        </div>
+
+        {/* 退会について（運営のみが処理。本人はLINEで申請） */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+          <h2 className="text-base font-bold text-gray-900 mb-2">退会について</h2>
+          <p className="text-sm text-gray-600 leading-relaxed mb-5">
+            退会をご希望の場合は、運営までLINEでご連絡ください。担当者が手続きを承ります。
+            退会後もお名前は記録として残りますが、プロフィールは非公開になります。
+          </p>
+          {/* TODO: 運営の公式LINE URL に差し替え（現状は仮値） */}
+          <a
+            href="https://line.me/R/ti/p/@tetsujin"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-[#06C755] hover:opacity-90 transition-opacity"
+          >
+            <MessageCircle className="w-4 h-4" />
+            LINEで退会を相談する
+          </a>
         </div>
       </div>
     </div>
