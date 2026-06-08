@@ -10,7 +10,15 @@ import {
   Eye,
   Upload,
   Camera,
+  Save,
+  Check,
 } from "lucide-react";
+import { CURRENT_USER_ID } from "@/lib/connections-data";
+import {
+  loadOwnSheet,
+  saveSheetData,
+  hasOwnSheet,
+} from "@/lib/profile-sheet-data";
 
 // テーマカラープリセット（シック〜カラフルまで幅広く）
 const themeColors = [
@@ -160,6 +168,23 @@ export default function ProfileSheetPage() {
     return () => window.removeEventListener("mousedown", handleClick);
   }, [showColorPicker]);
 
+  // 保存済みのシート（本人）を初期ロード（無ければ initialData のまま）
+  useEffect(() => {
+    const loaded = loadOwnSheet(CURRENT_USER_ID);
+    setData((prev) => ({ ...prev, ...loaded.data }));
+    if (hasOwnSheet(CURRENT_USER_ID)) {
+      const idx = themeColors.findIndex((t) => t.primary === loaded.themeColor);
+      if (idx >= 0) {
+        setThemeIndex(idx);
+        setUseCustom(false);
+      } else {
+        setCustomColor(loaded.themeColor);
+        setUseCustom(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const theme = useCustom
     ? { name: "カスタム", primary: customColor }
     : themeColors[themeIndex];
@@ -200,6 +225,13 @@ export default function ProfileSheetPage() {
 
   const update = (key: keyof ProfileData, value: string) => {
     setData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const [savedSheet, setSavedSheet] = useState(false);
+  const handleSaveSheet = () => {
+    saveSheetData(CURRENT_USER_ID, data, theme.primary);
+    setSavedSheet(true);
+    setTimeout(() => setSavedSheet(false), 2000);
   };
 
   const handleExportJpeg = async () => {
@@ -386,6 +418,22 @@ export default function ProfileSheetPage() {
                 ) : (
                   <>
                     <Pencil className="w-4 h-4" /> 編集
+                  </>
+                )}
+              </button>
+
+              {/* シート保存（公開プロフィールに反映） */}
+              <button
+                onClick={handleSaveSheet}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--tetsu-pink)] text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
+              >
+                {savedSheet ? (
+                  <>
+                    <Check className="w-4 h-4" /> 保存しました
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" /> 保存
                   </>
                 )}
               </button>
