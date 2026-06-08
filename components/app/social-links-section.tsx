@@ -13,6 +13,8 @@ import {
   Lock,
   Users,
   ExternalLink,
+  Clock,
+  Send,
 } from "lucide-react";
 import {
   SocialLink,
@@ -20,8 +22,12 @@ import {
   SocialVisibility,
   SOCIAL_PLATFORM_META,
   VISIBILITY_META,
-  filterVisibleLinks,
 } from "@/lib/social-links";
+import {
+  useDisclosureRequests,
+  requestDisclosure,
+  getDisclosureStatus,
+} from "@/lib/disclosure-data";
 
 // 各プラットフォーム用アイコン（LINE は lucide に無いのでインラインSVG）
 function PlatformIcon({ platform, className }: { platform: SocialPlatform; className?: string }) {
@@ -172,6 +178,46 @@ function EditableRow({
   );
 }
 
+// 未開示（つながり済みのみ）リンクの開示申請行
+function LockedLinkRow({
+  link,
+  status,
+  onRequest,
+}: {
+  link: SocialLink;
+  status: "pending" | "declined" | null;
+  onRequest: () => void;
+}) {
+  const meta = SOCIAL_PLATFORM_META[link.platform];
+  const label = link.label || meta.label;
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 bg-gray-50/70 rounded-xl border border-dashed border-gray-200">
+      <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gray-200 text-gray-400 flex-shrink-0">
+        <Lock className="w-4 h-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-gray-700 truncate">{label}</p>
+        <p className="text-[11px] text-gray-400">つながり済みのみに公開</p>
+      </div>
+      {status === "pending" ? (
+        <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 text-[11px] font-bold border border-amber-200 flex-shrink-0">
+          <Clock className="w-3 h-3" />
+          申請中
+        </span>
+      ) : (
+        <button
+          onClick={onRequest}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-[11px] font-bold hover:bg-gray-800 transition-colors flex-shrink-0"
+        >
+          <Send className="w-3 h-3" />
+          {status === "declined" ? "再申請" : "開示を申請"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // localStorage キー（mock永続化用）
 const storageKey = (memberId: string) => `tetsujin-social-links-${memberId}`;
 
@@ -186,6 +232,8 @@ interface SocialLinksSectionProps {
     links: SocialLink[];
     isConnected: boolean;
     isOwner?: boolean;
+    viewerId?: string; // 閲覧者（＝申請者）の member id
+    ownerId?: string; // プロフィール持ち主の member id
   };
 }
 
@@ -195,6 +243,8 @@ export function SocialLinksSection({ ownerMode, viewerMode }: SocialLinksSection
   const [links, setLinks] = useState<SocialLink[]>(
     ownerMode?.initialLinks ?? []
   );
+  // 開示申請の状態（閲覧視点で使用。hooks はトップレベルで呼ぶ）
+  const disclosureRequests = useDisclosureRequests();
 
   // localStorage から読み込み（クライアントサイド only）
   useEffect(() => {
@@ -304,15 +354,44 @@ export function SocialLinksSection({ ownerMode, viewerMode }: SocialLinksSection
     );
   }
 
-  // ============ 閲覧視点（公開範囲フィルタ） ============
+  // ============ 閲覧視点（公開範囲フィルタ ＋ 開示申請） ============
   if (!viewerMode) return null;
   const isOwnerView = viewerMode.isOwner === true;
-  const visible = filterVisibleLinks(viewerMode.links, {
-    isOwner: isOwnerView,
-    isConnected: viewerMode.isConnected,
-  });
+  const { isConnected, viewerId, ownerId } = viewerMode;
+  // 申請可能か（自分視点でなく、双方のidが分かるとき）
+  const canRequest = !isOwnerView && !!viewerId && !!ownerId;
 
-  if (visible.length === 0) return null;
+  // 各リンクを「見える」「未開示（申請対象）」「非表示」に振り分け
+  const visible: SocialLink[] = [];
+  const locked: { link: SocialLink; status: "pending" | "declined" | null }[] = [];
+
+  for (const link of viewerMode.links) {
+    if (isOwnerView || link.visibility === "public") {
+      visible.push(link);
+      continue;
+    }
+    if (link.visibility === "connections") {
+      if (isConnected) {
+        visible.push(link);
+        continue;
+      }
+      // つながり済みでない → 開示申請の状態を見る
+      const status = canRequest
+        ? getDisclosureStatus(disclosureRequests, viewerId!, ownerId!, link.id)
+        : null;
+      if (status === "approved") {
+        visible.push(link);
+      } else if (canRequest) {
+        const lockedStatus: "pending" | "declined" | null =
+          status === "pending" ? "pending" : status === "declined" ? "declined" : null;
+        locked.push({ link, status: lockedStatus });
+      }
+      continue;
+    }
+    // private → 非表示
+  }
+
+  if (visible.length === 0 && locked.length === 0) return null;
 
   return (
     <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -320,6 +399,16 @@ export function SocialLinksSection({ ownerMode, viewerMode }: SocialLinksSection
       <div className="space-y-2">
         {visible.map((link) => (
           <SocialLinkChip key={link.id} link={link} showVisibility={isOwnerView} />
+        ))}
+        {locked.map(({ link, status }) => (
+          <LockedLinkRow
+            key={link.id}
+            link={link}
+            status={status}
+            onRequest={() =>
+              requestDisclosure(viewerId!, ownerId!, link.id, link.platform)
+            }
+          />
         ))}
       </div>
     </section>

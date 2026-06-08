@@ -8,7 +8,7 @@ export default function AppLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       <AppSidebar />
-      <main className="lg:pl-64 pb-16 lg:pb-0">{children}</main>
+      <main className="lg:pl-64 pt-14 lg:pt-0">{children}</main>
     </div>
   );
 }

@@ -8,6 +8,8 @@ import {
   Handshake,
   MessageCircle,
   Bell,
+  UserPlus,
+  CheckCircle2,
 } from "lucide-react";
 import {
   NotificationItem,
@@ -43,6 +45,16 @@ const TYPE_META: Record<
     Icon: CreditCard,
     bg: "bg-rose-50",
     iconColor: "text-rose-500",
+  },
+  disclosure_request: {
+    Icon: UserPlus,
+    bg: "bg-[var(--tetsu-pink-pale)]",
+    iconColor: "text-[var(--tetsu-pink)]",
+  },
+  disclosure_approved: {
+    Icon: CheckCircle2,
+    bg: "bg-green-50",
+    iconColor: "text-green-600",
   },
 };
 
