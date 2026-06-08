@@ -641,7 +641,9 @@ export default function ProfileSheetPage() {
             </div>
           )}
 
-          {/* ===== プレビューカード（A4サイズ 595×842px @72dpi） ===== */}
+          {/* ===== プレビューカード（A4サイズ 595×842px @72dpi） =====
+              TODO: このカード描画は components/app/profile-sheet-card.tsx と同等。
+              将来 JPEG 出力の検証後に ProfileSheetCard へ統一して二重管理を解消する。 */}
           <div
             ref={cardWrapperRef}
             className={
