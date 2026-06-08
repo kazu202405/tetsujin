@@ -15,6 +15,7 @@ import {
 import {
   useDisclosureRequests,
   respondToRequest,
+  cancelDisclosureRequest,
   DisclosureRequest,
   DisclosureStatus,
 } from "@/lib/disclosure-data";
@@ -61,11 +62,13 @@ function RequestRow({
   perspective,
   onApprove,
   onDecline,
+  onCancel,
 }: {
   req: DisclosureRequest;
   perspective: Tab;
   onApprove?: () => void;
   onDecline?: () => void;
+  onCancel?: () => void;
 }) {
   // incoming は申請者、outgoing は相手（持ち主）を表示
   const otherId = perspective === "incoming" ? req.fromMemberId : req.toMemberId;
@@ -117,7 +120,7 @@ function RequestRow({
             {formatRelativeTime(req.respondedAt ?? req.createdAt)}
           </p>
 
-          {/* incoming かつ pending のときだけ操作ボタン */}
+          {/* incoming かつ pending のときだけ承認/却下 */}
           {perspective === "incoming" && req.status === "pending" && (
             <div className="flex items-center gap-2 mt-3">
               <button
@@ -133,6 +136,19 @@ function RequestRow({
               >
                 <X className="w-4 h-4" />
                 却下
+              </button>
+            </div>
+          )}
+
+          {/* outgoing かつ pending のときは取り下げ */}
+          {perspective === "outgoing" && req.status === "pending" && (
+            <div className="mt-3">
+              <button
+                onClick={onCancel}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                申請を取り下げる
               </button>
             </div>
           )}
@@ -241,6 +257,7 @@ export default function RequestsPage() {
                 perspective={tab}
                 onApprove={() => respondToRequest(req.id, "approved")}
                 onDecline={() => setDeclineTarget(req)}
+                onCancel={() => cancelDisclosureRequest(req.id)}
               />
             ))}
           </div>

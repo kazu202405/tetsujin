@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Clock,
   Send,
+  X,
 } from "lucide-react";
 import {
   SocialLink,
@@ -26,7 +27,7 @@ import {
 import {
   useDisclosureRequests,
   requestDisclosure,
-  getDisclosureStatus,
+  cancelDisclosureRequest,
 } from "@/lib/disclosure-data";
 
 // 各プラットフォーム用アイコン（LINE は lucide に無いのでインラインSVG）
@@ -183,10 +184,12 @@ function LockedLinkRow({
   link,
   status,
   onRequest,
+  onCancel,
 }: {
   link: SocialLink;
   status: "pending" | "declined" | null;
   onRequest: () => void;
+  onCancel: () => void;
 }) {
   const meta = SOCIAL_PLATFORM_META[link.platform];
   const label = link.label || meta.label;
@@ -201,10 +204,20 @@ function LockedLinkRow({
         <p className="text-[11px] text-gray-400">つながり済みのみに公開</p>
       </div>
       {status === "pending" ? (
-        <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 text-[11px] font-bold border border-amber-200 flex-shrink-0">
-          <Clock className="w-3 h-3" />
-          申請中
-        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-600 text-[11px] font-bold border border-amber-200">
+            <Clock className="w-3 h-3" />
+            申請中
+          </span>
+          <button
+            onClick={onCancel}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-[11px] font-bold hover:bg-gray-100 hover:text-gray-700 transition-colors"
+            title="申請を取り下げる"
+          >
+            <X className="w-3 h-3" />
+            取り下げ
+          </button>
+        </div>
       ) : (
         <button
           onClick={onRequest}
@@ -363,7 +376,11 @@ export function SocialLinksSection({ ownerMode, viewerMode }: SocialLinksSection
 
   // 各リンクを「見える」「未開示（申請対象）」「非表示」に振り分け
   const visible: SocialLink[] = [];
-  const locked: { link: SocialLink; status: "pending" | "declined" | null }[] = [];
+  const locked: {
+    link: SocialLink;
+    status: "pending" | "declined" | null;
+    requestId: string | null;
+  }[] = [];
 
   for (const link of viewerMode.links) {
     if (isOwnerView || link.visibility === "public") {
@@ -375,16 +392,22 @@ export function SocialLinksSection({ ownerMode, viewerMode }: SocialLinksSection
         visible.push(link);
         continue;
       }
-      // つながり済みでない → 開示申請の状態を見る
-      const status = canRequest
-        ? getDisclosureStatus(disclosureRequests, viewerId!, ownerId!, link.id)
-        : null;
+      // つながり済みでない → 自分が出した申請を探す
+      const req = canRequest
+        ? disclosureRequests.find(
+            (r) =>
+              r.fromMemberId === viewerId &&
+              r.toMemberId === ownerId &&
+              r.linkId === link.id
+          )
+        : undefined;
+      const status = req?.status ?? null;
       if (status === "approved") {
         visible.push(link);
       } else if (canRequest) {
         const lockedStatus: "pending" | "declined" | null =
           status === "pending" ? "pending" : status === "declined" ? "declined" : null;
-        locked.push({ link, status: lockedStatus });
+        locked.push({ link, status: lockedStatus, requestId: req?.id ?? null });
       }
       continue;
     }
@@ -400,7 +423,7 @@ export function SocialLinksSection({ ownerMode, viewerMode }: SocialLinksSection
         {visible.map((link) => (
           <SocialLinkChip key={link.id} link={link} showVisibility={isOwnerView} />
         ))}
-        {locked.map(({ link, status }) => (
+        {locked.map(({ link, status, requestId }) => (
           <LockedLinkRow
             key={link.id}
             link={link}
@@ -408,6 +431,7 @@ export function SocialLinksSection({ ownerMode, viewerMode }: SocialLinksSection
             onRequest={() =>
               requestDisclosure(viewerId!, ownerId!, link.id, link.platform)
             }
+            onCancel={() => requestId && cancelDisclosureRequest(requestId)}
           />
         ))}
       </div>

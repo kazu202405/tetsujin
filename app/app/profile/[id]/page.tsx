@@ -4,54 +4,12 @@ import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, UserX } from "lucide-react";
-import { getMemberProfile, MemberProfile } from "@/lib/dashboard-data";
-import {
-  ProfileSheetCard,
-  ProfileSheetData,
-} from "@/components/app/profile-sheet-card";
+import { getMemberProfile } from "@/lib/dashboard-data";
+import { ProfileSheetCard } from "@/components/app/profile-sheet-card";
 import { SocialLinksSection } from "@/components/app/social-links-section";
 import { CURRENT_USER_ID, isConnectedWithMe } from "@/lib/connections-data";
 import { useIsWithdrawn } from "@/lib/withdrawal-data";
-
-// メンバーごとに少しだけ色を変える（メンバー本人のテーマ設定が無いため id から決定）
-const SHEET_PALETTE = [
-  "#2a2a3e",
-  "#2b4a8c",
-  "#1a6b6b",
-  "#a0522d",
-  "#b83560",
-  "#6b2d6b",
-  "#5c3d1e",
-  "#2a6b45",
-];
-
-// メンバープロフィール → シート表示データ（ある項目だけ・無い欄は空でカード側が非表示）
-function toSheetData(profile: MemberProfile): ProfileSheetData {
-  const story = profile.profileStory;
-  const myHistory = story?.origin
-    ? [story.origin, story.turning, story.now].filter(Boolean).join("\n\n")
-    : profile.headline ?? "";
-  const hitokoto =
-    story?.coreValues && story.coreValues.length > 0
-      ? story.coreValues.map((v) => `●${v}`).join("\n")
-      : story?.values ?? profile.headline ?? "";
-
-  return {
-    memberNumber: "",
-    nameKanji: profile.name,
-    nameFurigana: "",
-    nickname: "",
-    job: [profile.roleTitle, profile.jobTitle].filter(Boolean).join("\n"),
-    location: "",
-    hobbies: story?.passion ?? "",
-    myHistory,
-    tetsujinBenefit: "",
-    hitokoto,
-    lineUrl: "",
-    instagramUrl: "",
-    photoUrl: profile.photoUrl,
-  };
-}
+import { useSheetData } from "@/lib/profile-sheet-data";
 
 export default function ProfilePage({
   params,
@@ -61,6 +19,7 @@ export default function ProfilePage({
   const { id } = use(params);
   const profile = getMemberProfile(id);
   const isWithdrawn = useIsWithdrawn(id, profile?.isWithdrawn);
+  const { data: sheetData, themeColor } = useSheetData(id);
 
   // カードをコンテナ幅に合わせてスケーリング
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -114,9 +73,6 @@ export default function ProfilePage({
     );
   }
 
-  const sheetData = toSheetData(profile);
-  const primaryColor = SHEET_PALETTE[Number(id) % SHEET_PALETTE.length] ?? SHEET_PALETTE[0];
-
   return (
     <div className="min-h-screen">
       {/* Header bar */}
@@ -137,7 +93,7 @@ export default function ProfilePage({
         <div ref={wrapRef} className="flex justify-center">
           <ProfileSheetCard
             data={sheetData}
-            primaryColor={primaryColor}
+            primaryColor={themeColor}
             scale={scale}
           />
         </div>
