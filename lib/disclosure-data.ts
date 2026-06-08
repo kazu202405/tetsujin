@@ -146,6 +146,15 @@ export function respondToRequest(
   writeRequests(next);
 }
 
+// 申請者が自分の申請を取り下げる（pending のみ削除＝再申請可能な状態に戻す）
+export function cancelDisclosureRequest(requestId: string): void {
+  const requests = readRequests();
+  const next = requests.filter(
+    (r) => !(r.id === requestId && r.status === "pending")
+  );
+  writeRequests(next);
+}
+
 // ============ 参照ヘルパー ============
 
 // 閲覧者→持ち主 の特定リンクが開示済みか（承認済み申請の有無）
