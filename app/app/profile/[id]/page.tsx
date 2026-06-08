@@ -10,6 +10,8 @@ import { SocialLinksSection } from "@/components/app/social-links-section";
 import { CURRENT_USER_ID, isConnectedWithMe } from "@/lib/connections-data";
 import { useIsWithdrawn } from "@/lib/withdrawal-data";
 import { useSheetData } from "@/lib/profile-sheet-data";
+import { useMemberRole } from "@/lib/member-roles";
+import { RoleBadge } from "@/components/app/role-badge";
 
 export default function ProfilePage({
   params,
@@ -20,6 +22,7 @@ export default function ProfilePage({
   const profile = getMemberProfile(id);
   const isWithdrawn = useIsWithdrawn(id, profile?.isWithdrawn);
   const { data: sheetData, themeColor } = useSheetData(id);
+  const role = useMemberRole(id);
 
   // カードをコンテナ幅に合わせてスケーリング
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -89,6 +92,13 @@ export default function ProfilePage({
       </div>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24 space-y-6">
+        {/* ロール（一般会員は非表示） */}
+        {role !== "ユーザー" && (
+          <div className="flex justify-center">
+            <RoleBadge role={role} />
+          </div>
+        )}
+
         {/* プロフィールシート（閲覧専用） */}
         <div ref={wrapRef} className="flex justify-center">
           <ProfileSheetCard

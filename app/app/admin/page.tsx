@@ -34,6 +34,14 @@ import {
   setMemberWithdrawn,
 } from "@/lib/withdrawal-data";
 import { useMemberNotes, setMemberNote } from "@/lib/member-notes";
+import {
+  useMemberRoles,
+  setMemberRole,
+  getMemberRole,
+  ROLE_LIST,
+  MemberRole,
+} from "@/lib/member-roles";
+import { RoleBadge } from "@/components/app/role-badge";
 
 // ============================================================
 // タブ定義
@@ -1737,6 +1745,7 @@ function MemberManageTab() {
   const isWithdrawn = useWithdrawnResolver();
   const meta = useWithdrawalMeta();
   const notes = useMemberNotes();
+  const roles = useMemberRoles();
   const [search, setSearch] = useState("");
   // 退会モーダル対象 + 理由入力
   const [withdrawTarget, setWithdrawTarget] = useState<
@@ -1820,7 +1829,7 @@ function MemberManageTab() {
                 }`}
               />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-bold text-gray-900 truncate">
                     {m.name}
                   </p>
@@ -1833,6 +1842,7 @@ function MemberManageTab() {
                       在籍
                     </span>
                   )}
+                  <RoleBadge role={getMemberRole(roles, m.id)} />
                 </div>
                 <p className="text-xs text-gray-400 truncate">{m.job}</p>
                 {withdrawn && info && (
@@ -1849,6 +1859,21 @@ function MemberManageTab() {
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
+                {/* ロール付与 */}
+                <select
+                  value={getMemberRole(roles, m.id)}
+                  onChange={(e) =>
+                    setMemberRole(m.id, e.target.value as MemberRole)
+                  }
+                  className="px-2.5 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent cursor-pointer"
+                  title="ロール"
+                >
+                  {ROLE_LIST.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
                 <button
                   onClick={() => {
                     setNoteTarget(m);
