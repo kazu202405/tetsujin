@@ -24,17 +24,25 @@ import {
   ChevronUp,
   X,
   Database,
+  UserCog,
+  RotateCcw,
 } from "lucide-react";
+import {
+  useWithdrawnResolver,
+  useWithdrawalMeta,
+  setMemberWithdrawn,
+} from "@/lib/withdrawal-data";
 
 // ============================================================
 // タブ定義
 // ============================================================
-type AdminTab = "applications" | "activity" | "participation" | "members-db" | "members-db-raw";
+type AdminTab = "applications" | "activity" | "participation" | "member-manage" | "members-db" | "members-db-raw";
 
 const tabs: { id: AdminTab; label: string; icon: typeof Clock }[] = [
   { id: "applications", label: "入会申請", icon: ClipboardList },
   { id: "activity", label: "メンバーの状況", icon: Activity },
   { id: "participation", label: "参加状況", icon: CalendarDays },
+  { id: "member-manage", label: "会員管理", icon: UserCog },
   { id: "members-db", label: "会員DB", icon: Database },
   { id: "members-db-raw", label: "生会員DB", icon: Database },
 ];
@@ -219,6 +227,7 @@ export default function AdminPage() {
         {activeTab === "applications" && <ApplicationsTab />}
         {activeTab === "activity" && <ActivityTab />}
         {activeTab === "participation" && <ParticipationTab />}
+        {activeTab === "member-manage" && <MemberManageTab />}
         {activeTab === "members-db" && <MembersDbTab />}
         {activeTab === "members-db-raw" && <MembersDbRawTab />}
 
@@ -1705,6 +1714,246 @@ function MembersDbRawTab() {
           {filtered.length}件 表示中（全{counts.total}件中）・全{columns.length}カラム
         </div>
       </div>
+    </>
+  );
+}
+
+// ============================================================
+// タブ: 会員管理（退会フロー＝運営のみ。退会させる / 復帰させる）
+// 退会状態は lib/withdrawal-data.ts（localStorage）が正。members/profile/tree に即反映。
+// ============================================================
+function fmtDate(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+function MemberManageTab() {
+  const isWithdrawn = useWithdrawnResolver();
+  const meta = useWithdrawalMeta();
+  const [search, setSearch] = useState("");
+  // 退会モーダル対象 + 理由入力
+  const [withdrawTarget, setWithdrawTarget] = useState<
+    (typeof allMembers)[number] | null
+  >(null);
+  const [reason, setReason] = useState("");
+  // 復帰モーダル対象
+  const [reactivateTarget, setReactivateTarget] = useState<
+    (typeof allMembers)[number] | null
+  >(null);
+
+  const filtered = allMembers.filter(
+    (m) => !search || m.name.includes(search) || m.job.includes(search)
+  );
+  const withdrawnCount = allMembers.filter((m) => isWithdrawn(m.id)).length;
+  const activeCount = allMembers.length - withdrawnCount;
+
+  const confirmWithdraw = () => {
+    if (!withdrawTarget) return;
+    setMemberWithdrawn(withdrawTarget.id, true, reason.trim());
+    setWithdrawTarget(null);
+    setReason("");
+  };
+
+  return (
+    <>
+      {/* サマリー */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
+          <p className="text-2xl font-bold text-gray-900">{activeCount}</p>
+          <p className="text-xs text-gray-500 mt-1">在籍</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
+          <p className="text-2xl font-bold text-red-500">{withdrawnCount}</p>
+          <p className="text-xs text-gray-500 mt-1">退会</p>
+        </div>
+      </div>
+
+      {/* 退会の運用メモ */}
+      <div className="flex items-start gap-2 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 leading-relaxed">
+        <UserX className="w-4 h-4 flex-shrink-0 mt-0.5" />
+        <span>
+          退会は運営側でのみ処理します（本人からの退会ボタンはありません）。会員からLINEで退会依頼を受けたら、ここで「退会させる」を実行してください。退会後も名前は記録として残り、いつでも復帰できます。
+        </span>
+      </div>
+
+      {/* 検索 */}
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="名前・職種で検索..."
+          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+        />
+      </div>
+
+      {/* 一覧 */}
+      <div className="space-y-2.5">
+        {filtered.map((m) => {
+          const withdrawn = isWithdrawn(m.id);
+          const info = meta[m.id];
+          return (
+            <div
+              key={m.id}
+              className={`flex items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm ${
+                withdrawn ? "border-red-100" : "border-gray-100"
+              }`}
+            >
+              <img
+                src={m.photoUrl}
+                alt={m.name}
+                className={`w-11 h-11 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 ${
+                  withdrawn ? "grayscale" : ""
+                }`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-gray-900 truncate">
+                    {m.name}
+                  </p>
+                  {withdrawn ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold border border-red-200">
+                      退会
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-bold border border-green-200">
+                      在籍
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 truncate">{m.job}</p>
+                {withdrawn && info && (
+                  <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                    {info.at && `退会日 ${fmtDate(info.at)}`}
+                    {info.reason && `・理由: ${info.reason}`}
+                  </p>
+                )}
+              </div>
+              {withdrawn ? (
+                <button
+                  onClick={() => setReactivateTarget(m)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors flex-shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  復帰させる
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setWithdrawTarget(m);
+                    setReason("");
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  退会させる
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length === 0 && (
+          <div className="text-center text-gray-400 py-12 text-sm">
+            該当するメンバーがいません
+          </div>
+        )}
+      </div>
+
+      {/* 退会させるモーダル */}
+      {withdrawTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setWithdrawTarget(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                <UserX className="w-5 h-5 text-red-500" />
+              </div>
+              <h2 className="text-base font-bold text-gray-900">
+                {withdrawTarget.name}さんを退会させますか？
+              </h2>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed mb-4">
+              一覧・プロフィール・紹介ツリーから非公開になります（名前は記録として残ります）。あとから復帰できます。
+            </p>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+              退会理由（任意・運営メモ）
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              placeholder="例: 本人都合・LINEにて申請"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent resize-none mb-5"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setWithdrawTarget(null)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                やめる
+              </button>
+              <button
+                onClick={confirmWithdraw}
+                className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors"
+              >
+                退会させる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 復帰させるモーダル */}
+      {reactivateTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setReactivateTarget(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                <RotateCcw className="w-5 h-5 text-green-600" />
+              </div>
+              <h2 className="text-base font-bold text-gray-900">
+                {reactivateTarget.name}さんを復帰させますか？
+              </h2>
+            </div>
+            <p className="text-sm text-gray-600 leading-relaxed mb-5">
+              再びメンバー一覧・プロフィール・紹介ツリーに表示されます。
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setReactivateTarget(null)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                やめる
+              </button>
+              <button
+                onClick={() => {
+                  setMemberWithdrawn(reactivateTarget.id, false);
+                  setReactivateTarget(null);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition-colors"
+              >
+                復帰させる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
