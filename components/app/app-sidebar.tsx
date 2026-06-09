@@ -16,6 +16,7 @@ import {
   UserPlus,
   Menu,
   X,
+  Settings,
 } from "lucide-react";
 import { communityStats } from "@/lib/dashboard-data";
 import { NotificationBell } from "./notification-bell";
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/app/requests", label: "つながり申請", icon: UserPlus },
   { href: "/app/members-admin", label: "つながり", icon: UserCog },
   { href: "/app/admin", label: "管理画面", icon: ShieldCheck },
+  { href: "/app/settings", label: "設定", icon: Settings },
 ];
 
 export function AppSidebar() {
