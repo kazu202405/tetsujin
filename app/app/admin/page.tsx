@@ -901,7 +901,7 @@ function ParticipationTab() {
               <table className="w-full border-collapse min-w-[500px]">
                 <thead>
                   <tr>
-                    <th className="p-2 text-left text-[11px] text-gray-400 font-medium w-28" />
+                    <th className="sticky left-0 z-20 bg-white p-2 text-left text-[11px] text-gray-400 font-medium w-28 border-r border-gray-100" />
                     {monthLabels.map((label) => (
                       <th key={label} className="p-1.5 text-center text-[11px] text-gray-500 font-medium">{label}</th>
                     ))}
@@ -913,14 +913,20 @@ function ParticipationTab() {
                     <tr
                       key={ms.member.id}
                       onClick={() => setSelectedMemberId(selectedMemberId === ms.member.id ? null : ms.member.id)}
-                      className={`cursor-pointer transition-colors ${
+                      className={`group cursor-pointer transition-colors ${
                         selectedMemberId === ms.member.id ? "bg-amber-50" : "hover:bg-gray-50"
                       }`}
                     >
-                      <td className="p-2">
+                      <td
+                        className={`sticky left-0 z-10 p-2 border-r border-gray-100 transition-colors ${
+                          selectedMemberId === ms.member.id
+                            ? "bg-amber-50"
+                            : "bg-white group-hover:bg-gray-50"
+                        }`}
+                      >
                         <div className="flex items-center gap-2">
                           <img src={ms.member.photoUrl} alt={ms.member.short} className="w-6 h-6 rounded-full object-cover" />
-                          <span className="text-xs text-gray-700 font-medium">{ms.member.short}</span>
+                          <span className="text-xs text-gray-700 font-medium whitespace-nowrap">{ms.member.short}</span>
                         </div>
                       </td>
                       {months.map((month) => {
