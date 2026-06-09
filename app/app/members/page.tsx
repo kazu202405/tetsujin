@@ -106,12 +106,34 @@ export default function MembersPage() {
       {/* ヘッダー */}
       <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          {/* タイトル + 法人/個人フィルタ（右寄せ） */}
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold text-gray-900">
               コミュニティメンバー
             </h1>
+            <div className="flex gap-1 flex-shrink-0 ml-auto">
+              {(["全て", "法人", "個人"] as const).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setMemberTypeFilter(type)}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                    memberTypeFilter === type
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  {type === "法人" && <Building2 className="w-3 h-3" />}
+                  {type === "個人" && <User className="w-3 h-3" />}
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 検索 + ジャンル絞り込み（左右に並べる） */}
+          <div className="flex items-center gap-2 mt-3">
             {/* 検索 */}
-            <div className="relative w-full sm:w-72">
+            <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
@@ -121,22 +143,18 @@ export default function MembersPage() {
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
               />
             </div>
-          </div>
-
-          {/* フィルター */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-4">
             {/* ジャンルドロップダウン */}
-            <div ref={genreRef} className="relative sm:flex-1">
+            <div ref={genreRef} className="relative flex-shrink-0">
               <button
                 onClick={() => { setGenreOpen(!genreOpen); setGenreSearch(""); }}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto ${
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                   activeFilter !== "全員"
                     ? "bg-gray-900 text-white"
                     : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
                 }`}
               >
-                <Search className="w-3.5 h-3.5" />
-                <span className="truncate">{activeFilter === "全員" ? "ジャンルで絞り込み" : activeFilter}</span>
+                <Search className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate max-w-[88px] sm:max-w-none">{activeFilter === "全員" ? "絞り込み" : activeFilter}</span>
                 {activeFilter !== "全員" ? (
                   <X
                     className="w-3.5 h-3.5 flex-shrink-0 hover:opacity-70"
@@ -148,7 +166,7 @@ export default function MembersPage() {
               </button>
 
               {genreOpen && (
-                <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl border border-gray-200 shadow-lg z-20 overflow-hidden">
+                <div className="absolute top-full right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-gray-200 shadow-lg z-20 overflow-hidden">
                   {/* 検索入力 */}
                   <div className="p-2 border-b border-gray-100">
                     <div className="relative">
@@ -184,25 +202,6 @@ export default function MembersPage() {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* 法人/個人フィルタ */}
-            <div className="flex gap-1 flex-shrink-0 sm:border-l sm:border-gray-200 sm:pl-3">
-              {(["全て", "法人", "個人"] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setMemberTypeFilter(type)}
-                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
-                    memberTypeFilter === type
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  {type === "法人" && <Building2 className="w-3 h-3" />}
-                  {type === "個人" && <User className="w-3 h-3" />}
-                  {type}
-                </button>
-              ))}
             </div>
           </div>
         </div>
