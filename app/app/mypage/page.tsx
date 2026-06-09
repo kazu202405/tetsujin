@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
-  Settings,
   ChevronLeft,
   ChevronRight,
   Handshake,
@@ -12,14 +11,10 @@ import {
   Clock,
   FileUser,
   Search,
-  GitBranch,
-  ShieldCheck,
-  Bell,
 } from "lucide-react";
 import { SocialLinksSection } from "@/components/app/social-links-section";
 import { members } from "@/lib/mock-data";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
-import { useNotifications } from "@/lib/notifications-data";
 import { MemberLink, MemberNameWithStatus } from "@/components/app/member-link";
 import { dashboardMembers } from "@/lib/dashboard-data";
 
@@ -143,7 +138,6 @@ export default function MyPage() {
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ViewTab>("connections");
-  const { unreadCount } = useNotifications();
 
   // Dates that have logs
   const logDates = useMemo(() => {
@@ -188,43 +182,8 @@ export default function MyPage() {
     <div className="min-h-screen">
       {/* Header */}
       <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900 flex-shrink-0">マイページ</h1>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/app/notifications"
-              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-gray-300 hover:text-gray-900 transition-colors"
-            >
-              <Bell className="w-3.5 h-3.5 flex-shrink-0" />
-              お知らせ
-              {unreadCount > 0 && (
-                <span className="ml-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-[var(--tetsu-pink)] text-white text-[9px] font-bold leading-none">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </Link>
-            <Link
-              href="/app/tree"
-              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-gray-300 hover:text-gray-900 transition-colors lg:hidden"
-            >
-              <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
-              紹介ツリー
-            </Link>
-            <Link
-              href="/app/settings"
-              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-gray-300 hover:text-gray-900 transition-colors"
-            >
-              <Settings className="w-3.5 h-3.5 flex-shrink-0" />
-              設定
-            </Link>
-            <Link
-              href="/app/admin"
-              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:border-gray-300 hover:text-gray-900 transition-colors lg:hidden"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" />
-              管理
-            </Link>
-          </div>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <h1 className="text-xl font-bold text-gray-900">マイページ</h1>
         </div>
       </div>
 
