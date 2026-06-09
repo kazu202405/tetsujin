@@ -310,7 +310,10 @@ export function AppSidebar() {
             </nav>
 
             {/* コミュニティ統計 */}
-            <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
+            <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0 space-y-2.5">
+              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                コミュニティ
+              </p>
               <div className="flex items-center justify-between text-xs text-gray-500">
                 <div className="flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5 text-gray-400" />
@@ -318,6 +321,15 @@ export function AppSidebar() {
                 </div>
                 <span className="font-bold text-gray-700">
                   {communityStats.memberCount}人
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <div className="flex items-center gap-1.5">
+                  <CalendarSearch className="w-3.5 h-3.5 text-gray-400" />
+                  <span>今月の会</span>
+                </div>
+                <span className="font-bold text-gray-700">
+                  {communityStats.monthlyPosts}件
                 </span>
               </div>
             </div>

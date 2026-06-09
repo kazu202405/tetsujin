@@ -31,7 +31,7 @@ function MemberCard({ member }: { member: DashboardMember }) {
           </h3>
           <RoleBadge role={role} />
           {member.jobTitle && (
-            <span className="text-[11px] text-gray-400 flex-shrink-0 truncate">
+            <span className="hidden sm:inline text-[11px] text-gray-400 flex-shrink-0 truncate">
               {member.jobTitle}
             </span>
           )}
@@ -124,9 +124,9 @@ export default function MembersPage() {
           </div>
 
           {/* フィルター */}
-          <div className="flex items-center gap-3 mt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-4">
             {/* ジャンルドロップダウン */}
-            <div ref={genreRef} className="relative flex-1">
+            <div ref={genreRef} className="relative sm:flex-1">
               <button
                 onClick={() => { setGenreOpen(!genreOpen); setGenreSearch(""); }}
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto ${
@@ -187,7 +187,7 @@ export default function MembersPage() {
             </div>
 
             {/* 法人/個人フィルタ */}
-            <div className="flex gap-1 flex-shrink-0 border-l border-gray-200 pl-3">
+            <div className="flex gap-1 flex-shrink-0 sm:border-l sm:border-gray-200 sm:pl-3">
               {(["全て", "法人", "個人"] as const).map((type) => (
                 <button
                   key={type}

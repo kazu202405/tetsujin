@@ -1817,14 +1817,15 @@ function MemberManageTab() {
           return (
             <div
               key={m.id}
-              className={`flex items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm ${
+              className={`flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm ${
                 withdrawn ? "border-red-100" : "border-gray-100"
               }`}
             >
+              <div className="flex items-center gap-3 min-w-0 sm:flex-1">
               <img
                 src={m.photoUrl}
                 alt={m.name}
-                className={`w-11 h-11 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 ${
+                className={`w-11 h-11 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 flex-shrink-0 ${
                   withdrawn ? "grayscale" : ""
                 }`}
               />
@@ -1858,7 +1859,8 @@ function MemberManageTab() {
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              </div>
+              <div className="flex items-center gap-2 flex-wrap sm:flex-shrink-0 pl-14 sm:pl-0">
                 {/* ロール付与 */}
                 <select
                   value={getMemberRole(roles, m.id)}
