@@ -5,39 +5,18 @@
 
 import { useEffect, useState } from "react";
 
-export type MemberRole =
-  | "マスター"
-  | "運営"
-  | "アンバサダー"
-  | "部長"
-  | "ユーザー";
+export type MemberRole = "運営" | "部長" | "ユーザー";
 
 // 表示順（権限の強い順）とバッジの色
-export const ROLE_LIST: MemberRole[] = [
-  "マスター",
-  "運営",
-  "アンバサダー",
-  "部長",
-  "ユーザー",
-];
+export const ROLE_LIST: MemberRole[] = ["運営", "部長", "ユーザー"];
 
 export const ROLE_META: Record<
   MemberRole,
   { label: string; badgeClass: string; showBadge: boolean }
 > = {
-  マスター: {
-    label: "マスター",
-    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
-    showBadge: true,
-  },
   運営: {
     label: "運営",
     badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
-    showBadge: true,
-  },
-  アンバサダー: {
-    label: "アンバサダー",
-    badgeClass: "bg-rose-50 text-rose-700 border-rose-200",
     showBadge: true,
   },
   部長: {
@@ -53,13 +32,17 @@ export const ROLE_META: Record<
   },
 };
 
+// 有効なロールか（旧データ＝マスター/アンバサダー等を安全にユーザーへ倒す）
+function normalizeRole(value: unknown): MemberRole {
+  return value === "運営" || value === "部長" ? value : "ユーザー";
+}
+
 const STORAGE_KEY = "tetsujin-member-roles";
 const EVENT_NAME = "tetsujin-member-roles-update";
 
-// デモ用シード（id 1-10。田中=マスター、他に運営/アンバサダー/部長を散らす）
+// デモ用シード（id 1-10。運営/部長を散らす）
 const SEED_ROLES: Record<string, MemberRole> = {
-  "1": "マスター", // 田中 一郎（現在ユーザー＝オーナー）
-  "4": "アンバサダー", // 鈴木 健二
+  "1": "運営", // 田中 一郎（現在ユーザー＝オーナー）
   "5": "運営", // 中村 明子
   "10": "部長", // 本田 浩二
 };
@@ -83,7 +66,7 @@ export function getMemberRole(
   roles: Record<string, MemberRole>,
   memberId: string
 ): MemberRole {
-  return roles[memberId] ?? "ユーザー";
+  return normalizeRole(roles[memberId]);
 }
 
 // ロールを設定（ユーザーに戻すときはキー削除＝既定）
@@ -114,5 +97,5 @@ export function useMemberRoles(): Record<string, MemberRole> {
 // 単一メンバーのロールを購読（SSR安全：マウント前は既定ユーザー）
 export function useMemberRole(memberId: string): MemberRole {
   const roles = useMemberRoles();
-  return roles[memberId] ?? "ユーザー";
+  return normalizeRole(roles[memberId]);
 }

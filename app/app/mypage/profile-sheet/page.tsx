@@ -12,6 +12,8 @@ import {
   Camera,
   Save,
   Check,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
 import {
@@ -19,6 +21,11 @@ import {
   saveSheetData,
   hasOwnSheet,
 } from "@/lib/profile-sheet-data";
+import {
+  SheetSnsLink,
+  snsLabel,
+} from "@/components/app/profile-sheet-card";
+import { SocialPlatform, SOCIAL_PLATFORM_META } from "@/lib/social-links";
 
 // テーマカラープリセット（シック〜カラフルまで幅広く）
 const themeColors = [
@@ -99,8 +106,7 @@ interface ProfileData {
   myHistory: string;
   tetsujinBenefit: string;
   hitokoto: string;
-  lineUrl: string;
-  instagramUrl: string;
+  snsLinks: SheetSnsLink[];
   photoUrl: string;
 }
 
@@ -121,8 +127,7 @@ const initialData: ProfileData = {
     "組織診断・経営相談の初回無料\n（TETSUJIN会メンバー限定）",
   hitokoto:
     "●人の可能性を信じ抜く。\n●約束を守ること。小さな信頼の積み重ね。\n●現場に足を運ぶこと。",
-  lineUrl: "",
-  instagramUrl: "",
+  snsLinks: [],
   photoUrl:
     "https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face",
 };
@@ -226,6 +231,30 @@ export default function ProfileSheetPage() {
   const update = (key: keyof ProfileData, value: string) => {
     setData((prev) => ({ ...prev, [key]: value }));
   };
+
+  // SNSリンク（名刺カード用）の追加・編集・削除
+  const addSns = () =>
+    setData((prev) => ({
+      ...prev,
+      snsLinks: [
+        ...prev.snsLinks,
+        {
+          id: `sns-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          platform: "line",
+          url: "",
+        },
+      ],
+    }));
+  const updateSns = (id: string, patch: Partial<SheetSnsLink>) =>
+    setData((prev) => ({
+      ...prev,
+      snsLinks: prev.snsLinks.map((l) => (l.id === id ? { ...l, ...patch } : l)),
+    }));
+  const removeSns = (id: string) =>
+    setData((prev) => ({
+      ...prev,
+      snsLinks: prev.snsLinks.filter((l) => l.id !== id),
+    }));
 
   const [savedSheet, setSavedSheet] = useState(false);
   const handleSaveSheet = () => {
@@ -656,34 +685,73 @@ export default function ProfileSheetPage() {
               </div>
 
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <h3 className="text-sm font-bold text-gray-900 mb-4">
-                  SNSリンク
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      LINEのURL（任意）
-                    </label>
-                    <input
-                      type="url"
-                      value={data.lineUrl}
-                      onChange={(e) => update("lineUrl", e.target.value)}
-                      className={inputClass}
-                      placeholder="https://line.me/..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      InstagramのURL（任意）
-                    </label>
-                    <input
-                      type="url"
-                      value={data.instagramUrl}
-                      onChange={(e) => update("instagramUrl", e.target.value)}
-                      className={inputClass}
-                      placeholder="https://instagram.com/..."
-                    />
-                  </div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-gray-900">SNSリンク</h3>
+                  <p className="text-[11px] text-gray-400">
+                    名刺カードに載せる（自由に追加・削除）
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {data.snsLinks.map((link) => (
+                    <div
+                      key={link.id}
+                      className="bg-gray-50/60 rounded-xl border border-gray-100 p-3 space-y-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={link.platform}
+                          onChange={(e) =>
+                            updateSns(link.id, {
+                              platform: e.target.value as SocialPlatform,
+                            })
+                          }
+                          className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                        >
+                          {(
+                            Object.keys(SOCIAL_PLATFORM_META) as SocialPlatform[]
+                          ).map((p) => (
+                            <option key={p} value={p}>
+                              {SOCIAL_PLATFORM_META[p].label}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => removeSns(link.id)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="削除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {link.platform === "other" && (
+                        <input
+                          type="text"
+                          value={link.label || ""}
+                          onChange={(e) =>
+                            updateSns(link.id, { label: e.target.value })
+                          }
+                          placeholder="ラベル（例: note、YouTube）"
+                          className={inputClass}
+                        />
+                      )}
+                      <input
+                        type="url"
+                        value={link.url}
+                        onChange={(e) =>
+                          updateSns(link.id, { url: e.target.value })
+                        }
+                        placeholder={SOCIAL_PLATFORM_META[link.platform].placeholder}
+                        className={inputClass}
+                      />
+                    </div>
+                  ))}
+                  <button
+                    onClick={addSns}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border-2 border-dashed border-gray-200 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-900 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    SNSを追加
+                  </button>
                 </div>
               </div>
             </div>
@@ -846,12 +914,15 @@ export default function ProfileSheetPage() {
               </div>
 
               {/* SNSリンク（あれば表示） */}
-              {(data.lineUrl || data.instagramUrl) && (
-                <div className="px-5 pb-3 flex items-center gap-4 text-xs text-gray-400 border-t border-gray-100 pt-2 mx-5">
-                  {data.lineUrl && <span>LINE: {data.lineUrl}</span>}
-                  {data.instagramUrl && (
-                    <span>Instagram: {data.instagramUrl}</span>
-                  )}
+              {data.snsLinks.filter((l) => l.url.trim()).length > 0 && (
+                <div className="px-5 pb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 border-t border-gray-100 pt-2 mx-5">
+                  {data.snsLinks
+                    .filter((l) => l.url.trim())
+                    .map((l) => (
+                      <span key={l.id}>
+                        {snsLabel(l)}: {l.url}
+                      </span>
+                    ))}
                 </div>
               )}
               </div>
