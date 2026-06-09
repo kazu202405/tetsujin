@@ -139,8 +139,7 @@ export function baseSheetFromProfile(profile: MemberProfile): ProfileSheetData {
     myHistory,
     tetsujinBenefit: "",
     hitokoto,
-    lineUrl: "",
-    instagramUrl: "",
+    snsLinks: [],
     photoUrl: profile.photoUrl,
   };
 }
@@ -180,8 +179,7 @@ function composeSheet(id: string): ProfileSheetData {
         myHistory: "",
         tetsujinBenefit: "",
         hitokoto: "",
-        lineUrl: "",
-        instagramUrl: "",
+        snsLinks: [],
         photoUrl: "",
       } as ProfileSheetData);
   const sample = SHEET_SAMPLES[id] ?? {};

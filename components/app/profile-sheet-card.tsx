@@ -4,9 +4,18 @@
 // オーナーの編集ページ（/app/mypage/profile-sheet）と
 // 他メンバーの閲覧ページ（/app/profile/[id]）で共有する。
 // - 値が空のセクションは非表示（メンバーごとに埋まっている項目だけ出す）
-// - SNSフッターは lineUrl/instagramUrl がある時だけ（閲覧側は空にして下に開示申請UIを置く）
+// - SNSフッターは snsLinks がある時だけ（閲覧側は空にして下に開示申請UIを置く）
 
 import { Upload } from "lucide-react";
+import { SocialPlatform, SOCIAL_PLATFORM_META } from "@/lib/social-links";
+
+// 名刺カードに載せるSNS（自由に追加/削除）
+export interface SheetSnsLink {
+  id: string;
+  platform: SocialPlatform;
+  label?: string; // platform="other" のときのラベル
+  url: string;
+}
 
 export interface ProfileSheetData {
   memberNumber: string;
@@ -19,9 +28,14 @@ export interface ProfileSheetData {
   myHistory: string;
   tetsujinBenefit: string;
   hitokoto: string;
-  lineUrl: string;
-  instagramUrl: string;
+  snsLinks: SheetSnsLink[];
   photoUrl: string;
+}
+
+// SNSリンクの表示ラベル
+export function snsLabel(link: SheetSnsLink): string {
+  if (link.platform === "other") return link.label?.trim() || "リンク";
+  return SOCIAL_PLATFORM_META[link.platform].label;
 }
 
 const has = (v: string | undefined) => !!v && v.trim().length > 0;
@@ -201,10 +215,15 @@ export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Pro
         </div>
 
         {/* SNSリンク（owner の名刺出力用。閲覧側は空にして下に開示申請UIを置く） */}
-        {(has(data.lineUrl) || has(data.instagramUrl)) && (
-          <div className="px-5 pb-3 flex items-center gap-4 text-xs text-gray-400 border-t border-gray-100 pt-2 mx-5">
-            {has(data.lineUrl) && <span>LINE: {data.lineUrl}</span>}
-            {has(data.instagramUrl) && <span>Instagram: {data.instagramUrl}</span>}
+        {data.snsLinks.filter((l) => has(l.url)).length > 0 && (
+          <div className="px-5 pb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 border-t border-gray-100 pt-2 mx-5">
+            {data.snsLinks
+              .filter((l) => has(l.url))
+              .map((l) => (
+                <span key={l.id}>
+                  {snsLabel(l)}: {l.url}
+                </span>
+              ))}
           </div>
         )}
       </div>
