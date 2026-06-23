@@ -191,13 +191,14 @@ export default function MyPage() {
         {/* Profile card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 mb-8">
           <div className="flex flex-col sm:flex-row items-start gap-6">
-            {/* 左: プロフィール情報 */}
-            <img
-              src={myProfile.photoUrl}
-              alt={myProfile.name}
-              className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg ring-1 ring-gray-100"
-            />
-            <div className="flex-1 min-w-0">
+            {/* 写真 + 情報: スマホでも横並び（写真の右にテキスト） */}
+            <div className="flex flex-row items-start gap-4 sm:gap-6 flex-1 min-w-0 w-full">
+              <img
+                src={myProfile.photoUrl}
+                alt={myProfile.name}
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-4 border-white shadow-lg ring-1 ring-gray-100 flex-shrink-0"
+              />
+              <div className="flex-1 min-w-0">
               <h2
                 className="text-2xl font-bold text-gray-900 mb-1"
                 style={{ fontFamily: "'Noto Serif JP', serif" }}
@@ -218,6 +219,7 @@ export default function MyPage() {
                   <FileUser className="w-3.5 h-3.5" />
                   プロフィールシート
                 </Link>
+              </div>
               </div>
             </div>
 

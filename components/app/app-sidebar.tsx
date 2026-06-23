@@ -75,7 +75,7 @@ export function AppSidebar() {
   return (
     <>
       {/* デスクトップサイドバー */}
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 bg-white border-r border-gray-100">
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:w-64 lg:z-40 bg-white border-r border-gray-100">
         {/* ロゴ + 通知 */}
         <div className="flex items-center justify-between gap-2 pl-6 pr-3 h-16 border-b border-gray-100">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -183,18 +183,8 @@ export function AppSidebar() {
 
           {/* 右側：お知らせベル + ハンバーガー */}
           <div className="flex items-center gap-1">
-            <Link
-              href="/app/notifications"
-              className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-              aria-label="お知らせ"
-            >
-              <Bell className="w-5 h-5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-[var(--tetsu-pink)] text-white text-[10px] font-bold flex items-center justify-center leading-none">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </Link>
+            {/* デスクトップと同じトグル式ドロップダウン（再タップで閉じる） */}
+            <NotificationBell />
             <button
               onClick={() => setDrawerOpen(true)}
               className="relative p-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
