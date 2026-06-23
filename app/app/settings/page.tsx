@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { User, Bell, CreditCard, Check, MessageCircle } from "lucide-react";
+import { PushNotificationSetup } from "@/components/app/push-notification-setup";
 
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
@@ -133,6 +134,9 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
+
+        {/* 端末プッシュ通知（PWA / Web Push） */}
+        <PushNotificationSetup />
 
         {/* Plan */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
