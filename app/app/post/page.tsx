@@ -1,12 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import {
-  CalendarDays,
-  Plus,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { CalendarDays, Plus, ChevronLeft } from "lucide-react";
 import type { Event, MyProfile, ParticipantRole, ToastMessage } from "./types";
 import { myProfile, seriesList, initialEvents } from "./data";
 import EventCard from "./components/EventCard";
@@ -15,25 +10,12 @@ import ManagePanel from "./components/ManagePanel";
 import JoinModal from "./components/JoinModal";
 import HostSummary from "./components/HostSummary";
 import Toast from "./components/Toast";
-
-// --- カレンダーヘルパー ---
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-function getFirstDayOfWeek(year: number, month: number) {
-  return new Date(year, month, 1).getDay();
-}
+import { useJoinedEventIds, setEventJoined } from "@/lib/event-participation";
+import { EventCalendar } from "@/components/app/event-calendar";
 
 function formatMonth(year: number, month: number) {
   return `${year}年${month + 1}月`;
 }
-
-function toDateStr(year: number, month: number, day: number) {
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
 export default function PostPage() {
   const today = new Date();
@@ -41,9 +23,8 @@ export default function PostPage() {
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [events, setEvents] = useState<Event[]>(initialEvents);
-  const [joinedIds, setJoinedIds] = useState<Set<string>>(
-    new Set(["e1", "e3"])
-  );
+  // 参加状態は単一ソース（lib/event-participation）から購読。mypage と同期する。
+  const joinedIds = useJoinedEventIds();
   const [showCreate, setShowCreate] = useState(false);
   const [managingEventId, setManagingEventId] = useState<string | null>(null);
   const [followedSeriesIds, setFollowedSeriesIds] = useState<Set<string>>(
@@ -84,8 +65,11 @@ export default function PostPage() {
     return events.filter((e) => e.date.startsWith(prefix));
   }, [selectedDate, viewYear, viewMonth, events]);
 
-  const daysInMonth = getDaysInMonth(viewYear, viewMonth);
-  const firstDay = getFirstDayOfWeek(viewYear, viewMonth);
+  // カレンダーのドット表示日（イベント開催日）
+  const markedDates = useMemo(
+    () => new Set(eventDateMap.keys()),
+    [eventDateMap]
+  );
 
   const prevMonth = () => {
     if (viewMonth === 0) {
@@ -110,11 +94,7 @@ export default function PostPage() {
   // 参加ボタン: 未参加→モーダル表示、参加済み→直接取り消し
   const handleJoinClick = (eventId: string) => {
     if (joinedIds.has(eventId)) {
-      setJoinedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(eventId);
-        return next;
-      });
+      setEventJoined(eventId, false);
       addToast("参加を取り消しました", "info");
     } else {
       setJoiningEventId(eventId);
@@ -124,7 +104,7 @@ export default function PostPage() {
   // モーダルから参加確定
   const confirmJoin = (eventId: string, comment: string, editedProfile: MyProfile) => {
     setCurrentProfile(editedProfile);
-    setJoinedIds((prev) => new Set(prev).add(eventId));
+    setEventJoined(eventId, true);
     setJoiningEventId(null);
     addToast("参加を申請しました");
   };
@@ -293,9 +273,22 @@ export default function PostPage() {
   // イベント作成
   const handleCreate = (newEvent: Event) => {
     setEvents((prev) => [newEvent, ...prev]);
-    setJoinedIds((prev) => new Set(prev).add(newEvent.id));
+    setEventJoined(newEvent.id, true);
     setShowCreate(false);
     addToast("新しい会を作成しました");
+  };
+
+  // 主催イベントのリマインド文面を生成してクリップボードにコピー
+  // （実際の一斉配信はしない。運営が LINE/メールへ貼り付けて送る前提）
+  // TODO: 自動配信は入金後に Supabase + プッシュ/メール送信で対応
+  const handleCopyReminder = async (ev: Event) => {
+    const text = `【リマインド】${ev.title}\n${ev.date} ${ev.time}／${ev.location}\nご参加お待ちしております！`;
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast("文面をコピーしました。LINE/メールに貼り付けて送信してください");
+    } catch {
+      addToast("コピーに失敗しました", "error");
+    }
   };
 
   // サイドバーから管理パネルを開く
@@ -339,103 +332,16 @@ export default function PostPage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* 左カラム: カレンダー + サマリー */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 lg:sticky lg:top-24">
-              {/* 月ナビゲーション */}
-              <div className="flex items-center justify-between mb-4">
-                <button
-                  onClick={prevMonth}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5 text-gray-600" />
-                </button>
-                <span className="text-sm font-bold text-gray-900">
-                  {formatMonth(viewYear, viewMonth)}
-                </span>
-                <button
-                  onClick={nextMonth}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5 text-gray-600" />
-                </button>
-              </div>
-
-              {/* 曜日ヘッダー */}
-              <div className="grid grid-cols-7 mb-1">
-                {WEEKDAYS.map((d, i) => (
-                  <div
-                    key={d}
-                    className={`text-center text-[11px] font-medium py-1 ${
-                      i === 0
-                        ? "text-red-400"
-                        : i === 6
-                          ? "text-blue-400"
-                          : "text-gray-400"
-                    }`}
-                  >
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              {/* 日付グリッド */}
-              <div className="grid grid-cols-7">
-                {Array.from({ length: firstDay }).map((_, i) => (
-                  <div key={`empty-${i}`} className="aspect-square" />
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1;
-                  const dateStr = toDateStr(viewYear, viewMonth, day);
-                  const hasEvent = eventDateMap.has(dateStr);
-                  const isSelected = selectedDate === dateStr;
-                  const isToday =
-                    viewYear === today.getFullYear() &&
-                    viewMonth === today.getMonth() &&
-                    day === today.getDate();
-                  const dayOfWeek = (firstDay + i) % 7;
-
-                  return (
-                    <button
-                      key={day}
-                      onClick={() =>
-                        setSelectedDate(isSelected ? null : dateStr)
-                      }
-                      className={`aspect-square flex flex-col items-center justify-center rounded-lg text-sm transition-all relative ${
-                        isSelected
-                          ? "bg-gray-900 text-white"
-                          : isToday
-                            ? "bg-amber-50 text-amber-700 font-bold"
-                            : dayOfWeek === 0
-                              ? "text-red-400 hover:bg-gray-50"
-                              : dayOfWeek === 6
-                                ? "text-blue-400 hover:bg-gray-50"
-                                : "text-gray-700 hover:bg-gray-50"
-                      }`}
-                    >
-                      {day}
-                      {hasEvent && (
-                        <span
-                          className={`absolute bottom-1 w-1 h-1 rounded-full ${
-                            isSelected ? "bg-amber-400" : "bg-amber-500"
-                          }`}
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* 凡例 */}
-              <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100 text-[11px] text-gray-400">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  イベントあり
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-4 h-4 rounded bg-amber-50 border border-amber-200" />
-                  今日
-                </div>
-              </div>
-            </div>
+            <EventCalendar
+              viewYear={viewYear}
+              viewMonth={viewMonth}
+              selectedDate={selectedDate}
+              markedDates={markedDates}
+              onPrevMonth={prevMonth}
+              onNextMonth={nextMonth}
+              onSelectDate={setSelectedDate}
+              legendLabel="イベントあり"
+            />
 
             {/* 主催イベントサマリー + フォロー中シリーズ */}
             <div className="hidden lg:block">
@@ -527,6 +433,7 @@ export default function PostPage() {
             onTransferOwnership={transferOwnership}
             onEditEvent={editEvent}
             onDeleteEvent={deleteEvent}
+            onCopyReminder={handleCopyReminder}
           />
         );
       })()}

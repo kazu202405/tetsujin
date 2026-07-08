@@ -15,6 +15,7 @@ import {
   Pencil,
   Trash2,
   Search,
+  Bell,
 } from "lucide-react";
 import type { Event, ParticipantRole } from "../types";
 
@@ -33,6 +34,7 @@ interface ManagePanelProps {
   onTransferOwnership: (eventId: string, newOwnerId: string) => void;
   onEditEvent: (eventId: string, updates: Partial<Event>) => void;
   onDeleteEvent: (eventId: string) => void;
+  onCopyReminder: (event: Event) => void;
 }
 
 type ManageTab = "participants" | "roles" | "settings";
@@ -48,6 +50,7 @@ export default function ManagePanel({
   onTransferOwnership,
   onEditEvent,
   onDeleteEvent,
+  onCopyReminder,
 }: ManagePanelProps) {
   const [tab, setTab] = useState<ManageTab>("participants");
   const [transferConfirmId, setTransferConfirmId] = useState<string | null>(
@@ -183,6 +186,29 @@ export default function ManagePanel({
               </span>
             )}
           </div>
+
+          {/* リマインド文面のコピー（upcomingのみ）。運営が LINE/メールに貼り付けて送る前提 */}
+          {!isPast && (
+            <div className="mb-4 p-3 bg-[var(--tetsu-pink-pale)] rounded-xl">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-gray-800">
+                    参加者へのリマインド
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                    文面をコピーして LINE/メールで送れます。
+                  </p>
+                </div>
+                <button
+                  onClick={() => onCopyReminder(event)}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-[var(--tetsu-pink)] text-white text-[11px] font-bold hover:bg-[var(--tetsu-pink-light)] transition-colors flex-shrink-0"
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                  文面をコピー
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 申請中の参加者（upcomingのみ） */}
           {!isPast && event.pendingParticipants.length > 0 && (

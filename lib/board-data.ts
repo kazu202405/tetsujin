@@ -41,3 +41,21 @@ export function useBoardUnreadCount(): number {
 
   return count;
 }
+
+// 掲示板を一度でも開いたか（オンボーディングの完了判定用・購読）
+export function useBoardVisited(): boolean {
+  const [visited, setVisited] = useState(false);
+  useEffect(() => {
+    const read = () => {
+      try {
+        setVisited(localStorage.getItem(STORAGE_KEY) !== null);
+      } catch {
+        setVisited(false);
+      }
+    };
+    read();
+    window.addEventListener(EVENT_NAME, read);
+    return () => window.removeEventListener(EVENT_NAME, read);
+  }, []);
+  return visited;
+}

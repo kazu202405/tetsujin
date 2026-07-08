@@ -252,3 +252,15 @@ export function loadOwnSheet(id: string): {
 export function hasOwnSheet(id: string): boolean {
   return readStored(id) !== null;
 }
+
+// 本人がプロフィールシートを保存済みか（購読・オンボーディングの完了判定用）
+export function useHasOwnSheet(id: string): boolean {
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    const read = () => setSaved(readStored(id) !== null);
+    read();
+    window.addEventListener(EVENT_NAME, read);
+    return () => window.removeEventListener(EVENT_NAME, read);
+  }, [id]);
+  return saved;
+}
