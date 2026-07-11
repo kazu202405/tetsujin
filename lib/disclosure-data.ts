@@ -155,6 +155,13 @@ export function cancelDisclosureRequest(requestId: string): void {
   writeRequests(next);
 }
 
+// デモ用：開示申請をシードに戻したうえで、自分が送った申請だけを取り除く。
+// → オンボ「誰かに開示申請する」は未完了(0/6)に戻り、
+//   他人→自分の受信申請（/app/requests 受信タブ・通知バッジ）はシードのまま残る。
+export function resetDisclosureForNewMember(userId: string): void {
+  writeRequests(SEED_REQUESTS.filter((r) => r.fromMemberId !== userId));
+}
+
 // ============ 参照ヘルパー ============
 
 // 閲覧者→持ち主 の特定リンクが開示済みか（承認済み申請の有無）

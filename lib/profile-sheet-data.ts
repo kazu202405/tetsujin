@@ -253,6 +253,17 @@ export function hasOwnSheet(id: string): boolean {
   return readStored(id) !== null;
 }
 
+// デモ用：本人の保存済みシートを削除（オンボ「プロフィールを作成する」が未完了に戻る）
+export function clearOwnSheet(id: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_PREFIX + id);
+    window.dispatchEvent(new Event(EVENT_NAME));
+  } catch {
+    /* ignore */
+  }
+}
+
 // 本人がプロフィールシートを保存済みか（購読・オンボーディングの完了判定用）
 export function useHasOwnSheet(id: string): boolean {
   const [saved, setSaved] = useState(false);

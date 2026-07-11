@@ -6,6 +6,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { clearJoinedEvents } from "./event-participation";
+import { resetBoardVisited } from "./board-data";
+import { clearOwnSheet } from "./profile-sheet-data";
+import { resetDisclosureForNewMember } from "./disclosure-data";
 
 const VIDEO_KEY = "tetsujin-onboarding-video-watched";
 const DISMISSED_KEY = "tetsujin-onboarding-dismissed";
@@ -38,6 +42,20 @@ export function markOnboardingVideoWatched() {
 // チェックリストを閉じる
 export function dismissOnboarding() {
   writeFlag(DISMISSED_KEY, true);
+}
+
+// デモ用：はじめてガイドを「まっさらな新規会員」（0/6）に戻す。
+// 各ステップの完了は他ストア（参加・掲示板・プロフ・開示）から自動判定されるため、
+// 動画・×閉じフラグのクリアだけでなく、それらの元データも空にする。
+// 注意：デフォルト（初回シード）は 3/6 のまま。この 0/6 化はリセット押下時のみ。
+// 開示申請は「自分が送った分」だけ消し、他人→自分の受信申請（受信タブ・通知）は残す。
+export function resetOnboardingDemo(userId: string) {
+  clearJoinedEvents(); // 参加を空に → join1/join2 未完了
+  resetBoardVisited(); // 掲示板の訪問記録をクリア → 未完了
+  clearOwnSheet(userId); // 本人のプロフィールシートを削除 → 未完了
+  resetDisclosureForNewMember(userId); // 自分の送信申請だけ消す → 開示 未完了（受信は残る）
+  writeFlag(VIDEO_KEY, false); // 動画視聴フラグをクリア → 未完了
+  writeFlag(DISMISSED_KEY, false); // ×閉じフラグをクリア → 再表示
 }
 
 // 2フラグをまとめて購読（mounted ガードでチラつき防止）

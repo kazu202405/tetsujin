@@ -56,6 +56,11 @@ export function setEventJoined(eventId: string, joined: boolean) {
   persist(ids);
 }
 
+// デモ用：参加状態を空にする（オンボ「イベントに参加する」を未完了に戻す＝まっさらな新規会員）
+export function clearJoinedEvents() {
+  persist(new Set());
+}
+
 // ============ 購読フック ============
 // mounted と ids を同一 state で更新し、初期描画のチラつき・hydration mismatch を防ぐ
 function useJoinedState(): { mounted: boolean; ids: Set<string> } {

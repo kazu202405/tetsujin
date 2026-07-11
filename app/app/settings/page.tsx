@@ -1,8 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { User, Bell, CreditCard, Check, MessageCircle } from "lucide-react";
+import {
+  User,
+  Bell,
+  CreditCard,
+  Check,
+  MessageCircle,
+  RotateCcw,
+} from "lucide-react";
 import { PushNotificationSetup } from "@/components/app/push-notification-setup";
+import { resetOnboardingDemo } from "@/lib/onboarding-data";
+import { CURRENT_USER_ID } from "@/lib/connections-data";
 
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
@@ -12,10 +21,19 @@ export default function SettingsPage() {
     newConnection: true,
     weeklyDigest: false,
   });
+  const [resetConfirm, setResetConfirm] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
 
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleResetOnboarding = () => {
+    resetOnboardingDemo(CURRENT_USER_ID);
+    setResetConfirm(false);
+    setResetDone(true);
+    setTimeout(() => setResetDone(false), 4000);
   };
 
   return (
@@ -194,6 +212,56 @@ export default function SettingsPage() {
             <MessageCircle className="w-4 h-4" />
             LINEで退会を相談する
           </a>
+        </div>
+
+        {/* はじめてガイドのリセット（デモ・動作確認用） */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+          <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2">
+            <RotateCcw className="w-5 h-5 text-gray-400" />
+            はじめてガイドをもう一度見る
+          </h2>
+          <p className="text-sm text-gray-600 leading-relaxed mb-5">
+            マイページ上部の「はじめてガイド」を、新規会員と同じ全ステップ未完了（0/6）の状態に戻します。デモ・動作確認用の機能です。
+            <br />
+            <span className="text-xs text-gray-400">
+              ※ あなたのイベント参加・作成したプロフィール・掲示板の閲覧記録・送信した開示申請がクリアされます（他の人から届いた開示申請は残ります）。
+            </span>
+          </p>
+          {!resetConfirm ? (
+            <button
+              onClick={() => setResetConfirm(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <RotateCcw className="w-4 h-4" />
+              はじめてガイドをリセット
+            </button>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <p className="text-sm font-medium text-gray-900">
+                初回状態に戻します。よろしいですか？
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleResetOnboarding}
+                  className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-[var(--tetsu-pink)] hover:opacity-90 transition-opacity"
+                >
+                  はい、リセット
+                </button>
+                <button
+                  onClick={() => setResetConfirm(false)}
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          )}
+          {resetDone && (
+            <p className="mt-3 text-sm font-medium text-green-600 flex items-center gap-1.5">
+              <Check className="w-4 h-4" />
+              リセットしました。マイページでご確認ください。
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -19,6 +19,17 @@ export function markBoardVisited() {
   }
 }
 
+// デモ用：掲示板の訪問記録をクリア（未読バッジ・オンボ「掲示板を見る」が初期状態に戻る）
+export function resetBoardVisited() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new Event(EVENT_NAME));
+  } catch {
+    /* ignore */
+  }
+}
+
 function readUnreadCount(): number {
   if (typeof window === "undefined") return BASELINE_UNREAD;
   try {
