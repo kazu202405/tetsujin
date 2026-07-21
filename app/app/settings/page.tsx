@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   User,
   Bell,
@@ -8,12 +9,17 @@ import {
   Check,
   MessageCircle,
   RotateCcw,
+  LogOut,
 } from "lucide-react";
 import { PushNotificationSetup } from "@/components/app/push-notification-setup";
 import { resetOnboardingDemo } from "@/lib/onboarding-data";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
+import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
   const [saved, setSaved] = useState(false);
   const [notifications, setNotifications] = useState({
     newRecommendation: true,
@@ -27,6 +33,14 @@ export default function SettingsPage() {
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await createClient().auth.signOut();
+    // Server Component 側のセッションも捨てさせる
+    router.push("/login");
+    router.refresh();
   };
 
   const handleResetOnboarding = () => {
@@ -194,6 +208,25 @@ export default function SettingsPage() {
             )}
           </button>
         </div>
+
+        {/* ログアウト（Supabase接続時のみ。mockモードではセッションが存在しない） */}
+        {isSupabaseConfigured && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
+            <h2 className="text-base font-bold text-gray-900 mb-2">ログアウト</h2>
+            <p className="text-sm text-gray-600 leading-relaxed mb-5">
+              このブラウザからログアウトします。次回はメールアドレスとパスワードで
+              ログインしてください。
+            </p>
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-60"
+            >
+              <LogOut className="w-4 h-4" />
+              {loggingOut ? "ログアウト中..." : "ログアウト"}
+            </button>
+          </div>
+        )}
 
         {/* 退会について（運営のみが処理。本人はLINEで申請） */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">

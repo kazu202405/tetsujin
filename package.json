@@ -7,9 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "build:members-db": "node scripts/build-members-db.mjs"
+    "build:members-db": "node scripts/build-members-db.mjs",
+    "import:members": "node scripts/import-members-to-supabase.mjs",
+    "create:admin": "node scripts/create-admin.mjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "html2canvas-pro": "^2.0.2",
