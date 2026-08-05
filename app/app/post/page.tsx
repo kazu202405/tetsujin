@@ -1,20 +1,55 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { CalendarDays, Plus, ChevronLeft } from "lucide-react";
 import type { Event, MyProfile, ParticipantRole, ToastMessage } from "./types";
-import { myProfile, seriesList, initialEvents } from "./data";
+import { myProfile, seriesList } from "./data";
 import EventCard from "./components/EventCard";
 import CreateForm from "./components/CreateForm";
 import ManagePanel from "./components/ManagePanel";
 import JoinModal from "./components/JoinModal";
 import HostSummary from "./components/HostSummary";
 import Toast from "./components/Toast";
-import { useJoinedEventIds, setEventJoined } from "@/lib/event-participation";
+import {
+  type EventRecord,
+  createEvent,
+  setEventJoined,
+  useEvents,
+} from "@/lib/events-api";
 import { EventCalendar } from "@/components/app/event-calendar";
 
 function formatMonth(year: number, month: number) {
   return `${year}年${month + 1}月`;
+}
+
+// DBの行を画面が使っている Event 型へ寄せる。
+// 参加承認・副管理者・オーナー委譲はまだ設計していないため、
+// pendingParticipants は常に空、参加者のロールも持たせない。
+function toEvent(record: EventRecord, todayIso: string): Event {
+  return {
+    id: record.id,
+    title: record.title,
+    date: record.date,
+    time: record.time,
+    location: record.location,
+    description: record.description,
+    organizer: {
+      id: record.hostId ?? "",
+      name: record.hostName,
+      photoUrl: "",
+    },
+    participantCount: record.participantCount,
+    participants: record.participants.map((p) => ({
+      id: p.id,
+      name: p.name,
+      photoUrl: p.avatarUrl ?? "",
+    })),
+    pendingParticipants: [],
+    capacity: record.capacity,
+    status: record.date >= todayIso ? "upcoming" : "past",
+    isHost: record.isMine,
+    seriesId: record.seriesName ?? undefined,
+  };
 }
 
 export default function PostPage() {
@@ -22,9 +57,19 @@ export default function PostPage() {
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [events, setEvents] = useState<Event[]>(initialEvents);
-  // 参加状態は単一ソース（lib/event-participation）から購読。mypage と同期する。
-  const joinedIds = useJoinedEventIds();
+  // イベントと参加実績は Supabase が正。マイページの参加数もここと同じ元を見る。
+  const { events: eventRecords, status: eventsStatus, reload: reloadEvents } = useEvents();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [events, setEvents] = useState<Event[]>([]);
+
+  useEffect(() => {
+    setEvents(eventRecords.map((r) => toEvent(r, todayIso)));
+  }, [eventRecords, todayIso]);
+
+  const joinedIds = useMemo(
+    () => new Set(eventRecords.filter((r) => r.joinedByMe).map((r) => r.id)),
+    [eventRecords]
+  );
   const [showCreate, setShowCreate] = useState(false);
   const [managingEventId, setManagingEventId] = useState<string | null>(null);
   const [followedSeriesIds, setFollowedSeriesIds] = useState<Set<string>>(
@@ -92,9 +137,14 @@ export default function PostPage() {
   };
 
   // 参加ボタン: 未参加→モーダル表示、参加済み→直接取り消し
-  const handleJoinClick = (eventId: string) => {
+  const handleJoinClick = async (eventId: string) => {
     if (joinedIds.has(eventId)) {
-      setEventJoined(eventId, false);
+      const result = await setEventJoined(eventId, false);
+      if (!result.ok) {
+        addToast(result.error, "error");
+        return;
+      }
+      await reloadEvents();
       addToast("参加を取り消しました", "info");
     } else {
       setJoiningEventId(eventId);
@@ -102,11 +152,16 @@ export default function PostPage() {
   };
 
   // モーダルから参加確定
-  const confirmJoin = (eventId: string, comment: string, editedProfile: MyProfile) => {
+  const confirmJoin = async (eventId: string, comment: string, editedProfile: MyProfile) => {
     setCurrentProfile(editedProfile);
-    setEventJoined(eventId, true);
+    const result = await setEventJoined(eventId, true);
     setJoiningEventId(null);
-    addToast("参加を申請しました");
+    if (!result.ok) {
+      addToast(result.error, "error");
+      return;
+    }
+    await reloadEvents();
+    addToast("参加しました");
   };
 
   const toggleFollowSeries = (seriesId: string) => {
@@ -270,10 +325,22 @@ export default function PostPage() {
     addToast("イベントを削除しました", "info");
   };
 
-  // イベント作成
-  const handleCreate = (newEvent: Event) => {
-    setEvents((prev) => [newEvent, ...prev]);
-    setEventJoined(newEvent.id, true);
+  // イベント作成（DBへ登録し、作成者は自動で参加者に入る）
+  const handleCreate = async (newEvent: Event) => {
+    const result = await createEvent({
+      title: newEvent.title,
+      seriesName: newEvent.seriesId ?? null,
+      date: newEvent.date,
+      time: newEvent.time,
+      location: newEvent.location,
+      description: newEvent.description,
+      capacity: newEvent.capacity,
+    });
+    if (!result.ok) {
+      addToast(result.error, "error");
+      return;
+    }
+    await reloadEvents();
     setShowCreate(false);
     addToast("新しい会を作成しました");
   };

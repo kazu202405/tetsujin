@@ -22,8 +22,9 @@ import {
 } from "lucide-react";
 import { communityStats } from "@/lib/dashboard-data";
 import { NotificationBell } from "./notification-bell";
+import { MemberAvatar } from "./member-avatar";
 import { useNotifications } from "@/lib/notifications-data";
-import { useBoardUnreadCount } from "@/lib/board-data";
+import { useBoardUnread } from "@/lib/board-api";
 import { usePendingIncomingCount } from "@/lib/disclosure-data";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
 import { createClient } from "@/lib/supabase/client";
@@ -54,7 +55,7 @@ export function AppSidebar() {
   const router = useRouter();
   const currentMember = useCurrentMember();
   const { unreadCount } = useNotifications();
-  const boardUnread = useBoardUnreadCount();
+  const boardUnread = useBoardUnread();
   const requestsPending = usePendingIncomingCount(CURRENT_USER_ID);
   // モバイル/タブレット用ドロワー（ハンバーガー）
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -64,7 +65,6 @@ export function AppSidebar() {
   );
   const displayName = currentMember?.name ?? "会員";
   const displayJob = currentMember?.job ?? "職業未登録";
-  const initial = displayName.trim().charAt(0) || "T";
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -122,9 +122,11 @@ export function AppSidebar() {
             href="/app/mypage"
             className="flex items-center gap-3 group"
           >
-            <div className="w-10 h-10 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center font-extrabold border-2 border-white shadow-sm ring-1 ring-gray-100 group-hover:ring-[var(--tetsu-pink)] transition-all">
-              {initial}
-            </div>
+            <MemberAvatar
+              name={displayName}
+              url={currentMember?.avatar_url}
+              className="ring-1 ring-gray-100 group-hover:ring-[var(--tetsu-pink)] transition-all"
+            />
             <div className="min-w-0">
               <p className="text-sm font-bold text-gray-900 truncate group-hover:text-[var(--tetsu-pink)] transition-colors">
                 {displayName}
@@ -268,9 +270,11 @@ export function AppSidebar() {
               href="/app/mypage"
               className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 group flex-shrink-0"
             >
-            <div className="w-10 h-10 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center font-extrabold border-2 border-white shadow-sm ring-1 ring-gray-100 group-hover:ring-[var(--tetsu-pink)] transition-all">
-              {initial}
-            </div>
+            <MemberAvatar
+              name={displayName}
+              url={currentMember?.avatar_url}
+              className="ring-1 ring-gray-100 group-hover:ring-[var(--tetsu-pink)] transition-all"
+            />
               <div className="min-w-0">
                 <p className="text-sm font-bold text-gray-900 truncate group-hover:text-[var(--tetsu-pink)] transition-colors">
                   {displayName}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { signAvatarPaths } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -20,5 +21,17 @@ export async function GET() {
     return NextResponse.json({ error: "メンバー一覧を取得できませんでした" }, { status: 500, headers });
   }
 
-  return NextResponse.json(data ?? [], { headers });
+  const rows = (data ?? []) as Record<string, unknown>[];
+
+  // 写真は非公開バケット。表示用の署名URLをまとめて発行して添える。
+  const signed = await signAvatarPaths(
+    supabase,
+    rows.map((row) => row.avatar_path as string | null),
+  );
+  const withAvatars = rows.map((row) => ({
+    ...row,
+    avatar_url: signed[row.avatar_path as string] ?? null,
+  }));
+
+  return NextResponse.json(withAvatars, { headers });
 }

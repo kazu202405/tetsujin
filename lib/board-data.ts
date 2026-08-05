@@ -1,13 +1,12 @@
-// 掲示板の未読カウント（mock）
+// 掲示板を一度でも開いたか（オンボーディング「掲示板を見る」の完了判定）
+// - 未読件数は実データ（board_reads）に移行したため lib/board-api.ts の useBoardUnread を使う。
+//   ここに残しているのは端末ローカルで持てば十分なオンボーディング用のフラグのみ。
 "use client";
 
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "tetsujin-board-last-visited";
 const EVENT_NAME = "tetsujin-board-visited";
-
-// 訪問前の見せかけ未読件数（mock）
-const BASELINE_UNREAD = 3;
 
 export function markBoardVisited() {
   if (typeof window === "undefined") return;
@@ -19,7 +18,7 @@ export function markBoardVisited() {
   }
 }
 
-// デモ用：掲示板の訪問記録をクリア（未読バッジ・オンボ「掲示板を見る」が初期状態に戻る）
+// デモ用：掲示板の訪問記録をクリア（オンボ「掲示板を見る」が初期状態に戻る）
 export function resetBoardVisited() {
   if (typeof window === "undefined") return;
   try {
@@ -30,30 +29,6 @@ export function resetBoardVisited() {
   }
 }
 
-function readUnreadCount(): number {
-  if (typeof window === "undefined") return BASELINE_UNREAD;
-  try {
-    const visited = localStorage.getItem(STORAGE_KEY);
-    return visited ? 0 : BASELINE_UNREAD;
-  } catch {
-    return BASELINE_UNREAD;
-  }
-}
-
-export function useBoardUnreadCount(): number {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    setCount(readUnreadCount());
-    const handler = () => setCount(readUnreadCount());
-    window.addEventListener(EVENT_NAME, handler);
-    return () => window.removeEventListener(EVENT_NAME, handler);
-  }, []);
-
-  return count;
-}
-
-// 掲示板を一度でも開いたか（オンボーディングの完了判定用・購読）
 export function useBoardVisited(): boolean {
   const [visited, setVisited] = useState(false);
   useEffect(() => {

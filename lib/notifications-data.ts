@@ -1,9 +1,13 @@
-// お知らせ（通知）機能のデータ・既読管理（mock）
+// ============================================================
+// お知らせ（通知）
+// ============================================================
+// 実データ。生成はDB側のトリガ（コメント・いいね・イベント参加・入会申請）と
+// 運営からの一斉送信で行われ、既読も会員ごとにDBへ保存される。
+// 旧実装は固定mock＋localStorage既読で、端末を変えると既読が消えていた。
+// ============================================================
 "use client";
 
-import { useEffect, useState } from "react";
-import { getDisclosureNotifications } from "./disclosure-data";
-import { CURRENT_USER_ID } from "./connections-data";
+import { useCallback, useEffect, useState } from "react";
 
 export type NotificationType =
   | "board_unread"
@@ -12,7 +16,8 @@ export type NotificationType =
   | "connection_new"
   | "comment_reply"
   | "disclosure_request"
-  | "disclosure_approved";
+  | "disclosure_approved"
+  | "announcement";
 
 export interface NotificationItem {
   id: string;
@@ -23,94 +28,6 @@ export interface NotificationItem {
   createdAt: string; // ISO 8601
 }
 
-// mock: 「今日 = 2026-04-27」想定
-export const mockNotifications: NotificationItem[] = [
-  {
-    id: "n-1",
-    type: "comment_reply",
-    title: "佐藤 裕樹さんが返信しました",
-    message: "「経営者グルメ会の感想」の投稿に返信があります。",
-    href: "/app/board",
-    createdAt: "2026-04-27T09:30:00+09:00",
-  },
-  {
-    id: "n-2",
-    type: "board_unread",
-    title: "掲示板に新しい投稿が3件",
-    message: "メンバーから新しい話題が投稿されました。",
-    href: "/app/board",
-    createdAt: "2026-04-26T18:15:00+09:00",
-  },
-  {
-    id: "n-3",
-    type: "event_reminder",
-    title: "第13回 経営者グルメ会まで3日",
-    message: "2026年4月30日 19:00〜 鮨 まつもと（大阪・北新地）",
-    href: "/app/events",
-    createdAt: "2026-04-26T08:00:00+09:00",
-  },
-  {
-    id: "n-4",
-    type: "connection_new",
-    title: "小川 理沙さんが新しいつながりを記録",
-    message: "中村 明子さんとの出会いが追加されました。",
-    href: "/app/profile/7",
-    createdAt: "2026-04-25T14:22:00+09:00",
-  },
-  {
-    id: "n-5",
-    type: "plan_renewal",
-    title: "プラン更新日が近づいています",
-    message: "次回請求日: 2026年5月14日（あと17日）",
-    href: "/app/settings",
-    createdAt: "2026-04-24T10:00:00+09:00",
-  },
-  {
-    id: "n-6",
-    type: "comment_reply",
-    title: "山本 恵美さんがコメントしました",
-    message: "「割烹 田中さんのおすすめメニュー」にコメントが届きました。",
-    href: "/app/board",
-    createdAt: "2026-04-22T20:45:00+09:00",
-  },
-  {
-    id: "n-7",
-    type: "event_reminder",
-    title: "第12回 経営者グルメ会のお礼",
-    message: "出会い記録を残しておきましょう。",
-    href: "/app/connections",
-    createdAt: "2026-04-20T11:00:00+09:00",
-  },
-];
-
-// ============ 既読管理（localStorage 永続化） ============
-
-const STORAGE_KEY = "tetsujin-notifications-read";
-const EVENT_NAME = "tetsujin-notifications-read-update";
-
-function getReadIds(): Set<string> {
-  if (typeof window === "undefined") return new Set();
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? new Set(parsed) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-function persistReadIds(ids: Set<string>) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
-    window.dispatchEvent(new Event(EVENT_NAME));
-  } catch {
-    /* ignore */
-  }
-}
-
-// ============ React フック ============
-
 export interface UseNotificationsResult {
   notifications: (NotificationItem & { read: boolean })[];
   unreadCount: number;
@@ -118,50 +35,59 @@ export interface UseNotificationsResult {
   markAllRead: () => void;
 }
 
-// 開示申請の更新イベント（disclosure-data.ts と同名）。クライアント側で購読して再計算する
-const DISCLOSURE_EVENT = "tetsujin-disclosure-update";
+/** 他の画面にも更新を知らせるためのイベント名 */
+const UPDATED_EVENT = "tetsujin-notifications-updated";
 
 export function useNotifications(): UseNotificationsResult {
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
-  // 開示申請から導出する動的通知（マウント後にクライアントで計算）
-  const [dynamic, setDynamic] = useState<NotificationItem[]>([]);
+  const [notifications, setNotifications] = useState<
+    (NotificationItem & { read: boolean })[]
+  >([]);
 
-  // 初期ロード + 他コンポーネントからの更新を購読
-  useEffect(() => {
-    const refresh = () => {
-      setReadIds(getReadIds());
-      setDynamic(getDisclosureNotifications(CURRENT_USER_ID));
-    };
-    refresh();
-    window.addEventListener(EVENT_NAME, refresh);
-    window.addEventListener(DISCLOSURE_EVENT, refresh);
-    return () => {
-      window.removeEventListener(EVENT_NAME, refresh);
-      window.removeEventListener(DISCLOSURE_EVENT, refresh);
-    };
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch("/api/notifications", { cache: "no-store" });
+      if (!response.ok) throw new Error("failed");
+      setNotifications(
+        (await response.json()) as (NotificationItem & { read: boolean })[]
+      );
+    } catch {
+      // 取得できないときは何も出さない（存在しない通知を作らない）
+      setNotifications([]);
+    }
   }, []);
 
-  // 静的mock + 動的（開示申請）をマージ
-  const all = [...mockNotifications, ...dynamic];
+  useEffect(() => {
+    void load();
+    const handler = () => void load();
+    window.addEventListener(UPDATED_EVENT, handler);
+    return () => window.removeEventListener(UPDATED_EVENT, handler);
+  }, [load]);
 
   const markRead = (id: string) => {
-    const next = new Set(readIds);
-    next.add(id);
-    persistReadIds(next);
-    setReadIds(next);
+    // 先に画面へ反映してから保存する（連打しても表示が跳ねない）
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+    void fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    })
+      .then(() => window.dispatchEvent(new Event(UPDATED_EVENT)))
+      .catch(() => void load());
   };
 
   const markAllRead = () => {
-    const next = new Set(all.map((n) => n.id));
-    persistReadIds(next);
-    setReadIds(next);
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    void fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ all: true }),
+    })
+      .then(() => window.dispatchEvent(new Event(UPDATED_EVENT)))
+      .catch(() => void load());
   };
 
-  // createdAt 降順で整列
-  const sorted = [...all].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-  const notifications = sorted.map((n) => ({ ...n, read: readIds.has(n.id) }));
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return { notifications, unreadCount, markRead, markAllRead };

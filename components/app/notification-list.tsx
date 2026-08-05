@@ -56,6 +56,11 @@ const TYPE_META: Record<
     bg: "bg-green-50",
     iconColor: "text-green-600",
   },
+  announcement: {
+    Icon: Bell,
+    bg: "bg-gray-100",
+    iconColor: "text-gray-600",
+  },
 };
 
 interface Props {

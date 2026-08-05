@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient, getCurrentMember } from "@/lib/supabase/server";
+import { signAvatarPaths } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,8 @@ const SELECT_COLUMNS = [
   "renewal_status", "renewal_fee", "renewal_note", "price", "referral_fee", "job",
   "grip", "frequency", "email", "phone", "gender", "age_range", "membership_type",
   "payment_method", "contact_submitted_at", "source", "is_withdrawn", "import_sheet",
-  "auth_user_id", "role",
+  "auth_user_id", "role", "withdrawn_at", "withdrawal_reason", "admin_note", "avatar_path",
+  "referrer_member_id",
 ].join(",");
 
 export async function GET() {
@@ -29,7 +31,7 @@ export async function GET() {
 
   const supabase = await createClient();
   const pageSize = 1000;
-  const rows: unknown[] = [];
+  const rows: Record<string, unknown>[] = [];
 
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
@@ -43,9 +45,19 @@ export async function GET() {
       return NextResponse.json({ error: "会員データを取得できませんでした" }, { status: 500, headers });
     }
 
-    rows.push(...(data ?? []));
+    rows.push(...((data ?? []) as unknown as Record<string, unknown>[]));
     if (!data || data.length < pageSize) break;
   }
 
-  return NextResponse.json(rows, { headers });
+  // 写真は非公開バケットにあるため、表示用の署名URLを一括で作って行に添える。
+  const signed = await signAvatarPaths(
+    supabase,
+    rows.map((row) => row.avatar_path as string | null),
+  );
+  const withAvatars = rows.map((row) => ({
+    ...row,
+    avatar_url: signed[row.avatar_path as string] ?? null,
+  }));
+
+  return NextResponse.json(withAvatars, { headers });
 }

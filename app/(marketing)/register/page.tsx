@@ -77,12 +77,53 @@ export default function RegisterPage() {
   const [genderOther, setGenderOther] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  // 入力内容を運営へ送る（以前は画面を切り替えるだけで、どこにも届いていなかった）
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!termsAgreed) {
-      alert("規約および概要書面をご確認・同意の上、お申し込みください。");
+      setSendError("規約および概要書面をご確認・同意の上、お申し込みください。");
       return;
     }
+
+    const form = new FormData(e.currentTarget);
+    setSending(true);
+    setSendError(null);
+
+    try {
+      const response = await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.get("name"),
+          gender: gender === "その他" ? genderOther || "その他" : gender,
+          ageRange: form.get("ageRange"),
+          email: form.get("email"),
+          phone: form.get("phone"),
+          job: form.get("job"),
+          referrer: form.get("referrer"),
+          startMonth: form.get("startMonth"),
+          membershipType: memberType,
+          paymentMethod,
+          termsAgreed: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        setSendError(body?.error || "送信できませんでした。時間をおいて再度お試しください。");
+        setSending(false);
+        return;
+      }
+    } catch {
+      setSendError("送信できませんでした。通信環境をご確認ください。");
+      setSending(false);
+      return;
+    }
+
+    setSending(false);
     setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -165,6 +206,7 @@ export default function RegisterPage() {
                   </label>
                   <input
                     type="text"
+                    name="name"
                     required
                     className={inputClass}
                     placeholder="山田 太郎"
@@ -214,7 +256,7 @@ export default function RegisterPage() {
                       年代
                     </span>
                   </label>
-                  <select required className={selectClass} defaultValue="">
+                  <select name="ageRange" required className={selectClass} defaultValue="">
                     <option value="" disabled>
                       選択してください
                     </option>
@@ -236,6 +278,7 @@ export default function RegisterPage() {
                   </label>
                   <input
                     type="email"
+                    name="email"
                     required
                     className={inputClass}
                     placeholder="example@email.com"
@@ -252,6 +295,7 @@ export default function RegisterPage() {
                   </label>
                   <input
                     type="tel"
+                    name="phone"
                     required
                     className={inputClass}
                     placeholder="090-1234-5678"
@@ -268,6 +312,7 @@ export default function RegisterPage() {
                   </label>
                   <input
                     type="text"
+                    name="job"
                     required
                     className={inputClass}
                     placeholder="経営コンサルタント"
@@ -284,6 +329,7 @@ export default function RegisterPage() {
                   </label>
                   <input
                     type="text"
+                    name="referrer"
                     required
                     className={inputClass}
                     placeholder="紹介してくれた方のお名前"
@@ -298,7 +344,7 @@ export default function RegisterPage() {
                       開始スタート月
                     </span>
                   </label>
-                  <select required className={selectClass} defaultValue="">
+                  <select name="startMonth" required className={selectClass} defaultValue="">
                     <option value="" disabled>
                       選択してください
                     </option>
@@ -450,12 +496,17 @@ export default function RegisterPage() {
 
                 {/* 送信ボタン */}
                 <div className="text-center pt-6">
+                  {sendError && (
+                    <p className="mb-4 text-sm bg-red-50 text-red-700 rounded-xl px-4 py-3">
+                      {sendError}
+                    </p>
+                  )}
                   <button
                     type="submit"
-                    disabled={!termsAgreed || !memberType || !paymentMethod}
+                    disabled={!termsAgreed || !memberType || !paymentMethod || sending}
                     className="inline-flex items-center gap-2 px-10 py-4 bg-[var(--tetsu-pink)] text-white rounded-full text-base font-bold hover:bg-[var(--tetsu-pink-light)] transition-all shadow-lg shadow-pink-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[var(--tetsu-pink)]"
                   >
-                    仮申し込みをする
+                    {sending ? "送信中..." : "仮申し込みをする"}
                   </button>
                   <p className="text-xs text-gray-400 mt-3">
                     ※ 運営にて確認後、承認されるとアカウントが有効になります

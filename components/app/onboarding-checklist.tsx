@@ -5,13 +5,12 @@
 //   TODO: 実際の説明動画 URL が用意でき次第、VideoModal の src を差し替える。
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Circle, X, Play, ChevronRight } from "lucide-react";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
-import { useJoinedEventIds } from "@/lib/event-participation";
+import { useJoinedEvents } from "@/lib/events-api";
 import { useBoardVisited } from "@/lib/board-data";
-import { useHasOwnSheet } from "@/lib/profile-sheet-data";
 import { useDisclosureRequests } from "@/lib/disclosure-data";
 import {
   useOnboardingFlags,
@@ -27,11 +26,34 @@ interface StepDef {
   onClick?: () => void; // 動画などその場で完了するステップ
 }
 
+/** プロフィールシートを作成済みか（DBに自分の行があるか）。 */
+function useHasProfileSheet(): boolean {
+  const [hasSheet, setHasSheet] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/me/profile-sheet", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const body = (await res.json()) as { exists?: boolean };
+        if (!cancelled) setHasSheet(Boolean(body.exists));
+      })
+      .catch(() => {
+        /* 取得できないときは未作成扱い（ガイドが出るだけ） */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return hasSheet;
+}
+
 export function OnboardingChecklist() {
   const { mounted, videoWatched, dismissed } = useOnboardingFlags();
-  const joinedIds = useJoinedEventIds();
+  const joinedEvents = useJoinedEvents();
   const boardVisited = useBoardVisited();
-  const hasSheet = useHasOwnSheet(CURRENT_USER_ID);
+  const hasSheet = useHasProfileSheet();
   const requests = useDisclosureRequests();
   const [showVideo, setShowVideo] = useState(false);
 
@@ -53,7 +75,7 @@ export function OnboardingChecklist() {
     {
       key: "join1",
       label: "イベントに参加する",
-      done: joinedIds.size > 0,
+      done: joinedEvents.length > 0,
       href: "/app/post",
     },
     {
@@ -71,7 +93,7 @@ export function OnboardingChecklist() {
     {
       key: "join2",
       label: "別のイベントにも参加する",
-      done: joinedIds.size >= 2,
+      done: joinedEvents.length >= 2,
       href: "/app/post",
     },
     {

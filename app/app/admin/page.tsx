@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   CheckCircle,
@@ -27,7 +27,9 @@ import {
   UserCog,
   RotateCcw,
   StickyNote,
-  ShieldCheck,
+  Handshake,
+  Megaphone,
+  Send,
 } from "lucide-react";
 import {
   useWithdrawnResolver,
@@ -37,25 +39,28 @@ import {
 import { useMemberNotes, setMemberNote } from "@/lib/member-notes";
 import {
   useMemberRoles,
-  setMemberRole,
   getMemberRole,
-  ROLE_LIST,
+  setMemberRole,
   MemberRole,
 } from "@/lib/member-roles";
 import { RoleBadge } from "@/components/app/role-badge";
+import { MemberAvatar } from "@/components/app/member-avatar";
+import { useEvents } from "@/lib/events-api";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 // ============================================================
 // タブ定義
 // ============================================================
-type AdminTab = "applications" | "activity" | "participation" | "member-manage" | "roles" | "members-db" | "members-db-raw";
+// 権限（運営/部長/一般）の変更は「会員管理」タブの各行に統合したため、
+// 独立した「権限管理」タブは廃止した（変更口が2か所あると事故るため）。
+type AdminTab = "applications" | "activity" | "participation" | "member-manage" | "announce" | "members-db" | "members-db-raw";
 
 const tabs: { id: AdminTab; label: string; icon: typeof Clock }[] = [
   { id: "applications", label: "入会申請", icon: ClipboardList },
   { id: "activity", label: "メンバーの状況", icon: Activity },
   { id: "participation", label: "参加状況", icon: CalendarDays },
   { id: "member-manage", label: "会員管理", icon: UserCog },
-  { id: "roles", label: "権限管理", icon: ShieldCheck },
+  { id: "announce", label: "お知らせ送信", icon: Megaphone },
   { id: "members-db", label: "会員DB", icon: Database },
   { id: "members-db-raw", label: "生会員DB", icon: Database },
 ];
@@ -81,29 +86,27 @@ const allMembers = [
 // ============================================================
 type ApplicationStatus = "pending" | "approved" | "rejected";
 
+// applications テーブルの行（/api/admin/applications が返す形）
 interface Application {
   id: string;
   name: string;
-  gender: string;
-  age: string;
+  name_furigana: string | null;
+  gender: string | null;
+  age_range: string | null;
   email: string;
-  phone: string;
-  job: string;
-  referrer: string;
-  startMonth: string;
-  memberType: "法人" | "個人";
-  paymentMethod: "銀行振込" | "PayPay";
+  phone: string | null;
+  job: string | null;
+  referrer: string | null;
+  start_month: string | null;
+  membership_type: "法人" | "個人" | null;
+  payment_method: string | null;
+  note: string | null;
   status: ApplicationStatus;
-  appliedAt: string;
-  approvedAt?: string;
+  member_id: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
 }
-
-const initialApplications: Application[] = [
-  { id: "a1", name: "高橋 美咲", gender: "女", age: "３０代前半", email: "takahashi@example.com", phone: "090-1111-2222", job: "Webデザイナー", referrer: "田中 一郎", startMonth: "４月", memberType: "個人", paymentMethod: "PayPay", status: "pending", appliedAt: "2026-03-01" },
-  { id: "a2", name: "松本 大輔", gender: "男", age: "４０代前半", email: "matsumoto@example.com", phone: "080-3333-4444", job: "不動産仲介業", referrer: "鈴木 健二", startMonth: "４月", memberType: "法人", paymentMethod: "銀行振込", status: "pending", appliedAt: "2026-03-02" },
-  { id: "a3", name: "伊藤 玲奈", gender: "女", age: "２０代後半", email: "ito@example.com", phone: "070-5555-6666", job: "フリーランスライター", referrer: "小川 理沙", startMonth: "３月", memberType: "個人", paymentMethod: "銀行振込", status: "approved", appliedAt: "2026-02-20", approvedAt: "2026-02-22" },
-  { id: "a4", name: "山口 健太", gender: "男", age: "５０代前半", email: "yamaguchi@example.com", phone: "090-7777-8888", job: "税理士事務所代表", referrer: "渡辺 剛", startMonth: "３月", memberType: "法人", paymentMethod: "PayPay", status: "rejected", appliedAt: "2026-02-15" },
-];
 
 const statusConfig: Record<ApplicationStatus, { label: string; color: string; bg: string; icon: typeof Clock }> = {
   pending: { label: "審査中", color: "text-amber-600", bg: "bg-amber-50 border-amber-200", icon: Clock },
@@ -116,30 +119,6 @@ const statusConfig: Record<ApplicationStatus, { label: string; color: string; bg
 // ============================================================
 type ActivityStatus = "active" | "dormant" | "inactive";
 
-interface MemberActivity {
-  memberId: string;
-  lastLoginAt: string;
-  lastEventAt: string;
-  lastPostAt: string;
-  loginCount30d: number;
-  eventCount90d: number;
-  postCount30d: number;
-  status: ActivityStatus;
-}
-
-const memberActivities: MemberActivity[] = [
-  { memberId: "1", lastLoginAt: "2026-04-05", lastEventAt: "2026-03-28", lastPostAt: "2026-04-04", loginCount30d: 18, eventCount90d: 5, postCount30d: 8, status: "active" },
-  { memberId: "3", lastLoginAt: "2026-04-06", lastEventAt: "2026-04-01", lastPostAt: "2026-04-05", loginCount30d: 22, eventCount90d: 6, postCount30d: 12, status: "active" },
-  { memberId: "10", lastLoginAt: "2026-04-04", lastEventAt: "2026-03-28", lastPostAt: "2026-04-02", loginCount30d: 15, eventCount90d: 4, postCount30d: 5, status: "active" },
-  { memberId: "2", lastLoginAt: "2026-04-03", lastEventAt: "2026-03-15", lastPostAt: "2026-03-30", loginCount30d: 12, eventCount90d: 3, postCount30d: 3, status: "dormant" },
-  { memberId: "8", lastLoginAt: "2026-03-18", lastEventAt: "2026-02-20", lastPostAt: "2026-03-10", loginCount30d: 4, eventCount90d: 1, postCount30d: 0, status: "inactive" },
-  { memberId: "5", lastLoginAt: "2026-04-05", lastEventAt: "2026-03-28", lastPostAt: "2026-04-03", loginCount30d: 14, eventCount90d: 4, postCount30d: 3, status: "active" },
-  { memberId: "6", lastLoginAt: "2026-03-20", lastEventAt: "2026-02-15", lastPostAt: "2026-03-10", loginCount30d: 4, eventCount90d: 1, postCount30d: 0, status: "inactive" },
-  { memberId: "7", lastLoginAt: "2026-03-15", lastEventAt: "2026-02-15", lastPostAt: "2026-03-05", loginCount30d: 3, eventCount90d: 1, postCount30d: 0, status: "inactive" },
-  { memberId: "4", lastLoginAt: "2026-04-02", lastEventAt: "2026-03-15", lastPostAt: "2026-03-28", loginCount30d: 8, eventCount90d: 2, postCount30d: 1, status: "dormant" },
-  { memberId: "9", lastLoginAt: "2026-02-01", lastEventAt: "2025-12-20", lastPostAt: "2026-01-15", loginCount30d: 0, eventCount90d: 0, postCount30d: 0, status: "inactive" },
-];
-
 const activityStatusConfig: Record<ActivityStatus, { label: string; color: string; bg: string; dot: string }> = {
   active: { label: "アクティブ", color: "text-green-700", bg: "bg-green-50 border-green-200", dot: "bg-green-500" },
   dormant: { label: "活動減少", color: "text-amber-700", bg: "bg-amber-50 border-amber-200", dot: "bg-amber-400" },
@@ -149,28 +128,6 @@ const activityStatusConfig: Record<ActivityStatus, { label: string; color: strin
 // ============================================================
 // タブ3: 参加状況 モックデータ
 // ============================================================
-interface EventParticipation {
-  eventId: string;
-  eventName: string;
-  seriesName: string | null;
-  date: string;
-  location: string;
-  participantIds: string[];
-}
-
-const eventParticipations: EventParticipation[] = [
-  { eventId: "e1", eventName: "第12回 経営者グルメ会", seriesName: "経営者グルメ会", date: "2026-03-28", location: "鮨 まつもと（大阪・北新地）", participantIds: ["1", "3", "10", "8", "2"] },
-  { eventId: "e2", eventName: "第11回 経営者グルメ会", seriesName: "経営者グルメ会", date: "2026-02-15", location: "割烹 田中（大阪・北新地）", participantIds: ["1", "2", "3", "5", "10"] },
-  { eventId: "e3", eventName: "ワイン勉強会 Vol.3", seriesName: "ワイン勉強会", date: "2026-03-20", location: "ワインバー CAVA（大阪・心斎橋）", participantIds: ["1", "6", "8", "10"] },
-  { eventId: "e4", eventName: "新メンバー歓迎ランチ", seriesName: null, date: "2026-02-15", location: "ビストロ マルシェ（大阪・中之島）", participantIds: ["1", "2", "7", "5"] },
-  { eventId: "e5", eventName: "健康経営セミナー", seriesName: null, date: "2026-01-25", location: "ホテルニューオータニ（大阪）", participantIds: ["1", "5", "3", "8"] },
-  { eventId: "e6", eventName: "第10回 経営者グルメ会", seriesName: "経営者グルメ会", date: "2026-01-10", location: "天ぷら 大阪あら川（大阪・本町）", participantIds: ["1", "3", "10", "4", "6"] },
-  { eventId: "e7", eventName: "ワイン勉強会 Vol.2", seriesName: "ワイン勉強会", date: "2025-12-15", location: "ワインバー CAVA（大阪・心斎橋）", participantIds: ["6", "8", "1", "10"] },
-  { eventId: "e8", eventName: "産地訪問ツアー", seriesName: null, date: "2025-12-20", location: "農家レストラン みのり（長野・安曇野）", participantIds: ["3", "9", "1", "5"] },
-  { eventId: "e9", eventName: "第9回 経営者グルメ会", seriesName: "経営者グルメ会", date: "2025-11-15", location: "天ぷら 大阪あら川（大阪・本町）", participantIds: ["1", "3", "10", "2", "8"] },
-  { eventId: "e10", eventName: "ヘルスケアイベント", seriesName: null, date: "2025-11-30", location: "自然食レストラン みどり（大阪・中崎町）", participantIds: ["5", "9", "7"] },
-];
-
 // ============================================================
 // タブ4: 紹介ランキング モックデータ
 // ============================================================
@@ -241,7 +198,7 @@ export default function AdminPage() {
         {activeTab === "activity" && <ActivityTab />}
         {activeTab === "participation" && <ParticipationTab />}
         {activeTab === "member-manage" && <MemberManageTab />}
-        {activeTab === "roles" && <RoleManagementTab />}
+        {activeTab === "announce" && <AnnounceTab />}
         {activeTab === "members-db" && <MembersDbTab />}
         {activeTab === "members-db-raw" && <MembersDbRawTab />}
 
@@ -254,30 +211,69 @@ export default function AdminPage() {
 // タブ1: 入会申請
 // ============================================================
 function ApplicationsTab() {
-  const [applications, setApplications] = useState(initialApplications);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<ApplicationStatus | "all">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/applications", { cache: "no-store" });
+      if (!response.ok) throw new Error("failed");
+      setApplications((await response.json()) as Application[]);
+      setLoadStatus("loaded");
+    } catch {
+      setApplications([]);
+      setLoadStatus("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const filtered = applications.filter((app) => {
-    const matchSearch = app.name.includes(search) || app.email.includes(search) || app.referrer.includes(search);
+    const query = search.trim();
+    const matchSearch =
+      !query ||
+      app.name.includes(query) ||
+      (app.email ?? "").includes(query) ||
+      (app.referrer ?? "").includes(query);
     const matchStatus = filterStatus === "all" || app.status === filterStatus;
     return matchSearch && matchStatus;
   });
 
-  const pendingCount = applications.filter((a) => a.status === "pending").length;
+  const review = async (id: string, action: "approve" | "reject") => {
+    setSavingId(id);
+    setMessage(null);
+    const response = await fetch(`/api/admin/applications/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    setSavingId(null);
 
-  const handleApprove = (id: string) => {
-    setApplications((prev) =>
-      prev.map((a) => a.id === id ? { ...a, status: "approved" as ApplicationStatus, approvedAt: new Date().toISOString().split("T")[0] } : a)
-    );
+    if (!response.ok) {
+      setMessage({ type: "error", text: result?.error || "更新できませんでした" });
+      return;
+    }
+    setMessage({
+      type: "success",
+      text: action === "approve" ? "承認して会員台帳に追加しました" : "却下しました",
+    });
+    await reload();
   };
 
-  const handleReject = (id: string) => {
-    setApplications((prev) =>
-      prev.map((a) => a.id === id ? { ...a, status: "rejected" as ApplicationStatus } : a)
-    );
-  };
+  if (loadStatus === "loading") {
+    return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
+  }
+  if (loadStatus === "error") {
+    return <div className="text-center text-red-600 py-20">入会申請を取得できませんでした。</div>;
+  }
 
   return (
     <>
@@ -297,6 +293,16 @@ function ApplicationsTab() {
           </div>
         ))}
       </div>
+
+      {message && (
+        <p
+          className={`mb-4 text-sm rounded-lg px-3 py-2 ${
+            message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+          }`}
+        >
+          {message.text}
+        </p>
+      )}
 
       {/* 検索・フィルター */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -349,10 +355,10 @@ function ApplicationsTab() {
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                    <span>{app.job}</span>
-                    <span>紹介者: {app.referrer}</span>
-                    <span>{app.memberType}</span>
-                    <span>{app.appliedAt}</span>
+                    {app.job && <span>{app.job}</span>}
+                    {app.referrer && <span>紹介者: {app.referrer}</span>}
+                    {app.membership_type && <span>{app.membership_type}</span>}
+                    <span>{fmtDate(app.created_at)}</span>
                   </div>
                 </div>
               </button>
@@ -362,25 +368,40 @@ function ApplicationsTab() {
                     <div className="flex items-center gap-2 text-sm"><Mail className="w-4 h-4 text-gray-400" /><span className="text-gray-600">{app.email}</span></div>
                     <div className="flex items-center gap-2 text-sm"><Phone className="w-4 h-4 text-gray-400" /><span className="text-gray-600">{app.phone}</span></div>
                     <div className="flex items-center gap-2 text-sm"><Briefcase className="w-4 h-4 text-gray-400" /><span className="text-gray-600">{app.job}</span></div>
-                    <div className="flex items-center gap-2 text-sm"><Calendar className="w-4 h-4 text-gray-400" /><span className="text-gray-600">開始月: {app.startMonth}</span></div>
-                    <div className="flex items-center gap-2 text-sm"><Building2 className="w-4 h-4 text-gray-400" /><span className="text-gray-600">{app.memberType}（{app.memberType === "個人" ? "¥19,800" : "¥30,000"}）</span></div>
-                    <div className="flex items-center gap-2 text-sm"><span className="text-gray-400">💳</span><span className="text-gray-600">{app.paymentMethod}</span></div>
+                    <div className="flex items-center gap-2 text-sm"><Calendar className="w-4 h-4 text-gray-400" /><span className="text-gray-600">開始月: {app.start_month ?? "未記入"}</span></div>
+                    <div className="flex items-center gap-2 text-sm"><Building2 className="w-4 h-4 text-gray-400" /><span className="text-gray-600">{app.membership_type ?? "未選択"}{app.membership_type && `（${app.membership_type === "個人" ? "¥19,800" : "¥30,000"}）`}</span></div>
+                    <div className="flex items-center gap-2 text-sm"><span className="text-gray-400">💳</span><span className="text-gray-600">{app.payment_method ?? "未選択"}</span></div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-400 mb-4">
-                    <span>年代: {app.age}</span><span>・</span><span>性別: {app.gender}</span><span>・</span><span>紹介者: {app.referrer}</span>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 mb-4">
+                    <span>年代: {app.age_range ?? "未記入"}</span><span>・</span><span>性別: {app.gender ?? "未記入"}</span><span>・</span><span>紹介者: {app.referrer ?? "未記入"}</span>
                   </div>
                   {app.status === "pending" && (
                     <div className="flex items-center gap-3">
-                      <button onClick={() => handleApprove(app.id)} className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors">
-                        <UserCheck className="w-4 h-4" />承認する
+                      <button
+                        onClick={() => review(app.id, "approve")}
+                        disabled={savingId === app.id}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-60"
+                      >
+                        <UserCheck className="w-4 h-4" />承認して会員に追加
                       </button>
-                      <button onClick={() => handleReject(app.id)} className="inline-flex items-center gap-2 px-6 py-2.5 bg-white border-2 border-red-200 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 transition-colors">
+                      <button
+                        onClick={() => review(app.id, "reject")}
+                        disabled={savingId === app.id}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 bg-white border-2 border-red-200 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 transition-colors disabled:opacity-60"
+                      >
                         <UserX className="w-4 h-4" />却下する
                       </button>
                     </div>
                   )}
-                  {app.status === "approved" && app.approvedAt && (
-                    <p className="text-sm text-green-600">✓ {app.approvedAt} に承認済み</p>
+                  {app.status === "approved" && (
+                    <p className="text-sm text-green-600">
+                      ✓ {app.reviewed_at ? `${fmtDate(app.reviewed_at)} に` : ""}承認済み（会員台帳に追加されています）
+                    </p>
+                  )}
+                  {app.status === "rejected" && (
+                    <p className="text-sm text-red-600">
+                      却下済み{app.reviewed_at ? `（${fmtDate(app.reviewed_at)}）` : ""}
+                    </p>
                   )}
                 </div>
               )}
@@ -401,678 +422,657 @@ function ApplicationsTab() {
 // ============================================================
 // タブ2: アクティブ状況
 // ============================================================
-type ActivitySort = "status" | "referral" | "retention" | "idle";
+// ============================================================
+// タブ2: メンバーの状況（実データ）
+// ============================================================
+// 出せる指標だけを出す。ログイン回数や紹介数のように記録していないものは
+// 画面にも置かない（もっともらしい数字を作らない）。
+interface ActivityRow {
+  memberId: string;
+  name: string;
+  job: string | null;
+  avatarUrl: string | null;
+  isWithdrawn: boolean;
+  hasLogin: boolean;
+  lastSignInAt: string | null;
+  lastVisitDate: string | null;
+  visitDays30d: number;
+  lastPostAt: string | null;
+  postCount30d: number;
+  lastEventDate: string | null;
+  eventCount90d: number;
+  referralCount: number;
+  renewalStatus: string | null;
+  startYear: number | null;
+  startMonth: number | null;
+}
 
+/** 参加・投稿・アクセスから状態を判定する。 */
+function judgeActivity(row: ActivityRow): ActivityStatus {
+  if (row.eventCount90d > 0 || row.postCount30d > 0) return "active";
+  if (row.visitDays30d > 0) return "dormant";
+  const days = daysSince(row.lastSignInAt);
+  if (days !== null && days <= 30) return "dormant";
+  return "inactive";
+}
+
+/** 入会年月から在籍月数。年が分からなければ null。 */
+function membershipMonths(row: ActivityRow): number | null {
+  if (!row.startYear) return null;
+  const start = new Date(row.startYear, (row.startMonth ?? 1) - 1, 1);
+  const now = new Date();
+  return Math.max(
+    0,
+    (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
+  );
+}
+
+function membershipLabel(row: ActivityRow): string {
+  const months = membershipMonths(row);
+  if (months === null) return "入会日不明";
+  if (months < 12) return `${months}か月`;
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  return rest === 0 ? `${years}年` : `${years}年${rest}か月`;
+}
+
+/** 何日前か。日付が無ければ null。 */
+function daysSince(value: string | null): number | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+function agoLabel(value: string | null): string {
+  const days = daysSince(value);
+  if (days === null) return "記録なし";
+  if (days === 0) return "今日";
+  if (days === 1) return "昨日";
+  if (days < 31) return `${days}日前`;
+  if (days < 365) return `${Math.floor(days / 30)}か月前`;
+  return `${Math.floor(days / 365)}年以上前`;
+}
 
 function ActivityTab() {
-  const [filterStatus, setFilterStatus] = useState<ActivityStatus | "all">("all");
+  const [rows, setRows] = useState<ActivityRow[]>([]);
+  const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<ActivityStatus | "all">("all");
+  const [onlyLoginUsers, setOnlyLoginUsers] = useState(true);
 
-  const [sortBy, setSortBy] = useState<ActivitySort>("status");
-  const [sortAsc, setSortAsc] = useState(true);
-  const [activityModal, setActivityModal] = useState<string | null>(null);
-
-  const handleSortClick = (key: ActivitySort) => {
-    if (sortBy === key) {
-      setSortAsc((prev) => !prev);
-    } else {
-      setSortBy(key);
-      setSortAsc(false);
-    }
-  };
-
-  // 日数計算
-  function daysAgo(dateStr: string) {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    if (days === 0) return "今日";
-    if (days === 1) return "昨日";
-    return `${days}日前`;
-  }
-
-  function daysFromNow(dateStr: string): number {
-    return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
-  }
-
-  function getLastActivityDate(memberId: string): number {
-    const a = memberActivities.find((x) => x.memberId === memberId);
-    if (!a) return 999;
-    return daysFromNow(a.lastEventAt);
-  }
-
-  // 紹介者ごとの定着率マップ
-  const referrerRetention = useMemo(() => {
-    const map = new Map<string, { count: number; activeCount: number; rate: number }>();
-    const grouped = new Map<string, string[]>();
-    referralRecords.forEach((r) => {
-      const arr = grouped.get(r.referrerId) || [];
-      arr.push(r.referredId);
-      grouped.set(r.referrerId, arr);
-    });
-    grouped.forEach((referredIds, referrerId) => {
-      const activeCount = referredIds.filter((id) => {
-        const a = memberActivities.find((x) => x.memberId === id);
-        return a?.status === "active";
-      }).length;
-      map.set(referrerId, {
-        count: referredIds.length,
-        activeCount,
-        rate: Math.round((activeCount / referredIds.length) * 100),
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/activity", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("failed");
+        if (!cancelled) {
+          setRows((await res.json()) as ActivityRow[]);
+          setLoadStatus("loaded");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadStatus("error");
       });
-    });
-    return map;
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // 紹介者の定着率を取得
-  function getReferrerRetentionRate(memberId: string): number | null {
-    const rec = referralRecords.find((r) => r.referredId === memberId);
-    if (!rec) return null;
-    return referrerRetention.get(rec.referrerId)?.rate ?? null;
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return rows
+      .filter((r) => !r.isWithdrawn)
+      .filter((r) => !onlyLoginUsers || r.hasLogin)
+      .filter((r) => filterStatus === "all" || judgeActivity(r) === filterStatus)
+      .filter(
+        (r) =>
+          !query ||
+          r.name.toLowerCase().includes(query) ||
+          (r.job ?? "").toLowerCase().includes(query)
+      );
+  }, [rows, search, filterStatus, onlyLoginUsers]);
+
+  if (loadStatus === "loading") {
+    return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
+  }
+  if (loadStatus === "error") {
+    return <div className="text-center text-red-600 py-20">活動状況を取得できませんでした。</div>;
   }
 
-  // 全メンバーベースの紹介stats（紹介ランキング形式）
-  const activityMemberStatsBase = useMemo(() => {
-    const map = new Map<string, ReferralRecord[]>();
-    referralRecords.forEach((r) => {
-      const arr = map.get(r.referrerId) || [];
-      arr.push(r);
-      map.set(r.referrerId, arr);
-    });
-    return allMembers.map((member) => {
-      const records = map.get(member.id) || [];
-      const activity = memberActivities.find((a) => a.memberId === member.id);
-      const activeCount = records.filter((r) => {
-        const a = memberActivities.find((x) => x.memberId === r.referredId);
-        return a?.status === "active";
-      }).length;
-      const selfLast = getLastActivityDate(member.id);
-      return {
-        member,
-        activity,
-        records: records.sort((a, b) => b.joinedAt.localeCompare(a.joinedAt)),
-        referralCount: records.length,
-        activeCount,
-        retentionRate: records.length > 0 ? Math.round((activeCount / records.length) * 100) : 0,
-        selfIdleDays: selfLast < 999 ? selfLast : 999,
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const activityMemberStats = useMemo(() => {
-    const arr = [...activityMemberStatsBase];
-    const dir = sortAsc ? 1 : -1;
-    if (sortBy === "status") {
-      const order: Record<ActivityStatus, number> = { active: 0, dormant: 1, inactive: 2 };
-      arr.sort((a, b) => {
-        const sa = a.activity?.status || "inactive";
-        const sb = b.activity?.status || "inactive";
-        return dir * (order[sa] - order[sb]);
-      });
-    } else if (sortBy === "referral") {
-      arr.sort((a, b) => dir * (a.referralCount - b.referralCount));
-    } else if (sortBy === "retention") {
-      arr.sort((a, b) => dir * (a.retentionRate - b.retentionRate) || b.referralCount - a.referralCount);
-    } else if (sortBy === "idle") {
-      arr.sort((a, b) => dir * (a.selfIdleDays - b.selfIdleDays));
-    }
-    return arr;
-  }, [activityMemberStatsBase, sortBy, sortAsc]);
-
+  const active = rows.filter((r) => !r.isWithdrawn && r.hasLogin);
   const counts = {
-    active: memberActivities.filter((a) => a.status === "active").length,
-    dormant: memberActivities.filter((a) => a.status === "dormant").length,
-    inactive: memberActivities.filter((a) => a.status === "inactive").length,
+    active: active.filter((r) => judgeActivity(r) === "active").length,
+    dormant: active.filter((r) => judgeActivity(r) === "dormant").length,
+    inactive: active.filter((r) => judgeActivity(r) === "inactive").length,
   };
 
+  // 継続率は台帳全体（ログインの有無に関係なく在籍か退会か）で見る
+  const withdrawnTotal = rows.filter((r) => r.isWithdrawn).length;
+  const activeTotal = rows.length - withdrawnTotal;
+  const retention = {
+    active: activeTotal,
+    withdrawn: withdrawnTotal,
+    rate: rows.length > 0 ? Math.round((activeTotal / rows.length) * 1000) / 10 : 0,
+  };
+
+  const renewalBreakdown = Object.entries(
+    rows.reduce<Record<string, number>>((acc, r) => {
+      const key = r.renewalStatus ?? "未記入";
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {})
+  )
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <>
-      {/* 統計カード */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <button
-          onClick={() => setFilterStatus("all")}
-          className={`bg-white rounded-2xl border shadow-sm p-5 text-left transition-all ${
-            filterStatus === "all" ? "border-gray-900 ring-1 ring-gray-900" : "border-gray-100 hover:border-gray-300"
-          }`}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2.5 h-2.5 rounded-full bg-gray-400" />
-            <span className="text-xs text-gray-500">全員</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{memberActivities.length}</p>
-          <p className="text-[11px] text-gray-400 mt-1">メンバー</p>
-        </button>
-        {([
-          { key: "active" as const, label: "アクティブ", color: "text-green-600", bg: "bg-green-50", dot: "bg-green-500" },
-          { key: "dormant" as const, label: "活動減少", color: "text-amber-600", bg: "bg-amber-50", dot: "bg-amber-400" },
-          { key: "inactive" as const, label: "長期不在", color: "text-red-600", bg: "bg-red-50", dot: "bg-red-400" },
-        ]).map((stat) => (
-          <button
-            key={stat.key}
-            onClick={() => setFilterStatus(stat.key)}
-            className={`bg-white rounded-2xl border shadow-sm p-5 text-left transition-all ${
-              filterStatus === stat.key ? "border-gray-900 ring-1 ring-gray-900" : "border-gray-100 hover:border-gray-300"
-            }`}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <div className={`w-2.5 h-2.5 rounded-full ${stat.dot}`} />
-              <span className="text-xs text-gray-500">{stat.label}</span>
+      <div className="flex items-start gap-2 p-4 mb-6 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 leading-relaxed">
+        <Activity className="w-4 h-4 flex-shrink-0 mt-0.5" />
+        <span>
+          掲示板の投稿・イベント参加・アプリを開いた日数から算出しています。「ログイン日数」はサインイン操作の回数ではなく、その期間に何日アプリを開いたかです（セッションが続くため回数では実態が測れません）。ログインアカウントがまだ無い会員は活動を記録できないため既定では表示していません。
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        {(
+          [
+            { key: "active", label: "アクティブ", count: counts.active },
+            { key: "dormant", label: "活動減少", count: counts.dormant },
+            { key: "inactive", label: "長期不在", count: counts.inactive },
+          ] as const
+        ).map((stat) => {
+          const config = activityStatusConfig[stat.key];
+          return (
+            <div key={stat.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${config.dot}`} />
+                <span className="text-xs text-gray-500">{stat.label}</span>
+              </div>
+              <p className="text-2xl font-bold text-gray-900">{stat.count}</p>
             </div>
-            <p className={`text-2xl font-bold ${stat.color}`}>{counts[stat.key]}</p>
-            <p className="text-[11px] text-gray-400 mt-1">/ {memberActivities.length}人中</p>
-          </button>
+          );
+        })}
+
+        {/* 継続率＝在籍 ÷ （在籍＋退会）。台帳の退会フラグから算出。 */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs text-gray-500 mb-2">継続率</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {retention.rate}
+            <span className="text-sm font-medium text-gray-400">%</span>
+          </p>
+          <p className="text-[11px] text-gray-400 mt-1">
+            在籍{retention.active} / 退会{retention.withdrawn}
+          </p>
+        </div>
+      </div>
+
+      {/* 更新状況の内訳（台帳の renewal_status） */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {renewalBreakdown.map((r) => (
+          <span
+            key={r.label}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-xs text-gray-600"
+          >
+            {r.label}
+            <span className="font-bold text-gray-900">{r.count}</span>
+          </span>
         ))}
       </div>
 
-      {/* 入会・退会推移（直近6ヶ月） */}
-      {(() => {
-        const monthlyData = [
-          { month: "11月", joined: 1, left: 0 },
-          { month: "12月", joined: 2, left: 1 },
-          { month: "1月", joined: 1, left: 0 },
-          { month: "2月", joined: 3, left: 0 },
-          { month: "3月", joined: 0, left: 1 },
-          { month: "4月", joined: 2, left: 0 },
-        ];
-        const maxVal = Math.max(...monthlyData.map((d) => Math.max(d.joined, d.left)), 1);
-        return (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-gray-700">入会・退会推移</p>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-green-400" />
-                  <span className="text-[11px] text-gray-500">入会</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-red-400" />
-                  <span className="text-[11px] text-gray-500">退会</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-end gap-2 h-24">
-              {monthlyData.map((d) => (
-                <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full flex items-end justify-center gap-1 h-16">
-                    <div
-                      className="w-3 rounded-t bg-green-400 transition-all"
-                      style={{ height: `${(d.joined / maxVal) * 100}%`, minHeight: d.joined > 0 ? 4 : 0 }}
-                    />
-                    <div
-                      className="w-3 rounded-t bg-red-400 transition-all"
-                      style={{ height: `${(d.left / maxVal) * 100}%`, minHeight: d.left > 0 ? 4 : 0 }}
-                    />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] text-gray-400">{d.month}</p>
-                    <p className="text-[10px] font-bold text-gray-600">
-                      {d.joined > 0 ? `+${d.joined}` : ""}{d.joined > 0 && d.left > 0 ? " " : ""}{d.left > 0 ? `-${d.left}` : ""}{d.joined === 0 && d.left === 0 ? "—" : ""}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* 判定基準 */}
-      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-6">
-        <p className="text-xs font-bold text-gray-600 mb-2">判定基準</p>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-gray-500">
-          <span><span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />アクティブ：30日以内にイベント参加</span>
-          <span><span className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-1" />活動減少：60日以内にイベント参加</span>
-          <span><span className="inline-block w-2 h-2 rounded-full bg-red-400 mr-1" />長期不在：60日以上イベント参加なし</span>
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="名前・職種で検索..."
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          />
         </div>
-      </div>
-
-      {/* メンバー管理（紹介ランキング形式） */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-base font-bold text-gray-900">メンバー管理</h2>
-            <p className="text-xs text-gray-400 mt-0.5">紹介数クリックで紹介メンバーの詳細を表示</p>
-          </div>
-          <div className="flex gap-1.5">
-            {([
-              { key: "status" as ActivitySort, label: "ステータス" },
-              { key: "referral" as ActivitySort, label: "紹介数" },
-              { key: "retention" as ActivitySort, label: "定着率" },
-              { key: "idle" as ActivitySort, label: "最終活動" },
-            ]).map((opt) => {
-              const isActive = sortBy === opt.key;
-              return (
-                <button
-                  key={opt.key}
-                  onClick={() => handleSortClick(opt.key)}
-                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                    isActive ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                  }`}
-                >
-                  {opt.label}
-                  {isActive && <span className="text-[10px] opacity-70">{sortAsc ? "↑" : "↓"}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="space-y-2">
-          {activityMemberStats.map((rs, i) => {
-            const statusCfg = activityStatusConfig[rs.activity?.status || "inactive"];
-            const matchStatus = filterStatus === "all" || rs.activity?.status === filterStatus;
-            const matchSearch = !search || rs.member.name.includes(search) || rs.member.job.includes(search);
-            if (!matchStatus || !matchSearch) return null;
-            return (
-              <div
-                key={rs.member.id}
-                className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all"
-              >
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                  i === 0 ? "bg-amber-100 text-amber-700" :
-                  i === 1 ? "bg-gray-100 text-gray-600" :
-                  i === 2 ? "bg-orange-50 text-orange-600" :
-                  "bg-gray-50 text-gray-400"
-                }`}>
-                  {i + 1}
-                </span>
-                <img src={rs.member.photoUrl} alt={rs.member.name} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-gray-900">{rs.member.name}</p>
-                    {rs.activity && (
-                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${statusCfg.bg} ${statusCfg.color}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
-                        {statusCfg.label}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-gray-500">{rs.member.job}</p>
-                </div>
-                <div className="flex items-center flex-shrink-0">
-                  {rs.referralCount > 0 ? (
-                    <button
-                      onClick={() => setActivityModal(rs.member.id)}
-                      className="w-14 text-center hover:bg-amber-50 rounded-lg py-1 transition-colors cursor-pointer"
-                    >
-                      <span className="text-sm font-bold text-amber-600">{rs.referralCount}</span>
-                      <span className="text-[10px] text-amber-600 ml-0.5">人</span>
-                      <p className="text-[9px] text-amber-500">紹介</p>
-                    </button>
-                  ) : (
-                    <div className="w-14 text-center py-1">
-                      <span className="text-sm font-bold text-gray-300">0</span>
-                      <span className="text-[10px] text-gray-300 ml-0.5">人</span>
-                      <p className="text-[9px] text-gray-300">紹介</p>
-                    </div>
-                  )}
-                  <div className={`w-14 text-center ${sortBy === "retention" ? "" : "hidden sm:block"}`}>
-                    {rs.referralCount > 0 ? (
-                      <span className={`text-sm font-bold ${rs.retentionRate >= 80 ? "text-green-600" : rs.retentionRate >= 50 ? "text-amber-600" : "text-red-500"}`}>
-                        {rs.retentionRate}%
-                      </span>
-                    ) : (
-                      <span className="text-sm font-bold text-gray-300">-</span>
-                    )}
-                    <p className="text-[9px] text-gray-400">定着</p>
-                  </div>
-                  <div className={`w-16 text-center ${sortBy === "idle" ? "" : "hidden sm:block"}`}>
-                    <span className={`text-sm font-bold ${rs.selfIdleDays >= 999 ? "text-gray-300" : rs.selfIdleDays <= 14 ? "text-green-600" : rs.selfIdleDays <= 30 ? "text-amber-600" : "text-red-500"}`}>
-                      {rs.selfIdleDays >= 999 ? "—" : `${rs.selfIdleDays}日前`}
-                    </span>
-                    <p className="text-[9px] text-gray-400">最終活動</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 紹介メンバー詳細モーダル */}
-      {activityModal && (() => {
-        const rs = activityMemberStats.find((r) => r.member.id === activityModal);
-        if (!rs || rs.referralCount === 0) return null;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setActivityModal(null)}>
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-            <div
-              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
+        <div className="flex gap-2 flex-wrap">
+          {(["all", "active", "dormant", "inactive"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilterStatus(s)}
+              className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                filterStatus === s
+                  ? "bg-gray-900 text-white"
+                  : "bg-white border border-gray-200 text-gray-600 hover:border-gray-300"
+              }`}
             >
-              <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex items-center gap-3 z-10">
-                <img src={rs.member.photoUrl} alt={rs.member.name} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-900">{rs.member.name}</p>
-                  <p className="text-[11px] text-gray-500">{rs.member.job}</p>
-                </div>
-                <div className="flex items-center gap-3 mr-2">
-                  <div className="text-center">
-                    <span className="text-sm font-bold text-amber-600">{rs.referralCount}</span>
-                    <span className="text-[10px] text-amber-600 ml-0.5">人紹介</span>
-                  </div>
-                  <div className="text-center">
-                    <span className={`text-sm font-bold ${rs.retentionRate >= 80 ? "text-green-600" : rs.retentionRate >= 50 ? "text-amber-600" : "text-red-500"}`}>
-                      {rs.retentionRate}%
-                    </span>
-                    <span className="text-[10px] text-gray-400 ml-0.5">定着</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setActivityModal(null)}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-400" />
-                </button>
-              </div>
-              <div className="p-4 overflow-y-auto max-h-[calc(80vh-72px)] space-y-2">
-                {rs.records.map((r) => {
-                  const status = memberActivities.find((a) => a.memberId === r.referredId)?.status || "inactive";
-                  const cfg = activityStatusConfig[status];
-                  return (
-                    <Link
-                      key={r.referredId}
-                      href={`/app/profile/${r.referredId}`}
-                      className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-amber-200 hover:bg-amber-50/50 transition-colors"
+              {s === "all" ? "すべて" : activityStatusConfig[s].label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <label className="inline-flex items-center gap-2 mb-4 text-xs text-gray-500 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={onlyLoginUsers}
+          onChange={(e) => setOnlyLoginUsers(e.target.checked)}
+          className="w-4 h-4"
+        />
+        ログインアカウントがある会員のみ表示（{rows.filter((r) => r.hasLogin && !r.isWithdrawn).length}人）
+      </label>
+
+      <div className="space-y-2.5">
+        {filtered.map((row) => {
+          const status = judgeActivity(row);
+          const config = activityStatusConfig[status];
+          return (
+            <div
+              key={row.memberId}
+              className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm"
+            >
+              <div className="flex items-center gap-3 min-w-0 sm:flex-1">
+                <MemberAvatar name={row.name} url={row.avatarUrl} />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-gray-900 truncate">{row.name}</p>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${config.bg} ${config.color}`}
                     >
-                      <img src={r.referredPhotoUrl} alt={r.referredName} className="w-9 h-9 rounded-full object-cover" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-sm font-medium text-gray-900">{r.referredName}</p>
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${cfg.bg} ${cfg.color}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                            {cfg.label}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-gray-500">{r.referredJob}</p>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        <p className="text-[10px] text-gray-400">入会 {r.joinedAt}</p>
-                      </div>
-                    </Link>
-                  );
-                })}
+                      <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
+                      {config.label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 truncate">{row.job || "職業未登録"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-2 text-[11px] sm:text-xs pl-14 sm:pl-0 sm:flex-shrink-0">
+                <div>
+                  <p className="text-gray-400">ログイン日数(30日)</p>
+                  <p className="text-gray-700 font-medium">
+                    {row.visitDays30d}日
+                    <span className="text-gray-400 ml-1">
+                      / {row.lastVisitDate ? agoLabel(row.lastVisitDate) : agoLabel(row.lastSignInAt)}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400">投稿(30日)</p>
+                  <p className="text-gray-700 font-medium">
+                    {row.postCount30d}件
+                    <span className="text-gray-400 ml-1">/ {agoLabel(row.lastPostAt)}</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400">参加(90日)</p>
+                  <p className="text-gray-700 font-medium">
+                    {row.eventCount90d}回
+                    <span className="text-gray-400 ml-1">
+                      / {row.lastEventDate ? fmtDate(row.lastEventDate) : "記録なし"}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400">紹介</p>
+                  <p className="text-gray-700 font-medium">{row.referralCount}人</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">継続</p>
+                  <p className="text-gray-700 font-medium">
+                    {membershipLabel(row)}
+                    {row.renewalStatus && (
+                      <span className="text-gray-400 ml-1">/ {row.renewalStatus}</span>
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
+          );
+        })}
+        {filtered.length === 0 && (
+          <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
+            <p className="text-sm text-gray-400">該当するメンバーがいません</p>
           </div>
-        );
-      })()}
+        )}
+      </div>
     </>
   );
 }
 
 // ============================================================
-// タブ3: 参加状況
+// タブ: お知らせ送信（運営 → 会員へ一斉）
 // ============================================================
-function ParticipationTab() {
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"member" | "event">("member");
+// 届くのはログインアカウントを持つ在籍会員だけ。
+// アカウントが無い人には読む手段が無いため送らない。
+function AnnounceTab() {
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  const [href, setHref] = useState("");
+  const [sending, setSending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [result, setResult] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // メンバー別参加数の集計
+  const send = async () => {
+    setSending(true);
+    setResult(null);
+    const response = await fetch("/api/admin/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, message, href }),
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { sent?: number; error?: string }
+      | null;
+    setSending(false);
+    setConfirming(false);
+
+    if (!response.ok) {
+      setResult({ type: "error", text: body?.error || "送信できませんでした" });
+      return;
+    }
+    setResult({ type: "success", text: `${body?.sent ?? 0}人に送信しました` });
+    setTitle("");
+    setMessage("");
+    setHref("");
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="flex items-start gap-2 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 leading-relaxed">
+        <Megaphone className="w-4 h-4 flex-shrink-0 mt-0.5" />
+        <span>
+          全会員のお知らせ一覧に表示されます。<strong>送信の取り消しはできません。</strong>
+          届くのはログインアカウントを持つ在籍会員のみです。
+        </span>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+        <div>
+          <label className="block text-sm font-bold text-gray-900 mb-1.5">タイトル</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="例: 4月の交流会の日程が決まりました"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-900 mb-1.5">本文（任意）</label>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            rows={4}
+            placeholder="詳細を書いてください"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-900 mb-1.5">
+            リンク先（任意）
+          </label>
+          <input
+            value={href}
+            onChange={(e) => setHref(e.target.value)}
+            placeholder="例: /app/post"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+          <p className="mt-1 text-[11px] text-gray-400">
+            アプリ内のページを指定します（例: /app/board、/app/post）。空ならお知らせ一覧を開きます。
+          </p>
+        </div>
+
+        {result && (
+          <p
+            className={`text-sm rounded-lg px-3 py-2 ${
+              result.type === "success"
+                ? "bg-green-50 text-green-700"
+                : "bg-red-50 text-red-700"
+            }`}
+          >
+            {result.text}
+          </p>
+        )}
+
+        {/* 取り消せない操作なので2段階にする */}
+        {!confirming ? (
+          <button
+            onClick={() => setConfirming(true)}
+            disabled={!title.trim()}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Send className="w-4 h-4" />
+            送信する
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
+            <span className="text-sm text-gray-700 flex-1">
+              全会員に送信します。よろしいですか？
+            </span>
+            <button
+              onClick={() => setConfirming(false)}
+              className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-white transition-colors"
+            >
+              やめる
+            </button>
+            <button
+              onClick={send}
+              disabled={sending}
+              className="px-5 py-2 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-60"
+            >
+              {sending ? "送信中..." : "送信"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// タブ3: 参加状況（実データ）
+// ============================================================
+// events / event_participants を集計する。会員向けの「会を探す」と同じ元データ。
+function ParticipationTab() {
+  const { events, status } = useEvents();
+  const [viewMode, setViewMode] = useState<"member" | "event">("member");
+  const [search, setSearch] = useState("");
+
+  // 会員ごとの参加実績（イベント一覧の参加者から組み立てる）
   const memberStats = useMemo(() => {
-    return allMembers.map((m) => {
-      const events = eventParticipations.filter((e) => e.participantIds.includes(m.id));
-      const seriesMap = new Map<string, number>();
-      events.forEach((e) => {
-        if (e.seriesName) {
-          seriesMap.set(e.seriesName, (seriesMap.get(e.seriesName) || 0) + 1);
-        }
-      });
-      return {
-        member: m,
-        totalEvents: events.length,
-        series: Array.from(seriesMap.entries()).map(([name, count]) => ({ name, count })),
-        lastEventDate: events.length > 0 ? events.sort((a, b) => b.date.localeCompare(a.date))[0].date : null,
-      };
-    }).sort((a, b) => b.totalEvents - a.totalEvents);
+    const map = new Map<
+      string,
+      { id: string; name: string; avatarUrl: string | null; dates: string[] }
+    >();
+    for (const ev of events) {
+      for (const p of ev.participants) {
+        const entry = map.get(p.id) ?? {
+          id: p.id,
+          name: p.name,
+          avatarUrl: p.avatarUrl,
+          dates: [],
+        };
+        entry.dates.push(ev.date);
+        map.set(p.id, entry);
+      }
+    }
+    return Array.from(map.values())
+      .map((m) => ({
+        ...m,
+        total: m.dates.length,
+        last: m.dates.slice().sort().at(-1) ?? null,
+      }))
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  }, [events]);
+
+  // 直近12か月の並び（ヒートマップの列）
+  const months = useMemo(() => {
+    const list: string[] = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i -= 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return list;
   }, []);
 
-  const maxEvents = memberStats[0]?.totalEvents || 1;
+  const filteredMembers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return memberStats;
+    return memberStats.filter((m) => m.name.toLowerCase().includes(query));
+  }, [memberStats, search]);
 
-  // 月別参加数（ヒートマップ風）
-  const months = ["2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03"];
-  const monthLabels = ["8月", "9月", "10月", "11月", "12月", "1月", "2月", "3月"];
-
-  function getMonthCount(memberId: string, month: string) {
-    return eventParticipations.filter(
-      (e) => e.participantIds.includes(memberId) && e.date.startsWith(month)
-    ).length;
+  if (status === "loading") {
+    return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
+  }
+  if (status === "error") {
+    return <div className="text-center text-red-600 py-20">参加状況を取得できませんでした。</div>;
   }
 
-  function heatBg(count: number) {
-    if (count === 0) return "bg-gray-50 text-gray-300";
-    if (count === 1) return "bg-amber-100 text-amber-700";
-    if (count === 2) return "bg-amber-200 text-amber-800";
-    return "bg-amber-300 text-amber-900 font-bold";
+  if (events.length === 0) {
+    return (
+      <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
+        <CalendarDays className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+        <p className="text-sm text-gray-500">まだイベントが登録されていません</p>
+        <p className="text-xs text-gray-400 mt-1">
+          「会を探す」からイベントを作成すると、ここに参加状況が集計されます
+        </p>
+      </div>
+    );
   }
-
-  // 選択メンバーの参加イベント一覧
-  const selectedMemberEvents = selectedMemberId
-    ? eventParticipations
-        .filter((e) => e.participantIds.includes(selectedMemberId))
-        .sort((a, b) => b.date.localeCompare(a.date))
-    : [];
 
   return (
     <>
-      {/* ビューモード切替 */}
-      <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setViewMode("member")}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-            viewMode === "member" ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-gray-300"
-          }`}
-        >
-          <Users className="w-4 h-4 inline mr-1.5" />メンバー別
-        </button>
-        <button
-          onClick={() => setViewMode("event")}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-            viewMode === "event" ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-gray-300"
-          }`}
-        >
-          <CalendarDays className="w-4 h-4 inline mr-1.5" />イベント別
-        </button>
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs text-gray-500 mb-1">イベント数</p>
+          <p className="text-2xl font-bold text-gray-900">{events.length}</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs text-gray-500 mb-1">参加した人数</p>
+          <p className="text-2xl font-bold text-gray-900">{memberStats.length}</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs text-gray-500 mb-1">のべ参加数</p>
+          <p className="text-2xl font-bold text-gray-900">
+            {memberStats.reduce((sum, m) => sum + m.total, 0)}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="flex gap-2">
+          {(["member", "event"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                viewMode === mode
+                  ? "bg-gray-900 text-white"
+                  : "bg-white border border-gray-200 text-gray-600 hover:border-gray-300"
+              }`}
+            >
+              {mode === "member" ? "会員ごと" : "イベントごと"}
+            </button>
+          ))}
+        </div>
+        {viewMode === "member" && (
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="名前で検索..."
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            />
+          </div>
+        )}
       </div>
 
       {viewMode === "member" ? (
-        <>
-          {/* 統計サマリー */}
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-              <p className="text-2xl font-bold text-gray-900">{eventParticipations.length}</p>
-              <p className="text-xs text-gray-500 mt-1">総イベント数</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-              <p className="text-2xl font-bold text-gray-900">
-                {(eventParticipations.reduce((s, e) => s + e.participantIds.length, 0) / eventParticipations.length).toFixed(1)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">平均参加人数</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
-              <p className="text-2xl font-bold text-amber-600">
-                {(memberStats.reduce((s, m) => s + m.totalEvents, 0) / memberStats.length).toFixed(1)}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">一人あたり平均参加数</p>
-            </div>
-          </div>
-
-          {/* 参加ヒートマップ */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-8">
-            <h2 className="text-base font-bold text-gray-900 mb-1">月別参加ヒートマップ</h2>
-            <p className="text-xs text-gray-400 mb-4">メンバーをクリックすると参加履歴を表示</p>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse min-w-[500px]">
-                <thead>
-                  <tr>
-                    <th className="sticky left-0 z-20 bg-white p-2 text-left text-[11px] text-gray-400 font-medium w-28 border-r border-gray-100" />
-                    {monthLabels.map((label) => (
-                      <th key={label} className="p-1.5 text-center text-[11px] text-gray-500 font-medium">{label}</th>
-                    ))}
-                    <th className="p-1.5 text-center text-[11px] text-gray-500 font-medium">計</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {memberStats.map((ms) => (
-                    <tr
-                      key={ms.member.id}
-                      onClick={() => setSelectedMemberId(selectedMemberId === ms.member.id ? null : ms.member.id)}
-                      className={`group cursor-pointer transition-colors ${
-                        selectedMemberId === ms.member.id ? "bg-amber-50" : "hover:bg-gray-50"
-                      }`}
-                    >
-                      <td
-                        className={`sticky left-0 z-10 p-2 border-r border-gray-100 transition-colors ${
-                          selectedMemberId === ms.member.id
-                            ? "bg-amber-50"
-                            : "bg-white group-hover:bg-gray-50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <img src={ms.member.photoUrl} alt={ms.member.short} className="w-6 h-6 rounded-full object-cover" />
-                          <span className="text-xs text-gray-700 font-medium whitespace-nowrap">{ms.member.short}</span>
-                        </div>
-                      </td>
-                      {months.map((month) => {
-                        const count = getMonthCount(ms.member.id, month);
-                        return (
-                          <td key={month} className="p-1">
-                            <div className={`w-full aspect-square max-w-[36px] mx-auto rounded-lg flex items-center justify-center text-[11px] font-medium ${heatBg(count)}`}>
-                              {count || ""}
-                            </div>
-                          </td>
-                        );
-                      })}
-                      <td className="p-1.5 text-center">
-                        <span className="text-sm font-bold text-gray-700">{ms.totalEvents}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {/* 凡例 */}
-            <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-100">
-              <span className="text-[10px] text-gray-400">参加数:</span>
-              {[0, 1, 2, 3].map((n) => (
-                <div key={n} className="flex items-center gap-1">
-                  <div className={`w-5 h-5 rounded ${heatBg(n)} flex items-center justify-center text-[10px]`}>
-                    {n || ""}
-                  </div>
-                  <span className="text-[10px] text-gray-400">
-                    {n === 0 ? "なし" : n === 3 ? "3+" : `${n}`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 選択メンバーの参加履歴 */}
-          {selectedMemberId && (
-            <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-6 mb-8">
-              <div className="flex items-center gap-3 mb-4">
-                <img
-                  src={allMembers.find((m) => m.id === selectedMemberId)!.photoUrl}
-                  alt=""
-                  className="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
-                />
-                <div>
-                  <p className="text-sm font-bold text-gray-900">
-                    {allMembers.find((m) => m.id === selectedMemberId)!.name}の参加履歴
-                  </p>
-                  <p className="text-xs text-gray-500">計 {selectedMemberEvents.length} イベント</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {selectedMemberEvents.map((ev) => (
-                  <div key={ev.eventId} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                    <div className="flex-shrink-0 w-16 text-center">
-                      <p className="text-[11px] text-gray-400">{ev.date.slice(0, 7)}</p>
-                      <p className="text-sm font-bold text-gray-700">{ev.date.slice(8)}</p>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{ev.eventName}</p>
-                      <p className="text-[11px] text-gray-500">{ev.location}</p>
-                    </div>
-                    {ev.seriesName && (
-                      <span className="flex-shrink-0 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full text-[10px] font-bold text-amber-700">
-                        {ev.seriesName}
-                      </span>
-                    )}
-                  </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                {/* 横スクロールしても誰の行か分かるよう左端を固定する */}
+                <th className="sticky left-0 z-20 bg-white border-r border-gray-200 px-4 py-3 text-left text-xs font-bold text-gray-600 min-w-[160px]">
+                  メンバー
+                </th>
+                <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">計</th>
+                {months.map((m) => (
+                  <th
+                    key={m}
+                    className="px-2 py-3 text-center text-[10px] font-medium text-gray-400 whitespace-nowrap"
+                  >
+                    {Number(m.slice(5))}月
+                  </th>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* メンバー別ランキング */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h2 className="text-base font-bold text-gray-900 mb-4">参加回数ランキング</h2>
-            <div className="space-y-3">
-              {memberStats.map((ms, i) => (
-                <div key={ms.member.id} className="flex items-center gap-3">
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    i === 0 ? "bg-amber-100 text-amber-700" :
-                    i === 1 ? "bg-gray-100 text-gray-600" :
-                    i === 2 ? "bg-orange-50 text-orange-600" :
-                    "bg-gray-50 text-gray-400"
-                  }`}>
-                    {i + 1}
-                  </span>
-                  <Link href={`/app/profile/${ms.member.id}`} className="flex items-center gap-2.5 flex-1 group">
-                    <img src={ms.member.photoUrl} alt={ms.member.name} className="w-9 h-9 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100" />
-                    <div className="min-w-0">
-                      <span className="text-sm font-medium text-gray-900 group-hover:text-amber-700 transition-colors">{ms.member.name}</span>
-                      {ms.series.length > 0 && (
-                        <p className="text-[10px] text-gray-400 truncate">
-                          {ms.series.map((s) => `${s.name}(${s.count})`).join(" / ")}
-                        </p>
-                      )}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredMembers.map((m) => (
+                <tr key={m.id} className="group border-b border-gray-50">
+                  <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-200 px-4 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <MemberAvatar name={m.name} url={m.avatarUrl} size="sm" />
+                      <span className="text-sm text-gray-800 truncate">{m.name}</span>
                     </div>
-                  </Link>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${(ms.totalEvents / maxEvents) * 100}%` }} />
-                    </div>
-                    <span className="text-sm font-bold text-gray-700 w-8 text-right">{ms.totalEvents}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      ) : (
-        /* イベント別ビュー */
-        <div className="space-y-4">
-          {eventParticipations
-            .sort((a, b) => b.date.localeCompare(a.date))
-            .map((ev) => (
-              <div key={ev.eventId} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-sm font-bold text-gray-900">{ev.eventName}</p>
-                      {ev.seriesName && (
-                        <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full text-[10px] font-bold text-amber-700">
-                          {ev.seriesName}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500">{ev.date} ・ {ev.location}</p>
-                  </div>
-                  <span className="text-lg font-bold text-gray-900">{ev.participantIds.length}<span className="text-xs font-normal text-gray-400 ml-0.5">名</span></span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {ev.participantIds.map((pid) => {
-                    const m = allMembers.find((x) => x.id === pid);
-                    if (!m) return null;
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-bold text-gray-900">{m.total}</td>
+                  {months.map((month) => {
+                    const count = m.dates.filter((d) => d.startsWith(month)).length;
                     return (
-                      <Link key={pid} href={`/app/profile/${pid}`} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <img src={m.photoUrl} alt={m.short} className="w-5 h-5 rounded-full object-cover" />
-                        <span className="text-xs text-gray-700 font-medium">{m.short}</span>
-                      </Link>
+                      <td key={month} className="px-2 py-2.5 text-center">
+                        {count > 0 ? (
+                          <span
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-md text-[11px] font-bold text-white"
+                            style={{
+                              backgroundColor: `rgba(230, 37, 102, ${Math.min(1, 0.3 + count * 0.25)})`,
+                            }}
+                          >
+                            {count}
+                          </span>
+                        ) : (
+                          <span className="text-gray-200">・</span>
+                        )}
+                      </td>
                     );
                   })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filteredMembers.length === 0 && (
+            <p className="text-center text-sm text-gray-400 py-12">該当するメンバーがいません</p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {[...events]
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .map((ev) => (
+              <div
+                key={ev.id}
+                className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm"
+              >
+                <div className="min-w-0 sm:flex-1">
+                  <p className="text-sm font-bold text-gray-900 truncate">{ev.title}</p>
+                  <p className="text-xs text-gray-400">
+                    {fmtDate(ev.date)}
+                    {ev.location && `・${ev.location}`}
+                    {ev.hostName && `・主催 ${ev.hostName}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 sm:flex-shrink-0">
+                  <div className="flex -space-x-2">
+                    {ev.participants.slice(0, 6).map((p) => (
+                      <MemberAvatar key={p.id} name={p.name} url={p.avatarUrl} size="sm" />
+                    ))}
+                  </div>
+                  <span className="text-sm font-bold text-gray-900">
+                    {ev.participantCount}
+                    <span className="text-xs font-normal text-gray-400 ml-0.5">人</span>
+                  </span>
                 </div>
               </div>
             ))}
@@ -1115,6 +1115,12 @@ interface MemberDbRow {
   import_sheet: string | null;
   auth_user_id: string | null;
   role: "admin" | "manager" | "user";
+  withdrawn_at?: string | null;
+  withdrawal_reason?: string | null;
+  admin_note?: string | null;
+  avatar_path?: string | null;
+  avatar_url?: string | null;   // サーバー側で発行した署名URL（写真なしは null）
+  referrer_member_id?: string | null;
 }
 
 type MembersDbFilter = "all" | "both" | "member_only" | "contact_only" | "withdrawn";
@@ -1291,109 +1297,6 @@ function useMembersDb() {
   }, []);
 
   return { rows, loadStatus };
-}
-
-function RoleManagementTab() {
-  const { rows, loadStatus } = useMembersDb();
-  const [localRows, setLocalRows] = useState<MemberDbRow[]>([]);
-  const [search, setSearch] = useState("");
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  useEffect(() => {
-    if (rows) setLocalRows(rows);
-  }, [rows]);
-
-  const linkedRows = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return localRows
-      .filter((row) => row.auth_user_id && !row.is_withdrawn)
-      .filter((row) =>
-        !query ||
-        row.name.toLowerCase().includes(query) ||
-        row.email?.toLowerCase().includes(query) ||
-        String(row.member_no ?? "").includes(query),
-      );
-  }, [localRows, search]);
-
-  const changeRole = async (row: MemberDbRow, role: MemberDbRow["role"]) => {
-    if (row.role === role) return;
-    setSavingId(row.id);
-    setMessage(null);
-    const response = await fetch(`/api/admin/members/${row.id}/role`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
-    });
-    const result = await response.json().catch(() => null) as { error?: string } | null;
-    setSavingId(null);
-    if (!response.ok) {
-      setMessage({ type: "error", text: result?.error || "ロールを変更できませんでした" });
-      return;
-    }
-    setLocalRows((current) => current.map((item) => item.id === row.id ? { ...item, role } : item));
-    setMessage({ type: "success", text: `${row.name}さんの権限を変更しました` });
-  };
-
-  if (loadStatus === "loading") return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
-  if (loadStatus === "error") return <div className="text-center text-red-600 py-20">権限情報を取得できませんでした。</div>;
-
-  return (
-    <div className="max-w-3xl mx-auto">
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-4">
-        <h2 className="font-bold text-gray-900 mb-1">ログイン権限管理</h2>
-        <p className="text-sm text-gray-500 mb-4">
-          ログインアカウントと紐づいている会員だけを表示しています。最後の運営は降格できません。
-        </p>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="氏名・メール・会員番号で検索"
-            className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
-          />
-        </div>
-        {message && (
-          <p className={`mt-3 text-sm rounded-lg px-3 py-2 ${
-            message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-          }`}>
-            {message.text}
-          </p>
-        )}
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm divide-y divide-gray-100">
-        {linkedRows.map((row) => (
-          <div key={row.id} className="flex items-center gap-4 p-4">
-            <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center font-bold flex-shrink-0">
-              {row.name.trim().charAt(0) || "T"}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-bold text-sm text-gray-900 truncate">{row.name}</p>
-              <p className="text-xs text-gray-400 truncate">
-                {row.email || "メールなし"}{row.member_no != null ? ` ・ 会員番号 ${row.member_no}` : ""}
-              </p>
-            </div>
-            <select
-              value={row.role}
-              onChange={(event) => changeRole(row, event.target.value as MemberDbRow["role"])}
-              disabled={savingId === row.id}
-              className="px-3 py-2 text-sm font-bold border border-gray-200 rounded-lg bg-white disabled:opacity-60"
-              aria-label={`${row.name}の権限`}
-            >
-              <option value="user">一般</option>
-              <option value="manager">部長</option>
-              <option value="admin">運営</option>
-            </select>
-          </div>
-        ))}
-        {linkedRows.length === 0 && (
-          <p className="text-center text-gray-400 py-12 text-sm">該当するログインユーザーがいません</p>
-        )}
-      </div>
-    </div>
-  );
 }
 
 // ソート可能なテーブルヘッダーセル（クリックで昇降切替）
@@ -1873,39 +1776,267 @@ function fmtDate(iso: string): string {
   ).padStart(2, "0")}`;
 }
 
+// DBのロール値（admin/manager/user）を画面表示のラベルへ
+function roleLabelOf(role: "admin" | "manager" | "user"): MemberRole {
+  if (role === "admin") return "運営";
+  if (role === "manager") return "部長";
+  return "ユーザー";
+}
+
+// 画面が扱う1行の形。実DB接続時とmock時で作り方が違うのでここで揃える。
+interface ManageRow {
+  id: string;
+  name: string;
+  job: string;
+  memberNo: number | string | null;
+  role: "admin" | "manager" | "user";
+  /** ログインアカウントと紐づいているか。ロールはこの人にしか意味がない。 */
+  hasLogin: boolean;
+  isWithdrawn: boolean;
+  withdrawnAt: string | null;
+  withdrawalReason: string | null;
+  note: string | null;
+  avatarUrl: string | null;
+  /** 台帳に書かれている紹介者の名前（原文） */
+  referrerText: string | null;
+  /** 紹介者を会員として特定できた場合の members.id */
+  referrerMemberId: string | null;
+}
+
+// 626名を一度に描画すると重いので、既定はこの件数まで（検索で絞り込む運用）
+const MANAGE_PAGE_SIZE = 100;
+
 function MemberManageTab() {
+  // 実DB接続時は members テーブルが正。未接続のmockデモでは従来どおり localStorage が正。
+  const useRealData = isSupabaseConfigured;
+  const { rows: dbRows, loadStatus } = useMembersDb();
+
   const isWithdrawn = useWithdrawnResolver();
   const meta = useWithdrawalMeta();
   const notes = useMemberNotes();
   const roles = useMemberRoles();
+
   const [search, setSearch] = useState("");
-  // 退会モーダル対象 + 理由入力
-  const [withdrawTarget, setWithdrawTarget] = useState<
-    (typeof allMembers)[number] | null
+  const [visibleCount, setVisibleCount] = useState(MANAGE_PAGE_SIZE);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [message, setMessage] = useState<
+    { type: "success" | "error"; text: string } | null
   >(null);
+  // 実DB側の更新結果をその場で反映するための上書き（再取得なしで一覧に効かせる）
+  const [overrides, setOverrides] = useState<Record<string, Partial<ManageRow>>>({});
+
+  const [withdrawTarget, setWithdrawTarget] = useState<ManageRow | null>(null);
   const [reason, setReason] = useState("");
-  // 復帰モーダル対象
-  const [reactivateTarget, setReactivateTarget] = useState<
-    (typeof allMembers)[number] | null
-  >(null);
-  // 備考（運営メモ）編集モーダル対象 + 下書き
-  const [noteTarget, setNoteTarget] = useState<
-    (typeof allMembers)[number] | null
-  >(null);
+  const [reactivateTarget, setReactivateTarget] = useState<ManageRow | null>(null);
+  const [noteTarget, setNoteTarget] = useState<ManageRow | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  // 紹介者の紐づけ（台帳のテキストを見ながら会員を選ぶ）
+  const [referrerTarget, setReferrerTarget] = useState<ManageRow | null>(null);
+  const [referrerSearch, setReferrerSearch] = useState("");
 
-  const filtered = allMembers.filter(
-    (m) => !search || m.name.includes(search) || m.job.includes(search)
-  );
-  const withdrawnCount = allMembers.filter((m) => isWithdrawn(m.id)).length;
-  const activeCount = allMembers.length - withdrawnCount;
+  const allRows: ManageRow[] = useMemo(() => {
+    const base: ManageRow[] = useRealData
+      ? (dbRows ?? []).map((r) => ({
+          id: r.id,
+          name: r.name,
+          job: r.job ?? "",
+          memberNo: r.member_no,
+          role: r.role,
+          hasLogin: Boolean(r.auth_user_id),
+          isWithdrawn: r.is_withdrawn,
+          withdrawnAt: r.withdrawn_at ?? null,
+          withdrawalReason: r.withdrawal_reason ?? null,
+          note: r.admin_note ?? null,
+          avatarUrl: r.avatar_url ?? null,
+          referrerText: r.referrer ?? null,
+          referrerMemberId: r.referrer_member_id ?? null,
+        }))
+      : allMembers.map((m) => ({
+          id: m.id,
+          name: m.name,
+          job: m.job,
+          memberNo: null,
+          role: getMemberRole(roles, m.id) === "運営"
+            ? "admin"
+            : getMemberRole(roles, m.id) === "部長"
+              ? "manager"
+              : "user",
+          hasLogin: true, // mockデモでは全員がログインできる想定
+          isWithdrawn: isWithdrawn(m.id),
+          withdrawnAt: meta[m.id]?.at ?? null,
+          withdrawalReason: meta[m.id]?.reason ?? null,
+          note: notes[m.id] ?? null,
+          avatarUrl: m.photoUrl,
+          referrerText: null,
+          referrerMemberId: null,
+        }));
 
-  const confirmWithdraw = () => {
-    if (!withdrawTarget) return;
-    setMemberWithdrawn(withdrawTarget.id, true, reason.trim());
-    setWithdrawTarget(null);
-    setReason("");
+    return base.map((row) =>
+      overrides[row.id] ? { ...row, ...overrides[row.id] } : row
+    );
+  }, [useRealData, dbRows, roles, isWithdrawn, meta, notes, overrides]);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return allRows;
+    return allRows.filter(
+      (m) =>
+        m.name.toLowerCase().includes(query) ||
+        m.job.toLowerCase().includes(query) ||
+        String(m.memberNo ?? "").includes(query)
+    );
+  }, [allRows, search]);
+
+  const visible = filtered.slice(0, visibleCount);
+  const withdrawnCount = allRows.filter((m) => m.isWithdrawn).length;
+  const activeCount = allRows.length - withdrawnCount;
+
+  // 実DB接続時のみ API を叩く。mock時は従来の localStorage ストアを更新する。
+  const patchMember = async (
+    row: ManageRow,
+    body: Record<string, unknown>,
+    optimistic: Partial<ManageRow>,
+    successText: string
+  ): Promise<boolean> => {
+    if (!useRealData) {
+      setOverrides((cur) => ({ ...cur, [row.id]: { ...cur[row.id], ...optimistic } }));
+      return true;
+    }
+
+    setSavingId(row.id);
+    setMessage(null);
+    const response = await fetch(`/api/admin/members/${row.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    setSavingId(null);
+
+    if (!response.ok) {
+      setMessage({ type: "error", text: result?.error || "更新できませんでした" });
+      return false;
+    }
+    setOverrides((cur) => ({ ...cur, [row.id]: { ...cur[row.id], ...optimistic } }));
+    setMessage({ type: "success", text: successText });
+    return true;
   };
+
+  // ロール変更（ログイン紐づけ済みの会員のみ）。
+  // set_member_role 側で「最後の運営は降格不可」を担保している。
+  const changeRole = async (row: ManageRow, role: ManageRow["role"]) => {
+    if (row.role === role) return;
+
+    if (!useRealData) {
+      setMemberRole(row.id, roleLabelOf(role));
+      return;
+    }
+
+    setSavingId(row.id);
+    setMessage(null);
+    const response = await fetch(`/api/admin/members/${row.id}/role`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    setSavingId(null);
+
+    if (!response.ok) {
+      setMessage({ type: "error", text: result?.error || "権限を変更できませんでした" });
+      return;
+    }
+    setOverrides((cur) => ({ ...cur, [row.id]: { ...cur[row.id], role } }));
+    setMessage({
+      type: "success",
+      text: `${row.name}さんの権限を「${roleLabelOf(role)}」にしました`,
+    });
+  };
+
+  const confirmWithdraw = async () => {
+    if (!withdrawTarget) return;
+    const trimmed = reason.trim();
+    const ok = await patchMember(
+      withdrawTarget,
+      { is_withdrawn: true, withdrawal_reason: trimmed },
+      {
+        isWithdrawn: true,
+        withdrawnAt: new Date().toISOString(),
+        withdrawalReason: trimmed || null,
+      },
+      `${withdrawTarget.name}さんを退会にしました`
+    );
+    if (!useRealData) setMemberWithdrawn(withdrawTarget.id, true, trimmed);
+    if (ok) {
+      setWithdrawTarget(null);
+      setReason("");
+    }
+  };
+
+  const confirmReactivate = async () => {
+    if (!reactivateTarget) return;
+    const ok = await patchMember(
+      reactivateTarget,
+      { is_withdrawn: false },
+      { isWithdrawn: false, withdrawnAt: null, withdrawalReason: null },
+      `${reactivateTarget.name}さんを復帰させました`
+    );
+    if (!useRealData) setMemberWithdrawn(reactivateTarget.id, false);
+    if (ok) setReactivateTarget(null);
+  };
+
+  // 紹介者を会員へ紐づける（解除は null）
+  const linkReferrer = async (row: ManageRow, referrerMemberId: string | null) => {
+    if (!useRealData) {
+      setReferrerTarget(null);
+      return;
+    }
+    setSavingId(row.id);
+    setMessage(null);
+    const response = await fetch(`/api/admin/members/${row.id}/referrer`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ referrerMemberId }),
+    });
+    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    setSavingId(null);
+
+    if (!response.ok) {
+      setMessage({ type: "error", text: result?.error || "紹介者を更新できませんでした" });
+      return;
+    }
+    setOverrides((cur) => ({ ...cur, [row.id]: { ...cur[row.id], referrerMemberId } }));
+    setMessage({
+      type: "success",
+      text: referrerMemberId ? "紹介者を紐づけました" : "紹介者の紐づけを解除しました",
+    });
+    setReferrerTarget(null);
+    setReferrerSearch("");
+  };
+
+  const confirmNote = async () => {
+    if (!noteTarget) return;
+    const trimmed = noteDraft.trim();
+    const ok = await patchMember(
+      noteTarget,
+      { admin_note: trimmed },
+      { note: trimmed || null },
+      `${noteTarget.name}さんの備考を保存しました`
+    );
+    if (!useRealData) setMemberNote(noteTarget.id, trimmed);
+    if (ok) setNoteTarget(null);
+  };
+
+  if (useRealData && loadStatus === "loading") {
+    return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
+  }
+  if (useRealData && loadStatus === "error") {
+    return (
+      <div className="text-center text-red-600 py-20">
+        会員データを取得できませんでした。
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1925,48 +2056,63 @@ function MemberManageTab() {
       <div className="flex items-start gap-2 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 leading-relaxed">
         <UserX className="w-4 h-4 flex-shrink-0 mt-0.5" />
         <span>
-          退会は運営側でのみ処理します（本人からの退会ボタンはありません）。会員からLINEで退会依頼を受けたら、ここで「退会させる」を実行してください。退会後も名前は記録として残り、いつでも復帰できます。
+          退会は運営側でのみ処理します（本人からの退会ボタンはありません）。会員からLINEで退会依頼を受けたら、ここで「退会させる」を実行してください。退会後も名前は記録として残り、いつでも復帰できます。権限（運営／部長）の変更は「権限管理」タブで行います。
         </span>
       </div>
 
       {/* 検索 */}
-      <div className="relative mb-4">
+      <div className="relative mb-3">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="名前・職種で検索..."
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setVisibleCount(MANAGE_PAGE_SIZE);
+          }}
+          placeholder="名前・職種・会員番号で検索..."
           className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
         />
       </div>
 
+      {message && (
+        <p
+          className={`mb-3 text-sm rounded-lg px-3 py-2 ${
+            message.type === "success"
+              ? "bg-green-50 text-green-700"
+              : "bg-red-50 text-red-700"
+          }`}
+        >
+          {message.text}
+        </p>
+      )}
+
+      <p className="text-xs text-gray-400 mb-3">
+        {filtered.length}件中 {visible.length}件を表示
+      </p>
+
       {/* 一覧 */}
       <div className="space-y-2.5">
-        {filtered.map((m) => {
-          const withdrawn = isWithdrawn(m.id);
-          const info = meta[m.id];
-          return (
-            <div
-              key={m.id}
-              className={`flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm ${
-                withdrawn ? "border-red-100" : "border-gray-100"
-              }`}
-            >
-              <div className="flex items-center gap-3 min-w-0 sm:flex-1">
-              <img
-                src={m.photoUrl}
-                alt={m.name}
-                className={`w-11 h-11 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 flex-shrink-0 ${
-                  withdrawn ? "grayscale" : ""
-                }`}
+        {visible.map((m) => (
+          <div
+            key={m.id}
+            className={`flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm ${
+              m.isWithdrawn ? "border-red-100" : "border-gray-100"
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0 sm:flex-1">
+              <MemberAvatar
+                name={m.name}
+                url={m.avatarUrl}
+                grayscale={m.isWithdrawn}
+                className="ring-1 ring-gray-100"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-bold text-gray-900 truncate">
                     {m.name}
                   </p>
-                  {withdrawn ? (
+                  {m.isWithdrawn ? (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold border border-red-200">
                       退会
                     </span>
@@ -1975,82 +2121,122 @@ function MemberManageTab() {
                       在籍
                     </span>
                   )}
-                  <RoleBadge role={getMemberRole(roles, m.id)} />
+                  <RoleBadge role={roleLabelOf(m.role)} />
+                  {m.memberNo != null && (
+                    <span className="text-[10px] text-gray-400">
+                      No.{m.memberNo}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-400 truncate">{m.job}</p>
-                {withdrawn && info && (
+                {m.isWithdrawn && (m.withdrawnAt || m.withdrawalReason) && (
                   <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                    {info.at && `退会日 ${fmtDate(info.at)}`}
-                    {info.reason && `・理由: ${info.reason}`}
+                    {m.withdrawnAt && `退会日 ${fmtDate(m.withdrawnAt)}`}
+                    {m.withdrawalReason && `・理由: ${m.withdrawalReason}`}
                   </p>
                 )}
-                {notes[m.id] && (
-                  <p className="flex items-start gap-1 text-[11px] text-gray-600 mt-1 bg-amber-50/70 border border-amber-100 rounded-lg px-2 py-1 whitespace-pre-wrap break-words">
-                    <StickyNote className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />
-                    <span>{notes[m.id]}</span>
-                  </p>
-                )}
-              </div>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap sm:flex-shrink-0 pl-14 sm:pl-0">
-                {/* ロール付与 */}
-                <select
-                  value={getMemberRole(roles, m.id)}
-                  onChange={(e) =>
-                    setMemberRole(m.id, e.target.value as MemberRole)
-                  }
-                  className="px-2.5 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent cursor-pointer"
-                  title="ロール"
-                >
-                  {ROLE_LIST.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => {
-                    setNoteTarget(m);
-                    setNoteDraft(notes[m.id] ?? "");
-                  }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${
-                    notes[m.id]
-                      ? "border-amber-200 text-amber-600 bg-amber-50 hover:bg-amber-100"
-                      : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                  }`}
-                  title="運営メモ（備考）"
-                >
-                  <StickyNote className="w-3.5 h-3.5" />
-                  備考
-                </button>
-                {withdrawn ? (
-                  <button
-                    onClick={() => setReactivateTarget(m)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    復帰させる
-                  </button>
-                ) : (
+                {m.referrerText && (
                   <button
                     onClick={() => {
-                      setWithdrawTarget(m);
-                      setReason("");
+                      setReferrerTarget(m);
+                      setReferrerSearch(m.referrerText ?? "");
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                    className="mt-1 inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-800 transition-colors"
+                    title="紹介者を会員に紐づける"
                   >
-                    <UserX className="w-3.5 h-3.5" />
-                    退会させる
+                    <Handshake className="w-3 h-3" />
+                    紹介者: {m.referrerText}
+                    {m.referrerMemberId ? (
+                      <span className="text-green-600 font-bold">（紐づけ済み）</span>
+                    ) : (
+                      <span className="text-amber-600">（未紐づけ）</span>
+                    )}
                   </button>
+                )}
+                {m.note && (
+                  <p className="flex items-start gap-1 text-[11px] text-gray-600 mt-1 bg-amber-50/70 border border-amber-100 rounded-lg px-2 py-1 whitespace-pre-wrap break-words">
+                    <StickyNote className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <span>{m.note}</span>
+                  </p>
                 )}
               </div>
             </div>
-          );
-        })}
+            <div className="flex items-center gap-2 flex-wrap sm:flex-shrink-0 pl-14 sm:pl-0">
+              {/* 権限。ログインアカウントが無い会員に付けても効かないので選ばせない。 */}
+              {m.hasLogin ? (
+                <select
+                  value={m.role}
+                  onChange={(e) => changeRole(m, e.target.value as ManageRow["role"])}
+                  disabled={savingId === m.id}
+                  className="px-2.5 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent cursor-pointer disabled:opacity-50"
+                  aria-label={`${m.name}の権限`}
+                  title="権限"
+                >
+                  <option value="user">一般</option>
+                  <option value="manager">部長</option>
+                  <option value="admin">運営</option>
+                </select>
+              ) : (
+                <span
+                  className="px-2.5 py-2 rounded-xl border border-dashed border-gray-200 text-[11px] text-gray-400"
+                  title="ログインアカウントが未作成のため権限は設定できません"
+                >
+                  未ログイン
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  setNoteTarget(m);
+                  setNoteDraft(m.note ?? "");
+                }}
+                disabled={savingId === m.id}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors disabled:opacity-50 ${
+                  m.note
+                    ? "border-amber-200 text-amber-600 bg-amber-50 hover:bg-amber-100"
+                    : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                }`}
+                title="運営メモ（備考）"
+              >
+                <StickyNote className="w-3.5 h-3.5" />
+                備考
+              </button>
+              {m.isWithdrawn ? (
+                <button
+                  onClick={() => setReactivateTarget(m)}
+                  disabled={savingId === m.id}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  復帰させる
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setWithdrawTarget(m);
+                    setReason("");
+                  }}
+                  disabled={savingId === m.id}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-200 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  退会させる
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
         {filtered.length === 0 && (
           <div className="text-center text-gray-400 py-12 text-sm">
             該当するメンバーがいません
           </div>
+        )}
+        {visible.length < filtered.length && (
+          <button
+            onClick={() => setVisibleCount((c) => c + MANAGE_PAGE_SIZE)}
+            className="w-full py-3 rounded-2xl border border-gray-200 bg-white text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            さらに{Math.min(MANAGE_PAGE_SIZE, filtered.length - visible.length)}件を表示
+          </button>
         )}
       </div>
 
@@ -2094,7 +2280,8 @@ function MemberManageTab() {
               </button>
               <button
                 onClick={confirmWithdraw}
-                className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors"
+                disabled={savingId === withdrawTarget.id}
+                className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-60"
               >
                 退会させる
               </button>
@@ -2132,13 +2319,100 @@ function MemberManageTab() {
                 やめる
               </button>
               <button
-                onClick={() => {
-                  setMemberWithdrawn(reactivateTarget.id, false);
-                  setReactivateTarget(null);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition-colors"
+                onClick={confirmReactivate}
+                disabled={savingId === reactivateTarget.id}
+                className="px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-60"
               >
                 復帰させる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 紹介者の紐づけモーダル */}
+      {referrerTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setReferrerTarget(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold text-gray-900 mb-1">
+              {referrerTarget.name}さんの紹介者
+            </h2>
+            <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+              台帳の記載は「
+              <span className="font-bold text-gray-700">{referrerTarget.referrerText}</span>
+              」です。該当する会員を選ぶと、その方の紹介数に数えられます。
+            </p>
+
+            <input
+              value={referrerSearch}
+              onChange={(e) => setReferrerSearch(e.target.value)}
+              placeholder="会員を名前で検索"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 mb-3"
+              autoFocus
+            />
+
+            <div className="flex-1 overflow-y-auto space-y-1 mb-4">
+              {allRows
+                .filter((c) => c.id !== referrerTarget.id)
+                .filter((c) => {
+                  const q = referrerSearch.trim().toLowerCase();
+                  return !q || c.name.toLowerCase().includes(q);
+                })
+                .slice(0, 30)
+                .map((candidate) => (
+                  <button
+                    key={candidate.id}
+                    onClick={() => linkReferrer(referrerTarget, candidate.id)}
+                    disabled={savingId === referrerTarget.id}
+                    className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-colors disabled:opacity-50 ${
+                      referrerTarget.referrerMemberId === candidate.id
+                        ? "bg-green-50 border border-green-200"
+                        : "hover:bg-gray-50 border border-transparent"
+                    }`}
+                  >
+                    <MemberAvatar name={candidate.name} url={candidate.avatarUrl} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-gray-800 truncate">{candidate.name}</p>
+                      <p className="text-[11px] text-gray-400 truncate">
+                        {candidate.memberNo != null ? `No.${candidate.memberNo}・` : ""}
+                        {candidate.job || "職業未登録"}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              {allRows.filter((c) => {
+                const q = referrerSearch.trim().toLowerCase();
+                return c.id !== referrerTarget.id && (!q || c.name.toLowerCase().includes(q));
+              }).length === 0 && (
+                <p className="text-center text-xs text-gray-400 py-8">
+                  該当する会員が見つかりません
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-between">
+              {referrerTarget.referrerMemberId ? (
+                <button
+                  onClick={() => linkReferrer(referrerTarget, null)}
+                  disabled={savingId === referrerTarget.id}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  紐づけを解除
+                </button>
+              ) : (
+                <span />
+              )}
+              <button
+                onClick={() => setReferrerTarget(null)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                閉じる
               </button>
             </div>
           </div>
@@ -2181,11 +2455,9 @@ function MemberManageTab() {
                 やめる
               </button>
               <button
-                onClick={() => {
-                  setMemberNote(noteTarget.id, noteDraft);
-                  setNoteTarget(null);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors"
+                onClick={confirmNote}
+                disabled={savingId === noteTarget.id}
+                className="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-60"
               >
                 保存
               </button>

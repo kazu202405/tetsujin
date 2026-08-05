@@ -1,17 +1,38 @@
 "use client";
 
+// ============================================================
+// 他の会員のプロフィール（名刺シート閲覧）
+// ============================================================
+// 以前は mock の人物データ（id 1〜10）しか引けず、実会員のUUIDを渡すと
+// 404 になっていた。/api/profile/[id] 経由の実データに置き換えている。
+// ============================================================
+
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ArrowLeft, UserX } from "lucide-react";
-import { getMemberProfile } from "@/lib/dashboard-data";
-import { ProfileSheetCard } from "@/components/app/profile-sheet-card";
-import { SocialLinksSection } from "@/components/app/social-links-section";
-import { CURRENT_USER_ID, isConnectedWithMe } from "@/lib/connections-data";
-import { useIsWithdrawn } from "@/lib/withdrawal-data";
-import { useSheetData } from "@/lib/profile-sheet-data";
-import { useMemberRole } from "@/lib/member-roles";
+import { ProfileSheetCard, type ProfileSheetData } from "@/components/app/profile-sheet-card";
 import { RoleBadge } from "@/components/app/role-badge";
+import type { MemberRole } from "@/lib/member-roles";
+
+interface ProfileResponse extends ProfileSheetData {
+  id: string;
+  memberNo: number | null;
+  name: string;
+  membershipType: string | null;
+  role: "admin" | "manager" | "user";
+  isWithdrawn: boolean;
+  isMe: boolean;
+  avatarUrl: string | null;
+  genre: string;
+  industry: string;
+  themeColor: string;
+}
+
+function roleLabel(role: "admin" | "manager" | "user"): MemberRole {
+  if (role === "admin") return "運営";
+  if (role === "manager") return "部長";
+  return "ユーザー";
+}
 
 export default function ProfilePage({
   params,
@@ -19,14 +40,38 @@ export default function ProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const profile = getMemberProfile(id);
-  const isWithdrawn = useIsWithdrawn(id, profile?.isWithdrawn);
-  const { data: sheetData, themeColor } = useSheetData(id);
-  const role = useMemberRole(id);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [status, setStatus] = useState<"loading" | "loaded" | "notfound" | "error">("loading");
 
   // カードをコンテナ幅に合わせてスケーリング
   const wrapRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    fetch(`/api/profile/${id}`, { cache: "no-store" })
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.status === 404) {
+          setStatus("notfound");
+          return;
+        }
+        if (!res.ok) {
+          setStatus("error");
+          return;
+        }
+        setProfile((await res.json()) as ProfileResponse);
+        setStatus("loaded");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
   useEffect(() => {
     const w = wrapRef.current;
     if (!w) return;
@@ -35,25 +80,53 @@ export default function ProfilePage({
     const observer = new ResizeObserver(update);
     observer.observe(w);
     return () => observer.disconnect();
-  }, [isWithdrawn]);
+  }, [status]);
 
-  if (!profile) return notFound();
+  const header = (
+    <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <Link
+          href="/app/members"
+          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          メンバー一覧に戻る
+        </Link>
+      </div>
+    </div>
+  );
 
-  // 退会済みメンバー：名前と業種のみ表示、他はマスク
-  if (isWithdrawn) {
+  if (status === "loading") {
     return (
       <div className="min-h-screen">
-        <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <Link
-              href="/app/members"
-              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              メンバー一覧に戻る
-            </Link>
+        {header}
+        <p className="text-center text-gray-400 py-24 text-sm">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (status === "notfound" || status === "error" || !profile) {
+    return (
+      <div className="min-h-screen">
+        {header}
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+            <p className="text-sm text-gray-500">
+              {status === "notfound"
+                ? "このメンバーは見つかりませんでした"
+                : "プロフィールを取得できませんでした"}
+            </p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // 退会済みメンバー：名前と業種のみ表示、他はマスク
+  if (profile.isWithdrawn) {
+    return (
+      <div className="min-h-screen">
+        {header}
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
             <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gray-100 flex items-center justify-center">
@@ -65,7 +138,9 @@ export default function ProfilePage({
             >
               {profile.name}
             </h1>
-            <p className="text-xs text-gray-400 mb-6">{profile.industry}</p>
+            {profile.membershipType && (
+              <p className="text-xs text-gray-400 mb-6">{profile.membershipType}</p>
+            )}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-50 text-gray-500 text-sm">
               <UserX className="w-4 h-4" />
               このメンバーは退会済みです
@@ -76,48 +151,48 @@ export default function ProfilePage({
     );
   }
 
+  const sheetData: ProfileSheetData = {
+    memberNumber: profile.memberNo != null ? String(profile.memberNo) : "",
+    nameKanji: profile.name,
+    nameFurigana: profile.nameFurigana,
+    nickname: profile.nickname,
+    job: profile.job,
+    location: profile.location,
+    hobbies: profile.hobbies,
+    myHistory: profile.myHistory,
+    tetsujinBenefit: profile.tetsujinBenefit,
+    hitokoto: profile.hitokoto,
+    snsLinks: profile.snsLinks,
+    photoUrl: profile.avatarUrl ?? "",
+  };
+
   return (
     <div className="min-h-screen">
-      {/* Header bar */}
-      <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <Link
-            href="/app/members"
-            className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            メンバー一覧に戻る
-          </Link>
-        </div>
-      </div>
+      {header}
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24 space-y-6">
-        {/* ロール（一般会員は非表示） */}
-        {role !== "ユーザー" && (
+        {profile.role !== "user" && (
           <div className="flex justify-center">
-            <RoleBadge role={role} />
+            <RoleBadge role={roleLabel(profile.role)} />
           </div>
         )}
 
-        {/* プロフィールシート（閲覧専用） */}
         <div ref={wrapRef} className="flex justify-center">
           <ProfileSheetCard
             data={sheetData}
-            primaryColor={themeColor}
+            primaryColor={profile.themeColor}
             scale={scale}
           />
         </div>
 
-        {/* SNS・リンク（開示申請フロー） */}
-        <SocialLinksSection
-          viewerMode={{
-            links: profile.socialLinks,
-            isConnected: isConnectedWithMe(id),
-            isOwner: id === CURRENT_USER_ID,
-            viewerId: CURRENT_USER_ID,
-            ownerId: id,
-          }}
-        />
+        {profile.isMe && (
+          <p className="text-center text-xs text-gray-400">
+            これは自分のシートです。
+            <Link href="/app/mypage/profile-sheet" className="text-gray-600 underline ml-1">
+              編集する
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

@@ -48,9 +48,30 @@ interface Props {
   cardRef?: React.Ref<HTMLDivElement>;
 }
 
+/**
+ * 氏名にルビを振るための組み合わせを作る。
+ *
+ * 台帳の氏名は「五島 一将」のようにスペースで区切られているとは限らず、
+ * 「五島一将」と続けて登録されている会員も多い。
+ * 姓名の数とふりがなの数が一致しないときは、分割せず
+ * 氏名全体にふりがな全体を振る（一致しない分を捨てないため）。
+ */
+export function splitNameForRuby(
+  nameKanji: string,
+  nameFurigana: string
+): { kanji: string; furigana: string }[] {
+  const kanjiParts = nameKanji.split(/[\s　]+/).filter(Boolean);
+  const furiganaParts = nameFurigana.split(/[\s　]+/).filter(Boolean);
+
+  if (kanjiParts.length > 1 && kanjiParts.length === furiganaParts.length) {
+    return kanjiParts.map((kanji, i) => ({ kanji, furigana: furiganaParts[i] }));
+  }
+
+  return [{ kanji: nameKanji, furigana: furiganaParts.join("　") }];
+}
+
 export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Props) {
-  const kanjiParts = data.nameKanji.split(/[\s　]+/).filter(Boolean);
-  const furiganaParts = data.nameFurigana.split(/[\s　]+/);
+  const nameParts = splitNameForRuby(data.nameKanji, data.nameFurigana);
 
   const BarHeader = ({ children }: { children: React.ReactNode }) => (
     <div className="px-5">
@@ -120,13 +141,13 @@ export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Pro
                     className="text-3xl font-extrabold text-gray-900 leading-tight"
                     style={{ fontFamily: "'Noto Serif JP', serif" }}
                   >
-                    {kanjiParts.map((kanji, i) => (
+                    {nameParts.map((part, i) => (
                       <span key={i} className={i > 0 ? "ml-2" : ""}>
                         <ruby>
-                          {kanji}
+                          {part.kanji}
                           <rp>(</rp>
                           <rt className="text-[11px] font-normal text-gray-400">
-                            {furiganaParts[i] || ""}
+                            {part.furigana}
                           </rt>
                           <rp>)</rp>
                         </ruby>

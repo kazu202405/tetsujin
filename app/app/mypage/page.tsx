@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -17,9 +17,10 @@ import { members } from "@/lib/mock-data";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
 import { EventCalendar } from "@/components/app/event-calendar";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
-import { useJoinedEvents } from "@/lib/event-participation";
-import { mockPosts } from "@/app/app/board/data";
+import { useJoinedEvents } from "@/lib/events-api";
 import { useCurrentMember } from "@/lib/current-member";
+import { MemberAvatar } from "@/components/app/member-avatar";
+import { type BoardPost, fetchPosts, formatPostedAt } from "@/lib/board-api";
 
 function formatMonth(year: number, month: number) {
   return `${year}年${month + 1}月`;
@@ -28,6 +29,8 @@ function formatMonth(year: number, month: number) {
 export default function MyPage() {
   const currentMember = useCurrentMember();
   const today = new Date();
+  // 開催済みかどうかの判定に使う「今日」（YYYY-MM-DD）
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -46,7 +49,6 @@ export default function MyPage() {
         ? `会員番号 ${currentMember.member_no}`
         : "プロフィール情報を登録してください"),
   };
-  const profileInitial = myProfile.name.trim().charAt(0) || "T";
 
   // 参加イベント（単一ソースから購読）
   const joinedEvents = useJoinedEvents();
@@ -79,11 +81,22 @@ export default function MyPage() {
     return [...list].sort((a, b) => a.date.localeCompare(b.date));
   }, [selectedDate, viewYear, viewMonth, joinedEvents]);
 
-  // 掲示板の最新プレビュー（3件・投稿日時の新しい順）。全文フィードは board に一本化。
-  const latestPosts = useMemo(
-    () => [...mockPosts].sort((a, b) => b.postedAt.localeCompare(a.postedAt)).slice(0, 3),
-    []
-  );
+  // 掲示板の最新プレビュー（3件）。全文フィードは board に一本化。
+  // チャンネル指定なしで新しい順に取れるので、そのまま先頭3件を出す。
+  const [latestPosts, setLatestPosts] = useState<BoardPost[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchPosts(undefined, 3)
+      .then((items) => {
+        if (!cancelled) setLatestPosts(items);
+      })
+      .catch(() => {
+        if (!cancelled) setLatestPosts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const prevMonth = () => {
     if (viewMonth === 0) {
@@ -121,12 +134,11 @@ export default function MyPage() {
         {/* Profile card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 mb-6">
           <div className="flex flex-row items-start gap-4 sm:gap-6">
-            <div
-              aria-label={myProfile.name}
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center text-2xl font-extrabold border-4 border-white shadow-lg ring-1 ring-gray-100 flex-shrink-0"
-            >
-              {profileInitial}
-            </div>
+            <MemberAvatar
+              name={myProfile.name}
+              url={currentMember?.avatar_url}
+              className="w-16 h-16 sm:w-20 sm:h-20 text-2xl border-4 shadow-lg ring-1 ring-gray-100"
+            />
             <div className="flex-1 min-w-0">
               <h2
                 className="text-2xl font-bold text-gray-900 mb-1"
@@ -206,10 +218,10 @@ export default function MyPage() {
                 href="/app/board"
                 className="flex items-start gap-3 py-3 first:pt-0 last:pb-0 group"
               >
-                <img
-                  src={post.author.photoUrl}
-                  alt={post.author.name}
-                  className="w-9 h-9 rounded-full object-cover border-2 border-white shadow flex-shrink-0"
+                <MemberAvatar
+                  name={post.author.name}
+                  url={post.author.avatarUrl}
+                  className="w-9 h-9"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -217,7 +229,7 @@ export default function MyPage() {
                       {post.author.name}
                     </span>
                     <span className="text-[10px] text-gray-400 flex-shrink-0">
-                      {post.postedAt}
+                      {formatPostedAt(post.createdAt)}
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 line-clamp-2 mt-0.5 whitespace-pre-wrap">
@@ -226,6 +238,14 @@ export default function MyPage() {
                 </div>
               </Link>
             ))}
+            {latestPosts.length === 0 && (
+              <Link
+                href="/app/board"
+                className="block py-6 text-center text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                まだ投稿がありません。最初の投稿をしてみましょう
+              </Link>
+            )}
           </div>
         </div>
 
@@ -297,7 +317,7 @@ export default function MyPage() {
                   <div
                     key={event.id}
                     className={`bg-white rounded-2xl border shadow-sm p-5 ${
-                      event.status === "past"
+                      event.date < todayIso
                         ? "border-gray-100"
                         : "border-2 border-amber-200"
                     }`}
@@ -306,10 +326,10 @@ export default function MyPage() {
                       <h5 className="text-base font-bold text-gray-900">
                         {event.title}
                       </h5>
-                      {event.isHost && (
+                      {event.isMine && (
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 ${
-                            event.status === "past"
+                            event.date < todayIso
                               ? "bg-gray-200 text-gray-600"
                               : "bg-gray-900 text-white"
                           }`}
@@ -333,11 +353,11 @@ export default function MyPage() {
                     <div className="flex items-center gap-2">
                       <div className="flex -space-x-2">
                         {event.participants.slice(0, 5).map((p) => (
-                          <img
+                          <MemberAvatar
                             key={p.id}
-                            src={p.photoUrl}
-                            alt=""
-                            className="w-7 h-7 rounded-full object-cover border-2 border-white shadow"
+                            name={p.name}
+                            url={p.avatarUrl}
+                            size="sm"
                           />
                         ))}
                       </div>

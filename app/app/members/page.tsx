@@ -5,6 +5,7 @@ import { Building2, Search, User } from "lucide-react";
 import { dashboardMembers } from "@/lib/dashboard-data";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { RoleBadge } from "@/components/app/role-badge";
+import { MemberAvatar } from "@/components/app/member-avatar";
 
 type DirectoryMember = {
   id: string;
@@ -15,6 +16,7 @@ type DirectoryMember = {
   grip: string | null;
   membership_type: string | null;
   role: "admin" | "manager" | "user";
+  avatar_url?: string | null;
 };
 
 const mockDirectory: DirectoryMember[] = dashboardMembers
@@ -35,12 +37,13 @@ function roleLabel(role: DirectoryMember["role"]) {
 }
 
 function MemberCard({ member }: { member: DirectoryMember }) {
-  const initial = member.name.trim().charAt(0) || "T";
   return (
     <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <div className="w-11 h-11 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center font-extrabold border-2 border-white shadow ring-1 ring-gray-100 flex-shrink-0">
-        {initial}
-      </div>
+      <MemberAvatar
+        name={member.name}
+        url={member.avatar_url}
+        className="w-11 h-11 ring-1 ring-gray-100"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="text-sm font-bold text-gray-900 truncate">{member.name}</h3>

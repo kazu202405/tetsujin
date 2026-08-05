@@ -13,6 +13,9 @@ export type CurrentMember = {
   membership_type: string | null;
   role: "admin" | "manager" | "user";
   is_withdrawn: boolean;
+  avatar_path?: string | null;
+  /** 表示用の署名URL。非公開バケットのためサーバー側（AppLayout）で発行する。 */
+  avatar_url?: string | null;
 };
 
 const CurrentMemberContext = createContext<CurrentMember | null>(null);

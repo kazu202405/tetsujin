@@ -9,22 +9,18 @@ import {
   Pencil,
   Eye,
   Upload,
-  Camera,
   Save,
   Check,
   Plus,
   Trash2,
 } from "lucide-react";
-import { CURRENT_USER_ID } from "@/lib/connections-data";
 import { useCurrentMember } from "@/lib/current-member";
-import {
-  loadOwnSheet,
-  saveSheetData,
-  hasOwnSheet,
-} from "@/lib/profile-sheet-data";
+import { AvatarUpload } from "@/components/app/avatar-upload";
+import { ToastStack, useToasts } from "@/components/app/toast";
 import {
   SheetSnsLink,
   snsLabel,
+  splitNameForRuby,
 } from "@/components/app/profile-sheet-card";
 import { SocialPlatform, SOCIAL_PLATFORM_META } from "@/lib/social-links";
 
@@ -133,9 +129,26 @@ const initialData: ProfileData = {
     "https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face",
 };
 
+/** サーバーへ送る形（会員番号・氏名は台帳が正本なので含めない） */
+function toPayload(data: ProfileData, themeColor: string) {
+  return {
+    nickname: data.nickname,
+    job: data.job,
+    nameFurigana: data.nameFurigana,
+    genre: data.genre,
+    industry: data.industry,
+    location: data.location,
+    hobbies: data.hobbies,
+    myHistory: data.myHistory,
+    tetsujinBenefit: data.tetsujinBenefit,
+    hitokoto: data.hitokoto,
+    snsLinks: data.snsLinks,
+    themeColor,
+  };
+}
+
 export default function ProfileSheetPage() {
   const currentMember = useCurrentMember();
-  const profileOwnerId = currentMember?.id ?? CURRENT_USER_ID;
   const [mode, setMode] = useState<"edit" | "preview">("preview");
   const [data, setData] = useState<ProfileData>(() => ({
     ...initialData,
@@ -144,10 +157,21 @@ export default function ProfileSheetPage() {
     nameFurigana: "",
     nickname: currentMember?.nickname ?? "",
     job: currentMember?.job ?? "",
-    genre: currentMember?.membership_type ?? "",
+    genre: "",
     hitokoto: currentMember?.grip ?? "",
     photoUrl: currentMember ? "" : initialData.photoUrl,
   }));
+
+  const { toast, showToast } = useToasts();
+
+  // 保存状態（自動保存と保存ボタンの両方でここを更新する）
+  const [sheetLoaded, setSheetLoaded] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "dirty" | "saving" | "saved" | "error">(
+    "idle"
+  );
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // 直近で保存に成功した内容。変化が無いときに無駄な保存を投げないための比較用。
+  const lastSavedRef = useRef<string | null>(null);
   const [themeIndex, setThemeIndex] = useState(0);
   const [customColor, setCustomColor] = useState("#2a2a3e");
   const [huePosition, setHuePosition] = useState(0);
@@ -186,39 +210,81 @@ export default function ProfileSheetPage() {
     return () => window.removeEventListener("mousedown", handleClick);
   }, [showColorPicker]);
 
-  // 保存済みのシート（本人）を初期ロード（無ければ initialData のまま）
+  // 保存済みのシートをサーバーから読み込む
+  // 会員番号・氏名・写真は台帳(members)側が正本なので、常にそちらで上書きする。
+  // それ以外の項目は保存値をそのまま使う（以前はここで台帳の値に戻していたため、
+  // 保存したはずの職業や一言が消えていた）。
   useEffect(() => {
-    const loaded = loadOwnSheet(profileOwnerId);
-    setData((prev) => ({
-      ...prev,
-      ...loaded.data,
-      ...(currentMember
-        ? {
-            memberNumber:
-              currentMember.member_no != null
-                ? String(currentMember.member_no)
-                : "",
-            nameKanji: currentMember.name,
-            nickname: currentMember.nickname ?? "",
-            job: currentMember.job ?? "",
-            genre: currentMember.membership_type ?? "",
-            hitokoto: currentMember.grip ?? "",
-            photoUrl: "",
-          }
-        : {}),
-    }));
-    if (hasOwnSheet(profileOwnerId)) {
-      const idx = themeColors.findIndex((t) => t.primary === loaded.themeColor);
-      if (idx >= 0) {
-        setThemeIndex(idx);
-        setUseCustom(false);
-      } else {
-        setCustomColor(loaded.themeColor);
-        setUseCustom(true);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMember, profileOwnerId]);
+    let cancelled = false;
+
+    fetch("/api/me/profile-sheet", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("failed");
+        return (await res.json()) as {
+          memberNo: number | null;
+          name: string;
+          avatarUrl: string | null;
+          nickname: string;
+          job: string;
+          gripFallback: string;
+          exists: boolean;
+          sheet: {
+            name_furigana: string | null;
+            genre: string | null;
+            industry: string | null;
+            location: string | null;
+            hobbies: string | null;
+            my_history: string | null;
+            tetsujin_benefit: string | null;
+            hitokoto: string | null;
+            sns_links: SheetSnsLink[] | null;
+            theme_color: string;
+          } | null;
+        };
+      })
+      .then((body) => {
+        if (cancelled) return;
+        const s = body.sheet;
+        const next: ProfileData = {
+          memberNumber: body.memberNo != null ? String(body.memberNo) : "",
+          nameKanji: body.name,
+          nameFurigana: s?.name_furigana ?? "",
+          nickname: body.nickname,
+          genre: s?.genre ?? "",
+          job: body.job,
+          industry: s?.industry ?? "",
+          location: s?.location ?? "",
+          hobbies: s?.hobbies ?? "",
+          myHistory: s?.my_history ?? "",
+          tetsujinBenefit: s?.tetsujin_benefit ?? "",
+          hitokoto: s?.hitokoto ?? body.gripFallback,
+          snsLinks: s?.sns_links ?? [],
+          photoUrl: body.avatarUrl ?? "",
+        };
+        setData(next);
+
+        const themeColor = s?.theme_color ?? themeColors[0].primary;
+        const idx = themeColors.findIndex((t) => t.primary === themeColor);
+        if (idx >= 0) {
+          setThemeIndex(idx);
+          setUseCustom(false);
+        } else {
+          setCustomColor(themeColor);
+          setUseCustom(true);
+        }
+
+        lastSavedRef.current = JSON.stringify(toPayload(next, themeColor));
+        setSheetLoaded(true);
+      })
+      .catch(() => {
+        // 未接続（mockデモ）や取得失敗時は編集できるが保存はできない
+        if (!cancelled) setSheetLoaded(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const theme = useCustom
     ? { name: "カスタム", primary: customColor }
@@ -286,12 +352,60 @@ export default function ProfileSheetPage() {
       snsLinks: prev.snsLinks.filter((l) => l.id !== id),
     }));
 
-  const [savedSheet, setSavedSheet] = useState(false);
+  // 保存本体。自動保存と保存ボタンの両方から呼ぶ。
+  const saveSheet = useCallback(
+    async (payloadJson: string, auto: boolean) => {
+      setSaveState("saving");
+      setSaveError(null);
+      try {
+        const res = await fetch("/api/me/profile-sheet", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: payloadJson,
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          const message = body?.error || "保存できませんでした";
+          setSaveError(message);
+          setSaveState("error");
+          showToast(message, "error");
+          return;
+        }
+        lastSavedRef.current = payloadJson;
+        setSaveState("saved");
+        showToast(auto ? "自動保存しました" : "保存しました", "success");
+      } catch {
+        setSaveError("保存できませんでした（通信エラー）");
+        setSaveState("error");
+        showToast("保存できませんでした（通信エラー）", "error");
+      }
+    },
+    [showToast]
+  );
+
+  // 自動保存：入力が止まって1.5秒後に保存する
+  const payloadJson = JSON.stringify(toPayload(data, theme.primary));
+  useEffect(() => {
+    if (!sheetLoaded) return;
+    if (payloadJson === lastSavedRef.current) return;
+    setSaveState("dirty");
+    const timer = setTimeout(() => void saveSheet(payloadJson, true), 1500);
+    return () => clearTimeout(timer);
+  }, [payloadJson, sheetLoaded, saveSheet]);
+
+  // 保存ボタン：待たずにすぐ保存する
   const handleSaveSheet = () => {
-    saveSheetData(profileOwnerId, data, theme.primary);
-    setSavedSheet(true);
-    setTimeout(() => setSavedSheet(false), 2000);
+    if (!sheetLoaded) {
+      const message = "ログイン情報を確認できないため保存できません";
+      setSaveError(message);
+      setSaveState("error");
+      showToast(message, "error");
+      return;
+    }
+    void saveSheet(payloadJson, false);
   };
+
+  const savedSheet = saveState === "saved";
 
   const handleExportJpeg = async () => {
     if (!cardRef.current) return;
@@ -311,9 +425,8 @@ export default function ProfileSheetPage() {
     }
   };
 
-  // 名前をルビ表示用に分割
-  const kanjiParts = data.nameKanji.split(/[\s　]+/);
-  const furiganaParts = data.nameFurigana.split(/[\s　]+/);
+  // 名前をルビ表示用に分割（閲覧側のカードと同じ規則を使う）
+  const nameParts = splitNameForRuby(data.nameKanji, data.nameFurigana);
 
   const inputClass =
     "w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all";
@@ -481,10 +594,11 @@ export default function ProfileSheetPage() {
                 )}
               </button>
 
-              {/* シート保存（公開プロフィールに反映） */}
+              {/* シート保存（公開プロフィールに反映）。入力が止まると自動保存もされる。 */}
               <button
                 onClick={handleSaveSheet}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--tetsu-pink)] text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
+                disabled={saveState === "saving"}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--tetsu-pink)] text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-60"
               >
                 {savedSheet ? (
                   <>
@@ -507,6 +621,16 @@ export default function ProfileSheetPage() {
               </button>
             </div>
           </div>
+
+          {/* 保存状態（自動保存の結果をここに出す） */}
+          <div className="mt-2 text-xs min-h-[1.25rem]">
+            {saveState === "dirty" && <span className="text-gray-400">未保存の変更があります</span>}
+            {saveState === "saving" && <span className="text-gray-400">保存中...</span>}
+            {saveState === "saved" && (
+              <span className="text-green-600">保存しました（自動保存されています）</span>
+            )}
+            {saveState === "error" && <span className="text-red-600">{saveError}</span>}
+          </div>
         </div>
       </div>
 
@@ -524,12 +648,13 @@ export default function ProfileSheetPage() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">
                       会員番号
                     </label>
-                    <input
-                      type="text"
-                      value={data.memberNumber}
-                      onChange={(e) => update("memberNumber", e.target.value)}
-                      className={inputClass}
-                    />
+                    {/* 会員番号は会員台帳が正本。本人が書き換えられると台帳と食い違うため表示のみ。 */}
+                    <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
+                      {data.memberNumber || "未採番"}
+                    </div>
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      会員番号と氏名は運営が管理しています。変更が必要な場合は運営へご連絡ください。
+                    </p>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">
@@ -569,34 +694,12 @@ export default function ProfileSheetPage() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">
                       写真
                     </label>
-                    <div className="flex items-center gap-3">
-                      {data.photoUrl && (
-                        <img
-                          src={data.photoUrl}
-                          alt=""
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
-                      )}
-                      <label className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg text-base text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors">
-                        <Camera className="w-4 h-4" />
-                        写真を変更
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = (ev) => {
-                                update("photoUrl", ev.target?.result as string);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
-                    </div>
+                    {/* 写真はプロフィール写真と共通（設定画面と同じもの）。
+                        ここで別の画像を持たせると、掲示板のアイコンと名刺の顔が違う人になる。 */}
+                    <AvatarUpload
+                      variant="inline"
+                      onChanged={(url) => update("photoUrl", url ?? "")}
+                    />
                   </div>
                 </div>
               </div>
@@ -856,13 +959,13 @@ export default function ProfileSheetPage() {
                         className="text-3xl font-extrabold text-gray-900 leading-tight"
                         style={{ fontFamily: "'Noto Serif JP', serif" }}
                       >
-                        {kanjiParts.map((kanji, i) => (
+                        {nameParts.map((part, i) => (
                           <span key={i} className={i > 0 ? "ml-2" : ""}>
                             <ruby>
-                              {kanji}
+                              {part.kanji}
                               <rp>(</rp>
                               <rt className="text-[11px] font-normal text-gray-400">
-                                {furiganaParts[i] || ""}
+                                {part.furigana}
                               </rt>
                               <rp>)</rp>
                             </ruby>
@@ -960,6 +1063,8 @@ export default function ProfileSheetPage() {
           </div>
         </div>
       </div>
+
+      <ToastStack toast={toast} />
     </div>
   );
 }

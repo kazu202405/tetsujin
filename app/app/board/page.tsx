@@ -1,6 +1,14 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+// ============================================================
+// 掲示板（実データ）
+// ============================================================
+// 投稿・コメント・いいね・チャンネルはすべて Supabase が正。
+// チャンネルは以前 localStorage にあり会員ごとに別物が見えていたため、
+// 運営が管理する1つの正本（board_channels）に統一している。
+// ============================================================
+
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
   Send,
@@ -22,20 +30,31 @@ import {
   Pencil,
   Trash2,
   X,
-  RotateCcw,
-  Check,
+  EyeOff,
   Reply,
   CornerDownRight,
   type LucideIcon,
 } from "lucide-react";
 import { markBoardVisited } from "@/lib/board-data";
+import { useCurrentMember } from "@/lib/current-member";
+import { MemberAvatar } from "@/components/app/member-avatar";
 import {
-  type Comment,
-  type Post,
-  currentUser,
-  mockPosts,
-  mockComments,
-} from "./data";
+  type BoardChannel,
+  type BoardComment,
+  type BoardPost,
+  createChannel,
+  createComment,
+  createPost,
+  deleteChannel,
+  fetchComments,
+  fetchPosts,
+  formatPostedAt,
+  markBoardRead,
+  toggleLike,
+  updateChannel,
+  uploadPostImage,
+  useBoardChannels,
+} from "@/lib/board-api";
 
 // アイコンマップ（文字列キー → コンポーネント）
 const iconMap: Record<string, LucideIcon> = {
@@ -55,7 +74,6 @@ const iconMap: Record<string, LucideIcon> = {
 
 const iconKeys = Object.keys(iconMap);
 
-// カラー候補
 const colorOptions = [
   { key: "pink", class: "text-pink-500", bg: "bg-pink-500" },
   { key: "amber", class: "text-amber-500", bg: "bg-amber-500" },
@@ -67,46 +85,6 @@ const colorOptions = [
   { key: "teal", class: "text-teal-500", bg: "bg-teal-500" },
 ];
 
-// チャンネルデータ型
-interface ChannelData {
-  id: string;
-  name: string;
-  iconKey: string;
-  color: string;
-}
-
-// デフォルトチャンネル
-const defaultChannels: ChannelData[] = [
-  { id: "welcome", name: "新規ご入会挨拶", iconKey: "PartyPopper", color: "pink" },
-  { id: "chat", name: "つぶやき・雑談", iconKey: "Coffee", color: "amber" },
-  { id: "gallery", name: "みんなのギャラリー", iconKey: "ImagePlus", color: "blue" },
-  { id: "exchange", name: "○○さんと交流しました", iconKey: "Handshake", color: "green" },
-  { id: "club", name: "部活動：全", iconKey: "Dumbbell", color: "purple" },
-  { id: "announce", name: "告知します！", iconKey: "Megaphone", color: "red" },
-  { id: "referral", name: "紹介と依頼", iconKey: "ArrowUpRight", color: "indigo" },
-];
-
-const STORAGE_KEY = "tetsujin-board-channels";
-
-// localStorage読み書き
-function loadChannels(): ChannelData[] {
-  if (typeof window === "undefined") return defaultChannels;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultChannels;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    return defaultChannels;
-  } catch {
-    return defaultChannels;
-  }
-}
-
-function saveChannels(channels: ChannelData[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
-}
-
-// カラーキーからtailwindクラスを取得
 function getColorClass(colorKey: string): string {
   return colorOptions.find((c) => c.key === colorKey)?.class ?? "text-gray-500";
 }
@@ -115,223 +93,288 @@ function getIconComponent(iconKey: string): LucideIcon {
   return iconMap[iconKey] ?? Star;
 }
 
-// 投稿・コメント・現在ユーザーの mock データは ./data に集約（マイページのプレビューと共有）
+// @メンション部分をハイライト表示
+function renderMentionText(text: string) {
+  return text.split(/(@\S+)/g).map((part, i) =>
+    part.startsWith("@") ? (
+      <span key={i} className="text-amber-600 font-bold">
+        {part}
+      </span>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
+
+// 退会者はプロフィールへ飛ばさない（既存方針＝名前は残すがクリック不可）
+function AuthorName({
+  author,
+  className,
+}: {
+  author: BoardPost["author"];
+  className: string;
+}) {
+  if (author.isWithdrawn) {
+    return <span className={`${className} text-gray-400`}>{author.name}（退会）</span>;
+  }
+  return (
+    <Link href={`/app/profile/${author.id}`} className={className}>
+      {author.name}
+    </Link>
+  );
+}
 
 export default function BoardPage() {
-  const [channels, setChannels] = useState<ChannelData[]>(defaultChannels);
-  const [activeChannel, setActiveChannel] = useState<string>("welcome");
+  const me = useCurrentMember();
+  const isAdmin = me?.role === "admin";
+
+  const { channels, status: channelStatus, reload: reloadChannels } = useBoardChannels();
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+
+  const [posts, setPosts] = useState<BoardPost[]>([]);
+  const [postsStatus, setPostsStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [newPost, setNewPost] = useState("");
-  const [posts, setPosts] = useState(mockPosts);
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 添付画像（ギャラリー等で使う）。送信時にStorageへ上げてからパスを渡す。
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const [showModal, setShowModal] = useState(false);
 
-  // コメント関連
-  const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>(mockComments);
+  // コメント（開いた投稿だけ取得する）
+  const [commentsMap, setCommentsMap] = useState<Record<string, BoardComment[]>>({});
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
-  const [newComment, setNewComment] = useState("");
-  const [replyTarget, setReplyTarget] = useState<{ commentId: string; authorName: string } | null>(null);
+  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [replyTarget, setReplyTarget] = useState<
+    { postId: string; commentId: string; authorName: string } | null
+  >(null);
   const [replyText, setReplyText] = useState("");
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
-  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
-  // 新規追加フォーム
+  // チャンネル管理フォーム
   const [newChName, setNewChName] = useState("");
   const [newChIcon, setNewChIcon] = useState("Star");
   const [newChColor, setNewChColor] = useState("blue");
-
-  // 編集中のチャンネルID
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editIcon, setEditIcon] = useState("");
   const [editColor, setEditColor] = useState("");
+  const [channelError, setChannelError] = useState<string | null>(null);
 
-  // localStorage読み込み（クライアントのみ）+ 訪問記録（未読バッジ消去）
+  // 掲示板を開いたら既読化（未読バッジ用）＋オンボーディングの「掲示板を見た」
   useEffect(() => {
-    setChannels(loadChannels());
     markBoardVisited();
+    void markBoardRead();
   }, []);
 
-  // チャンネル変更時にlocalStorageへ保存
-  const updateChannels = useCallback((next: ChannelData[]) => {
-    setChannels(next);
-    saveChannels(next);
+  // 最初のチャンネルを選ぶ／選択中が消えたら先頭へ戻す
+  useEffect(() => {
+    if (channels.length === 0) return;
+    if (!activeChannelId || !channels.some((c) => c.id === activeChannelId)) {
+      setActiveChannelId(channels[0].id);
+    }
+  }, [channels, activeChannelId]);
+
+  const loadPosts = useCallback(async (channelId: string) => {
+    setPostsStatus("loading");
+    try {
+      setPosts(await fetchPosts(channelId));
+      setPostsStatus("loaded");
+    } catch {
+      setPosts([]);
+      setPostsStatus("error");
+    }
   }, []);
 
-  // @メンション部分をハイライト表示
-  const renderMentionText = useCallback((text: string) => {
-    const parts = text.split(/(@\S+)/g);
-    return parts.map((part, i) =>
-      part.startsWith("@") ? (
-        <span key={i} className="text-amber-600 font-bold">{part}</span>
-      ) : (
-        <span key={i}>{part}</span>
-      )
-    );
-  }, []);
+  useEffect(() => {
+    if (!activeChannelId) return;
+    void loadPosts(activeChannelId);
+  }, [activeChannelId, loadPosts]);
 
-  const channelPosts = useMemo(
-    () => posts.filter((p) => p.channelId === activeChannel),
-    [posts, activeChannel]
+  const activeChannel: BoardChannel | undefined = useMemo(
+    () => channels.find((c) => c.id === activeChannelId),
+    [channels, activeChannelId]
   );
 
-  const activeChannelData = channels.find((c) => c.id === activeChannel);
+  // ---------- 投稿 ----------
+  const clearImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImageFile(null);
+    setImagePreview(null);
+  };
 
-  // アクティブチャンネルが削除された場合、先頭に戻す
-  useEffect(() => {
-    if (!activeChannelData && channels.length > 0) {
-      setActiveChannel(channels[0].id);
+  const handlePost = async () => {
+    if (!newPost.trim() || !activeChannelId || posting) return;
+    setPosting(true);
+    setError(null);
+
+    let imagePath: string | null = null;
+    if (imageFile && me) {
+      const uploaded = await uploadPostImage(me.id, imageFile);
+      if (!uploaded.ok) {
+        setPosting(false);
+        setError(uploaded.error);
+        return;
+      }
+      imagePath = uploaded.path;
     }
-  }, [activeChannelData, channels]);
 
-  const handleLike = (postId: string) => {
+    const result = await createPost({
+      channelId: activeChannelId,
+      content: newPost.trim(),
+      imagePath,
+    });
+    setPosting(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setNewPost("");
+    clearImage();
+    await loadPosts(activeChannelId);
+    void reloadChannels();
+  };
+
+  // ---------- いいね ----------
+  const handleLike = async (post: BoardPost) => {
+    const nextLiked = !post.likedByMe;
+    // 先に画面を変えて、失敗したら戻す
     setPosts((prev) =>
       prev.map((p) =>
-        p.id === postId
-          ? { ...p, isLiked: !p.isLiked, likes: p.isLiked ? p.likes - 1 : p.likes + 1 }
+        p.id === post.id
+          ? { ...p, likedByMe: nextLiked, likeCount: p.likeCount + (nextLiked ? 1 : -1) }
           : p
       )
     );
+    const result = await toggleLike(post.id, nextLiked);
+    if (!result.ok) {
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === post.id
+            ? { ...p, likedByMe: post.likedByMe, likeCount: post.likeCount }
+            : p
+        )
+      );
+      setError(result.error);
+    }
   };
 
-  const handlePost = () => {
-    if (!newPost.trim()) return;
-    const post: Post = {
-      id: `p${Date.now()}`,
-      channelId: activeChannel,
-      author: {
-        id: "1",
-        name: "田中 一郎",
-        photoUrl: "https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face",
-        roleTitle: "経営コンサルタント",
-      },
-      content: newPost,
-      likes: 0,
-      comments: 0,
-      isLiked: false,
-      postedAt: new Date().toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(/\//g, "-"),
-    };
-    setPosts((prev) => [post, ...prev]);
-    setNewPost("");
-  };
+  // ---------- コメント ----------
+  const loadComments = useCallback(async (postId: string) => {
+    try {
+      const items = await fetchComments(postId);
+      setCommentsMap((prev) => ({ ...prev, [postId]: items }));
+    } catch {
+      setError("コメントを取得できませんでした");
+    }
+  }, []);
 
-  // コメント展開トグル
-  const toggleComments = (postId: string) => {
-    setExpandedPostId((prev) => (prev === postId ? null : postId));
+  const toggleComments = async (postId: string) => {
+    const opening = expandedPostId !== postId;
+    setExpandedPostId(opening ? postId : null);
     setReplyTarget(null);
     setReplyText("");
-    setNewComment("");
+    if (opening && !commentsMap[postId]) await loadComments(postId);
   };
 
-  // コメント追加
-  const handleAddComment = (postId: string) => {
-    if (!newComment.trim()) return;
-    const comment: Comment = {
-      id: `c${Date.now()}`,
-      author: currentUser,
-      content: newComment.trim(),
-      postedAt: new Date().toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(/\//g, "-"),
-      replies: [],
-    };
-    setCommentsMap((prev) => ({
-      ...prev,
-      [postId]: [...(prev[postId] ?? []), comment],
-    }));
+  const submitComment = async (postId: string, parentCommentId?: string) => {
+    const raw = parentCommentId ? replyText : commentInputs[postId] ?? "";
+    const content = raw.trim();
+    if (!content) return;
+
+    const result = await createComment(postId, { content, parentCommentId });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+
+    if (parentCommentId) {
+      setReplyTarget(null);
+      setReplyText("");
+      setExpandedReplies((prev) => new Set(prev).add(parentCommentId));
+    } else {
+      setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
+    }
+
+    await loadComments(postId);
+    setExpandedPostId(postId);
     setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, comments: p.comments + 1 } : p))
+      prev.map((p) => (p.id === postId ? { ...p, commentCount: p.commentCount + 1 } : p))
     );
-    setNewComment("");
   };
 
-  // コメント追加（スレッド非展開時、入力欄から直接）
-  const handleAddCommentDirect = (postId: string) => {
-    const text = (commentInputs[postId] ?? "").trim();
-    if (!text) return;
-    const comment: Comment = {
-      id: `c${Date.now()}`,
-      author: currentUser,
-      content: text,
-      postedAt: new Date().toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(/\//g, "-"),
-      replies: [],
-    };
-    setCommentsMap((prev) => ({
-      ...prev,
-      [postId]: [...(prev[postId] ?? []), comment],
-    }));
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, comments: p.comments + 1 } : p))
-    );
-    setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
-  };
-
-  // 返信追加
-  const handleAddReply = (postId: string, parentCommentId: string) => {
-    if (!replyText.trim()) return;
-    const reply: Comment = {
-      id: `r${Date.now()}`,
-      author: currentUser,
-      content: replyText.trim(),
-      postedAt: new Date().toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(/\//g, "-"),
-      replies: [],
-    };
-    setCommentsMap((prev) => ({
-      ...prev,
-      [postId]: (prev[postId] ?? []).map((c) =>
-        c.id === parentCommentId ? { ...c, replies: [...c.replies, reply] } : c
-      ),
-    }));
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, comments: p.comments + 1 } : p))
-    );
-    setExpandedReplies((prev) => new Set(prev).add(parentCommentId));
-    setReplyTarget(null);
-    setReplyText("");
-  };
-
-  // チャンネル追加
-  const handleAddChannel = () => {
-    const trimmed = newChName.trim();
-    if (!trimmed) return;
-    const id = `ch_${Date.now()}`;
-    const next = [...channels, { id, name: trimmed, iconKey: newChIcon, color: newChColor }];
-    updateChannels(next);
+  // ---------- チャンネル管理（運営のみ） ----------
+  const handleAddChannel = async () => {
+    const name = newChName.trim();
+    if (!name) return;
+    setChannelError(null);
+    const result = await createChannel({ name, icon_key: newChIcon, color: newChColor });
+    if (!result.ok) {
+      setChannelError(result.error);
+      return;
+    }
     setNewChName("");
     setNewChIcon("Star");
     setNewChColor("blue");
+    await reloadChannels();
   };
 
-  // チャンネル削除
-  const handleDeleteChannel = (id: string) => {
-    const next = channels.filter((c) => c.id !== id);
-    updateChannels(next);
-  };
-
-  // 編集開始
-  const startEdit = (ch: ChannelData) => {
-    setEditingId(ch.id);
-    setEditName(ch.name);
-    setEditIcon(ch.iconKey);
-    setEditColor(ch.color);
-  };
-
-  // 編集確定
-  const confirmEdit = () => {
+  const confirmEdit = async () => {
     if (!editingId || !editName.trim()) return;
-    const next = channels.map((c) =>
-      c.id === editingId ? { ...c, name: editName.trim(), iconKey: editIcon, color: editColor } : c
+    setChannelError(null);
+    const result = await updateChannel(editingId, {
+      name: editName.trim(),
+      icon_key: editIcon,
+      color: editColor,
+    });
+    if (!result.ok) {
+      setChannelError(result.error);
+      return;
+    }
+    setEditingId(null);
+    await reloadChannels();
+  };
+
+  const handleDeleteChannel = async (id: string) => {
+    setChannelError(null);
+    const result = await deleteChannel(id);
+    if (!result.ok) {
+      setChannelError(result.error);
+      return;
+    }
+    await reloadChannels();
+  };
+
+  const handleArchiveChannel = async (id: string) => {
+    setChannelError(null);
+    const result = await updateChannel(id, { is_archived: true });
+    if (!result.ok) {
+      setChannelError(result.error);
+      return;
+    }
+    await reloadChannels();
+  };
+
+  // ---------- 読み込み前・未ログイン ----------
+  if (channelStatus === "loading") {
+    return <div className="text-center text-gray-400 py-24">読み込み中...</div>;
+  }
+  if (channelStatus === "error") {
+    return (
+      <div className="max-w-md mx-auto text-center py-24 px-6">
+        <p className="text-sm text-gray-600 mb-2">掲示板を表示できませんでした。</p>
+        <p className="text-xs text-gray-400">
+          ログインが切れている可能性があります。ページを再読み込みしてください。
+        </p>
+      </div>
     );
-    updateChannels(next);
-    setEditingId(null);
-  };
+  }
 
-  // デフォルトに戻す
-  const resetToDefault = () => {
-    updateChannels(defaultChannels);
-    setActiveChannel("welcome");
-    setEditingId(null);
-  };
-
-  // activeChannelDataがない場合のフォールバック
-  const currentIcon = activeChannelData ? getIconComponent(activeChannelData.iconKey) : Star;
-  const currentColor = activeChannelData ? getColorClass(activeChannelData.color) : "text-gray-500";
+  const currentIcon = activeChannel ? getIconComponent(activeChannel.icon_key) : Star;
+  const currentColor = activeChannel ? getColorClass(activeChannel.color) : "text-gray-500";
 
   return (
     <div className="min-h-screen">
@@ -340,86 +383,95 @@ export default function BoardPage() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold text-gray-900">掲示板</h1>
-            <span className="text-xs text-gray-400">
-              {channelPosts.length}件の投稿
-            </span>
+            <span className="text-xs text-gray-400">{posts.length}件の投稿</span>
           </div>
 
           {/* チャンネルタブ */}
           <div className="flex flex-wrap gap-2 items-center">
             {channels.map((ch) => {
-              const Icon = getIconComponent(ch.iconKey);
+              const Icon = getIconComponent(ch.icon_key);
               const colorCls = getColorClass(ch.color);
-              const count = posts.filter((p) => p.channelId === ch.id).length;
+              const isActive = activeChannelId === ch.id;
               return (
                 <button
                   key={ch.id}
-                  onClick={() => setActiveChannel(ch.id)}
+                  onClick={() => setActiveChannelId(ch.id)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border ${
-                    activeChannel === ch.id
+                    isActive
                       ? "bg-gray-900 text-white border-gray-900"
                       : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
                   }`}
                 >
-                  <Icon className={`w-3.5 h-3.5 ${activeChannel === ch.id ? "text-white" : colorCls}`} />
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? "text-white" : colorCls}`} />
                   {ch.name}
-                  {count > 0 && (
-                    <span className={`text-[10px] ${activeChannel === ch.id ? "text-gray-300" : "text-gray-400"}`}>
-                      {count}
+                  {ch.post_count > 0 && (
+                    <span
+                      className={`text-[10px] ${isActive ? "text-gray-300" : "text-gray-400"}`}
+                    >
+                      {ch.post_count}
                     </span>
                   )}
                 </button>
               );
             })}
-            {/* 管理ボタン */}
-            <button
-              onClick={() => setShowModal(true)}
-              className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium transition-colors bg-white text-gray-400 border border-gray-200 hover:border-gray-300 hover:text-gray-600"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
+            {/* チャンネル管理は運営のみ */}
+            {isAdmin && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium transition-colors bg-white text-gray-400 border border-gray-200 hover:border-gray-300 hover:text-gray-600"
+                title="チャンネル管理"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* メインコンテンツ */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6">
-
-        {/* チャンネル管理モーダル */}
-        {showModal && (
+        {/* チャンネル管理モーダル（運営のみ） */}
+        {showModal && isAdmin && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={() => { setShowModal(false); setEditingId(null); }}
+              onClick={() => {
+                setShowModal(false);
+                setEditingId(null);
+                setChannelError(null);
+              }}
             />
             <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[85vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-sm font-bold text-gray-900">チャンネル管理</h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={resetToDefault}
-                    className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    リセット
-                  </button>
-                  <button
-                    onClick={() => { setShowModal(false); setEditingId(null); }}
-                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => {
+                    setShowModal(false);
+                    setEditingId(null);
+                    setChannelError(null);
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
+
+              <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
+                ここでの変更は全会員に反映されます。投稿があるチャンネルは削除できません（「非表示」で一覧から外せます）。
+              </p>
+
+              {channelError && (
+                <p className="mb-4 text-xs bg-red-50 text-red-700 rounded-lg px-3 py-2">
+                  {channelError}
+                </p>
+              )}
 
               {/* 既存チャンネル一覧 */}
               <div className="space-y-1.5 mb-5">
                 {channels.map((ch) => {
-                  const Icon = getIconComponent(ch.iconKey);
+                  const Icon = getIconComponent(ch.icon_key);
                   const colorCls = getColorClass(ch.color);
-                  const isEditing = editingId === ch.id;
 
-                  if (isEditing) {
+                  if (editingId === ch.id) {
                     return (
                       <div key={ch.id} className="p-3 bg-gray-50 rounded-xl space-y-2.5">
                         <input
@@ -435,7 +487,9 @@ export default function BoardPage() {
                                 key={ik}
                                 onClick={() => setEditIcon(ik)}
                                 className={`p-1.5 rounded-md transition-colors ${
-                                  editIcon === ik ? "bg-gray-900 text-white" : "bg-white text-gray-400 hover:text-gray-600 border border-gray-200"
+                                  editIcon === ik
+                                    ? "bg-gray-900 text-white"
+                                    : "bg-white text-gray-400 hover:text-gray-600 border border-gray-200"
                                 }`}
                               >
                                 <Ic className="w-3.5 h-3.5" />
@@ -449,16 +503,24 @@ export default function BoardPage() {
                               key={co.key}
                               onClick={() => setEditColor(co.key)}
                               className={`w-5 h-5 rounded-full ${co.bg} transition-all ${
-                                editColor === co.key ? "ring-2 ring-offset-1 ring-gray-900 scale-110" : "opacity-50 hover:opacity-80"
+                                editColor === co.key
+                                  ? "ring-2 ring-offset-1 ring-gray-900 scale-110"
+                                  : "opacity-50 hover:opacity-80"
                               }`}
                             />
                           ))}
                         </div>
                         <div className="flex gap-2 justify-end">
-                          <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs text-gray-500 hover:bg-gray-200 rounded-lg transition-colors">
+                          <button
+                            onClick={() => setEditingId(null)}
+                            className="px-3 py-1 text-xs text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"
+                          >
                             キャンセル
                           </button>
-                          <button onClick={confirmEdit} className="px-3 py-1 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors">
+                          <button
+                            onClick={confirmEdit}
+                            className="px-3 py-1 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                          >
                             保存
                           </button>
                         </div>
@@ -467,18 +529,36 @@ export default function BoardPage() {
                   }
 
                   return (
-                    <div key={ch.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-xl transition-colors group">
+                    <div
+                      key={ch.id}
+                      className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-xl transition-colors group"
+                    >
                       <Icon className={`w-4 h-4 ${colorCls}`} />
                       <span className="text-sm text-gray-700 flex-1">{ch.name}</span>
+                      <span className="text-[10px] text-gray-400">{ch.post_count}件</span>
                       <button
-                        onClick={() => startEdit(ch)}
-                        className="p-1.5 text-gray-300 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100"
+                        onClick={() => {
+                          setEditingId(ch.id);
+                          setEditName(ch.name);
+                          setEditIcon(ch.icon_key);
+                          setEditColor(ch.color);
+                        }}
+                        className="p-1.5 text-gray-300 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                        title="編集"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
+                        onClick={() => handleArchiveChannel(ch.id)}
+                        className="p-1.5 text-gray-300 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                        title="非表示にする"
+                      >
+                        <EyeOff className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={() => handleDeleteChannel(ch.id)}
-                        className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                        className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+                        title="削除する"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -507,7 +587,9 @@ export default function BoardPage() {
                             key={ik}
                             onClick={() => setNewChIcon(ik)}
                             className={`p-1.5 rounded-lg transition-colors ${
-                              newChIcon === ik ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-400 hover:text-gray-600 border border-gray-200"
+                              newChIcon === ik
+                                ? "bg-gray-900 text-white"
+                                : "bg-gray-50 text-gray-400 hover:text-gray-600 border border-gray-200"
                             }`}
                           >
                             <Ic className="w-4 h-4" />
@@ -524,22 +606,14 @@ export default function BoardPage() {
                           key={co.key}
                           onClick={() => setNewChColor(co.key)}
                           className={`w-6 h-6 rounded-full ${co.bg} transition-all ${
-                            newChColor === co.key ? "ring-2 ring-offset-2 ring-gray-900 scale-110" : "opacity-50 hover:opacity-80"
+                            newChColor === co.key
+                              ? "ring-2 ring-offset-2 ring-gray-900 scale-110"
+                              : "opacity-50 hover:opacity-80"
                           }`}
                         />
                       ))}
                     </div>
                   </div>
-                  {newChName.trim() && (
-                    <div className="bg-gray-50 rounded-xl p-3 flex items-center gap-2">
-                      <p className="text-[10px] text-gray-400">プレビュー:</p>
-                      {(() => {
-                        const PreviewIcon = getIconComponent(newChIcon);
-                        return <PreviewIcon className={`w-4 h-4 ${getColorClass(newChColor)}`} />;
-                      })()}
-                      <span className="text-sm font-medium text-gray-700">{newChName.trim()}</span>
-                    </div>
-                  )}
                   <button
                     onClick={handleAddChannel}
                     disabled={!newChName.trim()}
@@ -554,34 +628,74 @@ export default function BoardPage() {
           </div>
         )}
 
+        {/* エラー表示 */}
+        {error && (
+          <div className="mt-4 text-sm bg-red-50 text-red-700 rounded-xl px-4 py-3 flex items-start gap-2">
+            <span className="flex-1">{error}</span>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* 投稿フォーム */}
         <div className="py-6">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-start gap-3">
-              <img
-                src="https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face"
-                alt=""
-                className="w-9 h-9 rounded-full object-cover border-2 border-white shadow flex-shrink-0 mt-0.5"
-              />
+              <MemberAvatar name={me?.name ?? "会員"} size="md" className="mt-0.5" />
               <div className="flex-1">
                 <textarea
                   value={newPost}
                   onChange={(e) => setNewPost(e.target.value)}
-                  placeholder={`${activeChannelData?.name ?? "チャンネル"}に投稿...`}
+                  placeholder={`${activeChannel?.name ?? "チャンネル"}に投稿...`}
                   rows={2}
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent focus:bg-white transition-all resize-none"
                 />
+                {imagePreview && (
+                  <div className="relative mt-2 inline-block">
+                    <img
+                      src={imagePreview}
+                      alt="添付画像"
+                      className="max-h-40 rounded-xl border border-gray-200"
+                    />
+                    <button
+                      onClick={clearImage}
+                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gray-900 text-white flex items-center justify-center shadow hover:bg-gray-700 transition-colors"
+                      title="画像を外す"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center justify-between mt-2">
-                  <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+                  <button
+                    onClick={() => imageInputRef.current?.click()}
+                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                    title="画像を添付"
+                  >
                     <ImageIcon className="w-4 h-4" />
                   </button>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      clearImage();
+                      setImageFile(file);
+                      setImagePreview(URL.createObjectURL(file));
+                    }}
+                  />
                   <button
                     onClick={handlePost}
-                    disabled={!newPost.trim()}
+                    disabled={!newPost.trim() || posting || !activeChannelId}
                     className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gray-900 text-white rounded-lg text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    投稿
+                    {posting ? "送信中..." : "投稿"}
                   </button>
                 </div>
               </div>
@@ -591,34 +705,44 @@ export default function BoardPage() {
 
         {/* 投稿一覧 */}
         <div className="space-y-4 pb-24">
-          {channelPosts.length > 0 ? (
-            <>
-              {channelPosts.map((post) => (
+          {postsStatus === "loading" && (
+            <div className="text-center text-gray-400 py-16 text-sm">読み込み中...</div>
+          )}
+
+          {postsStatus === "loaded" &&
+            posts.map((post) => {
+              const comments = commentsMap[post.id] ?? [];
+              const isExpanded = expandedPostId === post.id;
+              return (
                 <div
                   key={post.id}
                   className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-all"
                 >
                   <div className="flex gap-3">
-                    <Link href={`/app/profile/${post.author.id}`}>
-                      <img
-                        src={post.author.photoUrl}
-                        alt={post.author.name}
-                        className="w-10 h-10 rounded-full object-cover border-2 border-white shadow hover:ring-2 hover:ring-amber-300 transition-all flex-shrink-0"
+                    {post.author.isWithdrawn ? (
+                      <MemberAvatar
+                        name={post.author.name}
+                        url={post.author.avatarUrl}
+                        grayscale
                       />
-                    </Link>
+                    ) : (
+                      <Link href={`/app/profile/${post.author.id}`}>
+                        <MemberAvatar name={post.author.name} url={post.author.avatarUrl} />
+                      </Link>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <Link
-                          href={`/app/profile/${post.author.id}`}
+                        <AuthorName
+                          author={post.author}
                           className="text-sm font-bold text-gray-900 hover:text-amber-700 transition-colors"
-                        >
-                          {post.author.name}
-                        </Link>
-                        <span className="text-xs text-gray-400">
-                          {post.author.roleTitle}
-                        </span>
+                        />
+                        {post.author.job && (
+                          <span className="text-xs text-gray-400 truncate">
+                            {post.author.job}
+                          </span>
+                        )}
                         <span className="text-xs text-gray-300 ml-auto flex-shrink-0">
-                          {post.postedAt}
+                          {formatPostedAt(post.createdAt)}
                         </span>
                       </div>
 
@@ -628,50 +752,46 @@ export default function BoardPage() {
 
                       {post.imageUrl && (
                         <div className="mb-3 rounded-xl overflow-hidden max-w-lg">
-                          <img
-                            src={post.imageUrl}
-                            alt=""
-                            className="w-full h-48 object-cover"
-                          />
+                          <img src={post.imageUrl} alt="" className="w-full h-48 object-cover" />
                         </div>
                       )}
 
                       <div className="flex items-center gap-4">
                         <button
-                          onClick={() => handleLike(post.id)}
+                          onClick={() => handleLike(post)}
                           className={`inline-flex items-center gap-1.5 text-xs transition-colors ${
-                            post.isLiked
+                            post.likedByMe
                               ? "text-pink-500"
                               : "text-gray-400 hover:text-pink-500"
                           }`}
                         >
                           <Heart
-                            className={`w-4 h-4 ${post.isLiked ? "fill-current" : ""}`}
+                            className={`w-4 h-4 ${post.likedByMe ? "fill-current" : ""}`}
                           />
-                          {post.likes}
+                          {post.likeCount}
                         </button>
                         <button
                           onClick={() => toggleComments(post.id)}
                           className={`inline-flex items-center gap-1.5 text-xs transition-colors ${
-                            expandedPostId === post.id
-                              ? "text-amber-600"
-                              : "text-gray-400 hover:text-gray-600"
+                            isExpanded ? "text-amber-600" : "text-gray-400 hover:text-gray-600"
                           }`}
                         >
-                          <MessageCircle className={`w-4 h-4 ${expandedPostId === post.id ? "fill-current" : ""}`} />
-                          {post.comments}
+                          <MessageCircle
+                            className={`w-4 h-4 ${isExpanded ? "fill-current" : ""}`}
+                          />
+                          {post.commentCount}
                         </button>
                       </div>
 
                       {/* コメントスレッド（展開式） */}
-                      {post.comments > 0 && (
+                      {post.commentCount > 0 && (
                         <div className="mt-3">
-                          {expandedPostId !== post.id ? (
+                          {!isExpanded ? (
                             <button
                               onClick={() => toggleComments(post.id)}
                               className="text-xs text-gray-400 hover:text-amber-600 transition-colors"
                             >
-                              コメント {post.comments}件を表示
+                              コメント {post.commentCount}件を表示
                             </button>
                           ) : (
                             <>
@@ -683,41 +803,51 @@ export default function BoardPage() {
                               </button>
                               <div className="pt-3 border-t border-gray-100">
                                 <div className="space-y-3">
-                                  {(commentsMap[post.id] ?? []).map((comment) => (
+                                  {comments.map((comment) => (
                                     <div key={comment.id}>
-                                      {/* 親コメント */}
                                       <div className="flex gap-2.5">
-                                        <Link href={`/app/profile/${comment.author.id}`}>
-                                          <img
-                                            src={comment.author.photoUrl}
-                                            alt={comment.author.name}
-                                            className="w-7 h-7 rounded-full object-cover border border-gray-200 flex-shrink-0 hover:ring-2 hover:ring-amber-300 transition-all"
-                                          />
-                                        </Link>
+                                        <MemberAvatar
+                                          name={comment.author.name}
+                                          url={comment.author.avatarUrl}
+                                          size="sm"
+                                          grayscale={comment.author.isWithdrawn}
+                                        />
                                         <div className="flex-1 min-w-0">
                                           <div className="bg-gray-50 rounded-xl px-3 py-2">
                                             <div className="flex items-center gap-1.5 mb-0.5">
-                                              <Link
-                                                href={`/app/profile/${comment.author.id}`}
+                                              <AuthorName
+                                                author={comment.author}
                                                 className="text-xs font-bold text-gray-800 hover:text-amber-700 transition-colors"
-                                              >
-                                                {comment.author.name}
-                                              </Link>
-                                              <span className="text-[10px] text-gray-400">{comment.author.roleTitle}</span>
+                                              />
+                                              {comment.author.job && (
+                                                <span className="text-[10px] text-gray-400 truncate">
+                                                  {comment.author.job}
+                                                </span>
+                                              )}
                                             </div>
-                                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{comment.content}</p>
+                                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                              {comment.content}
+                                            </p>
                                           </div>
                                           <div className="flex items-center gap-3 mt-1 ml-1">
-                                            <span className="text-[10px] text-gray-300">{comment.postedAt}</span>
+                                            <span className="text-[10px] text-gray-300">
+                                              {formatPostedAt(comment.createdAt)}
+                                            </span>
                                             <button
                                               onClick={() => {
                                                 if (replyTarget?.commentId === comment.id) {
                                                   setReplyTarget(null);
                                                   setReplyText("");
                                                 } else {
-                                                  setReplyTarget({ commentId: comment.id, authorName: comment.author.name });
+                                                  setReplyTarget({
+                                                    postId: post.id,
+                                                    commentId: comment.id,
+                                                    authorName: comment.author.name,
+                                                  });
                                                   setReplyText(`@${comment.author.name} `);
-                                                  setExpandedReplies((prev) => new Set(prev).add(comment.id));
+                                                  setExpandedReplies((prev) =>
+                                                    new Set(prev).add(comment.id)
+                                                  );
                                                 }
                                               }}
                                               className={`inline-flex items-center gap-1 text-[10px] font-medium transition-colors ${
@@ -726,72 +856,89 @@ export default function BoardPage() {
                                                   : "text-gray-400 hover:text-gray-600"
                                               }`}
                                             >
-                                              返信{comment.replies.length > 0 && ` ${comment.replies.length}件`}
+                                              <Reply className="w-3 h-3" />
+                                              返信
+                                              {(comment.replies?.length ?? 0) > 0 &&
+                                                ` ${comment.replies?.length}件`}
                                             </button>
                                           </div>
 
                                           {/* 返信一覧（折りたたみ） */}
-                                          {comment.replies.length > 0 && !expandedReplies.has(comment.id) && (
-                                            <button
-                                              onClick={() => setExpandedReplies((prev) => new Set(prev).add(comment.id))}
-                                              className="mt-1.5 ml-2 inline-flex items-center gap-1.5 text-[11px] text-amber-600 hover:text-amber-700 font-medium transition-colors"
-                                            >
-                                              <CornerDownRight className="w-3 h-3" />
-                                              返信 {comment.replies.length}件を表示
-                                            </button>
-                                          )}
-                                          {comment.replies.length > 0 && expandedReplies.has(comment.id) && (
-                                            <div className="mt-2 space-y-2 ml-2">
-                                              {comment.replies.map((reply) => (
-                                                <div key={reply.id} className="flex gap-2">
-                                                  <CornerDownRight className="w-3 h-3 text-gray-300 flex-shrink-0 mt-2" />
-                                                  <Link href={`/app/profile/${reply.author.id}`}>
-                                                    <img
-                                                      src={reply.author.photoUrl}
-                                                      alt={reply.author.name}
-                                                      className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0 hover:ring-2 hover:ring-amber-300 transition-all"
+                                          {(comment.replies?.length ?? 0) > 0 &&
+                                            !expandedReplies.has(comment.id) && (
+                                              <button
+                                                onClick={() =>
+                                                  setExpandedReplies((prev) =>
+                                                    new Set(prev).add(comment.id)
+                                                  )
+                                                }
+                                                className="mt-1.5 ml-2 inline-flex items-center gap-1.5 text-[11px] text-amber-600 hover:text-amber-700 font-medium transition-colors"
+                                              >
+                                                <CornerDownRight className="w-3 h-3" />
+                                                返信 {comment.replies?.length}件を表示
+                                              </button>
+                                            )}
+                                          {(comment.replies?.length ?? 0) > 0 &&
+                                            expandedReplies.has(comment.id) && (
+                                              <div className="mt-2 space-y-2 ml-2">
+                                                {comment.replies?.map((reply) => (
+                                                  <div key={reply.id} className="flex gap-2">
+                                                    <CornerDownRight className="w-3 h-3 text-gray-300 flex-shrink-0 mt-2" />
+                                                    <MemberAvatar
+                                                      name={reply.author.name}
+                                                      url={reply.author.avatarUrl}
+                                                      size="xs"
+                                                      grayscale={reply.author.isWithdrawn}
                                                     />
-                                                  </Link>
-                                                  <div className="flex-1 min-w-0">
-                                                    <div className="bg-gray-50/70 rounded-lg px-2.5 py-1.5">
-                                                      <div className="flex items-center gap-1.5 mb-0.5">
-                                                        <Link
-                                                          href={`/app/profile/${reply.author.id}`}
-                                                          className="text-[11px] font-bold text-gray-800 hover:text-amber-700 transition-colors"
-                                                        >
-                                                          {reply.author.name}
-                                                        </Link>
-                                                        <span className="text-[10px] text-gray-400">{reply.author.roleTitle}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                      <div className="bg-gray-50/70 rounded-lg px-2.5 py-1.5">
+                                                        <div className="flex items-center gap-1.5 mb-0.5">
+                                                          <AuthorName
+                                                            author={reply.author}
+                                                            className="text-[11px] font-bold text-gray-800 hover:text-amber-700 transition-colors"
+                                                          />
+                                                        </div>
+                                                        <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                                          {renderMentionText(reply.content)}
+                                                        </p>
                                                       </div>
-                                                      <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{renderMentionText(reply.content)}</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 mt-0.5 ml-1">
-                                                      <span className="text-[10px] text-gray-300">{reply.postedAt}</span>
-                                                      <button
-                                                        onClick={() => {
-                                                          setReplyTarget({ commentId: comment.id, authorName: reply.author.name });
-                                                          setReplyText(`@${reply.author.name} `);
-                                                          setExpandedReplies((prev) => new Set(prev).add(comment.id));
-                                                        }}
-                                                        className="text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-colors"
-                                                      >
-                                                        返信
-                                                      </button>
+                                                      <div className="flex items-center gap-3 mt-0.5 ml-1">
+                                                        <span className="text-[10px] text-gray-300">
+                                                          {formatPostedAt(reply.createdAt)}
+                                                        </span>
+                                                        <button
+                                                          onClick={() => {
+                                                            setReplyTarget({
+                                                              postId: post.id,
+                                                              commentId: comment.id,
+                                                              authorName: reply.author.name,
+                                                            });
+                                                            setReplyText(
+                                                              `@${reply.author.name} `
+                                                            );
+                                                            setExpandedReplies((prev) =>
+                                                              new Set(prev).add(comment.id)
+                                                            );
+                                                          }}
+                                                          className="text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-colors"
+                                                        >
+                                                          返信
+                                                        </button>
+                                                      </div>
                                                     </div>
                                                   </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
+                                                ))}
+                                              </div>
+                                            )}
 
                                           {/* 返信入力欄 */}
                                           {replyTarget?.commentId === comment.id && (
                                             <div className="mt-2 ml-2 flex gap-2 items-start">
                                               <CornerDownRight className="w-3 h-3 text-gray-300 flex-shrink-0 mt-2.5" />
-                                              <img
-                                                src={currentUser.photoUrl}
-                                                alt=""
-                                                className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0 mt-0.5"
+                                              <MemberAvatar
+                                                name={me?.name ?? "会員"}
+                                                size="xs"
+                                                className="mt-0.5"
                                               />
                                               <div className="flex-1 flex gap-1.5">
                                                 <input
@@ -800,7 +947,7 @@ export default function BoardPage() {
                                                   onKeyDown={(e) => {
                                                     if (e.key === "Enter" && !e.shiftKey) {
                                                       e.preventDefault();
-                                                      handleAddReply(post.id, comment.id);
+                                                      void submitComment(post.id, comment.id);
                                                     }
                                                   }}
                                                   placeholder={`${replyTarget.authorName}さんに返信...`}
@@ -808,7 +955,9 @@ export default function BoardPage() {
                                                   autoFocus
                                                 />
                                                 <button
-                                                  onClick={() => handleAddReply(post.id, comment.id)}
+                                                  onClick={() =>
+                                                    void submitComment(post.id, comment.id)
+                                                  }
                                                   disabled={!replyText.trim()}
                                                   className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30"
                                                 >
@@ -829,44 +978,33 @@ export default function BoardPage() {
                       )}
 
                       {/* コメント入力欄（常に表示） */}
-                      <div className={`flex gap-2.5 items-start ${post.comments > 0 ? "mt-3 pt-3 border-t border-gray-100" : "mt-3"}`}>
-                        <img
-                          src={currentUser.photoUrl}
-                          alt=""
-                          className="w-7 h-7 rounded-full object-cover border border-gray-200 flex-shrink-0 mt-0.5"
-                        />
+                      <div
+                        className={`flex gap-2.5 items-start ${
+                          post.commentCount > 0 ? "mt-3 pt-3 border-t border-gray-100" : "mt-3"
+                        }`}
+                      >
+                        <MemberAvatar name={me?.name ?? "会員"} size="sm" className="mt-0.5" />
                         <div className="flex-1 flex gap-1.5">
                           <input
-                            value={expandedPostId === post.id ? newComment : (commentInputs[post.id] ?? "")}
-                            onChange={(e) => {
-                              if (expandedPostId === post.id) {
-                                setNewComment(e.target.value);
-                              } else {
-                                setCommentInputs((prev) => ({ ...prev, [post.id]: e.target.value }));
-                              }
-                            }}
+                            value={commentInputs[post.id] ?? ""}
+                            onChange={(e) =>
+                              setCommentInputs((prev) => ({
+                                ...prev,
+                                [post.id]: e.target.value,
+                              }))
+                            }
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
-                                if (expandedPostId === post.id) {
-                                  handleAddComment(post.id);
-                                } else {
-                                  handleAddCommentDirect(post.id);
-                                }
+                                void submitComment(post.id);
                               }
                             }}
                             placeholder="コメントを追加..."
                             className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
                           />
                           <button
-                            onClick={() => {
-                              if (expandedPostId === post.id) {
-                                handleAddComment(post.id);
-                              } else {
-                                handleAddCommentDirect(post.id);
-                              }
-                            }}
-                            disabled={expandedPostId === post.id ? !newComment.trim() : !(commentInputs[post.id] ?? "").trim()}
+                            onClick={() => void submitComment(post.id)}
+                            disabled={!(commentInputs[post.id] ?? "").trim()}
                             className="p-2 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30"
                           >
                             <Send className="w-4 h-4" />
@@ -876,24 +1014,31 @@ export default function BoardPage() {
                     </div>
                   </div>
                 </div>
-              ))}
-            </>
-          ) : (
+              );
+            })}
+
+          {postsStatus === "loaded" && posts.length === 0 && (
             <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
               {(() => {
                 const EmptyIcon = currentIcon;
                 return (
-                  <EmptyIcon
-                    className={`w-10 h-10 mx-auto mb-3 ${currentColor} opacity-30`}
-                  />
+                  <EmptyIcon className={`w-10 h-10 mx-auto mb-3 ${currentColor} opacity-30`} />
                 );
               })()}
-              <p className="text-sm text-gray-400">
-                まだ投稿がありません
-              </p>
-              <p className="text-xs text-gray-300 mt-1">
-                最初の投稿をしてみましょう
-              </p>
+              <p className="text-sm text-gray-400">まだ投稿がありません</p>
+              <p className="text-xs text-gray-300 mt-1">最初の投稿をしてみましょう</p>
+            </div>
+          )}
+
+          {postsStatus === "error" && (
+            <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
+              <p className="text-sm text-gray-500">投稿を取得できませんでした</p>
+              <button
+                onClick={() => activeChannelId && loadPosts(activeChannelId)}
+                className="mt-3 px-4 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50"
+              >
+                再読み込み
+              </button>
             </div>
           )}
         </div>

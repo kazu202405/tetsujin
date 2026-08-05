@@ -10,6 +10,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { PushNotificationSetup } from "@/components/app/push-notification-setup";
+import { AvatarUpload } from "@/components/app/avatar-upload";
 import { resetOnboardingDemo } from "@/lib/onboarding-data";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
 import { useCurrentMember } from "@/lib/current-member";
@@ -50,6 +51,9 @@ export default function SettingsPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {/* プロフィール写真（実データ：Storageへアップロード） */}
+        <AvatarUpload />
+
         {/* Profile */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
           <h2 className="text-base font-bold text-gray-900 mb-5 flex items-center gap-2">
@@ -57,17 +61,6 @@ export default function SettingsPage() {
             プロフィール
           </h2>
           <div className="space-y-5">
-            <div className="flex items-center gap-4">
-              <div
-                aria-label={displayName}
-                className="w-16 h-16 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center text-xl font-extrabold border-2 border-white shadow ring-1 ring-gray-100"
-              >
-                {initial}
-              </div>
-              <button className="text-sm font-medium text-gray-600 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
-                写真を変更
-              </button>
-            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
