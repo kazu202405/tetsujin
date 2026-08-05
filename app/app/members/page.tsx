@@ -1,116 +1,125 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import Link from "next/link";
-import { Search, ChevronRight, Building2, User, ChevronDown, X } from "lucide-react";
-import {
-  dashboardMembers,
-  industryFilters,
-  DashboardMember,
-} from "@/lib/dashboard-data";
-import { useWithdrawnResolver } from "@/lib/withdrawal-data";
-import { useMemberRole } from "@/lib/member-roles";
+import { useEffect, useMemo, useState } from "react";
+import { Building2, Search, User } from "lucide-react";
+import { dashboardMembers } from "@/lib/dashboard-data";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { RoleBadge } from "@/components/app/role-badge";
 
-function MemberCard({ member }: { member: DashboardMember }) {
-  const role = useMemberRole(member.id);
+type DirectoryMember = {
+  id: string;
+  member_no: number | null;
+  name: string;
+  nickname: string | null;
+  job: string | null;
+  grip: string | null;
+  membership_type: string | null;
+  role: "admin" | "manager" | "user";
+};
+
+const mockDirectory: DirectoryMember[] = dashboardMembers
+  .filter((member) => !member.isWithdrawn)
+  .map((member) => ({
+    id: member.id,
+    member_no: Number(member.id) || null,
+    name: member.name,
+    nickname: null,
+    job: member.jobTitle,
+    grip: member.headline,
+    membership_type: member.memberType,
+    role: "user",
+  }));
+
+function roleLabel(role: DirectoryMember["role"]) {
+  return role === "admin" ? "運営" : role === "manager" ? "部長" : "ユーザー";
+}
+
+function MemberCard({ member }: { member: DirectoryMember }) {
+  const initial = member.name.trim().charAt(0) || "T";
   return (
-    <Link
-      href={`/app/profile/${member.id}`}
-      className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 group"
-    >
-      <img
-        src={member.photoUrl}
-        alt={member.name}
-        className="w-11 h-11 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100 flex-shrink-0"
-      />
+    <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className="w-11 h-11 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center font-extrabold border-2 border-white shadow ring-1 ring-gray-100 flex-shrink-0">
+        {initial}
+      </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold text-gray-900 truncate transition-colors group-hover:text-amber-700">
-            {member.name}
-          </h3>
-          <RoleBadge role={role} />
-          {member.jobTitle && (
-            <span className="hidden sm:inline text-[11px] text-gray-400 flex-shrink-0 truncate">
-              {member.jobTitle}
-            </span>
-          )}
-          <span
-            className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
-              member.memberType === "法人"
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="text-sm font-bold text-gray-900 truncate">{member.name}</h3>
+          {member.role !== "user" && <RoleBadge role={roleLabel(member.role)} />}
+          {member.membership_type && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+              member.membership_type === "法人"
                 ? "bg-blue-50 text-blue-600"
                 : "bg-gray-50 text-gray-500"
-            }`}
-          >
-            {member.memberType}
-          </span>
+            }`}>
+              {member.membership_type}
+            </span>
+          )}
         </div>
-        {member.headline && (
-          <p className="text-xs text-gray-500 truncate mt-0.5">
-            {member.headline}
-          </p>
-        )}
+        {member.nickname && <p className="text-[11px] text-gray-400 truncate mt-0.5">{member.nickname}</p>}
+        {member.job && <p className="text-xs text-gray-500 truncate mt-0.5">{member.job}</p>}
+        {member.grip && <p className="text-xs text-gray-400 truncate mt-0.5">{member.grip}</p>}
       </div>
-      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-amber-500 transition-colors flex-shrink-0" />
-    </Link>
+      {member.member_no != null && (
+        <span className="text-[10px] font-mono text-gray-300 flex-shrink-0">#{member.member_no}</span>
+      )}
+    </div>
   );
 }
 
 export default function MembersPage() {
+  const [members, setMembers] = useState<DirectoryMember[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState("全員");
   const [memberTypeFilter, setMemberTypeFilter] = useState<"全て" | "法人" | "個人">("全て");
-  const [genreOpen, setGenreOpen] = useState(false);
-  const [genreSearch, setGenreSearch] = useState("");
-  const genreRef = useRef<HTMLDivElement>(null);
+  const [loadError, setLoadError] = useState(false);
 
-  // ドロップダウン外クリックで閉じる
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (genreRef.current && !genreRef.current.contains(e.target as Node)) {
-        setGenreOpen(false);
-      }
+    if (!isSupabaseConfigured) {
+      setMembers(mockDirectory);
+      return;
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    let active = true;
+    fetch("/api/members", { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("members fetch failed");
+        return response.json();
+      })
+      .then((rows: DirectoryMember[]) => {
+        if (active) setMembers(rows);
+      })
+      .catch(() => {
+        if (active) {
+          setLoadError(true);
+          setMembers([]);
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const isWithdrawn = useWithdrawnResolver();
-  // 退会者は一覧から除外（退会状態は localStorage が正・admin の復帰も反映）
-  const sourceMembers = dashboardMembers.filter(
-    (m) => !isWithdrawn(m.id, m.isWithdrawn)
-  );
-
-  const filteredGenres = industryFilters.filter(
-    (g) => g === "全員" || g.includes(genreSearch)
-  );
-
-  const filtered = sourceMembers.filter((m) => {
-    const matchesSearch =
-      !searchQuery ||
-      m.name.includes(searchQuery) ||
-      m.jobTitle.includes(searchQuery) ||
-      m.headline.includes(searchQuery);
-
-    const matchesFilter =
-      activeFilter === "全員" || m.industry === activeFilter;
-
-    const matchesMemberType =
-      memberTypeFilter === "全て" || m.memberType === memberTypeFilter;
-
-    return matchesSearch && matchesFilter && matchesMemberType;
-  });
+  const filtered = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return (members ?? []).filter((member) => {
+      const matchesType =
+        memberTypeFilter === "全て" || member.membership_type === memberTypeFilter;
+      const matchesSearch =
+        !query ||
+        member.name.toLowerCase().includes(query) ||
+        member.nickname?.toLowerCase().includes(query) ||
+        member.job?.toLowerCase().includes(query) ||
+        member.grip?.toLowerCase().includes(query) ||
+        String(member.member_no ?? "").includes(query);
+      return matchesType && Boolean(matchesSearch);
+    });
+  }, [members, memberTypeFilter, searchQuery]);
 
   return (
     <div className="min-h-screen">
-      {/* ヘッダー */}
       <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          {/* タイトル + 法人/個人フィルタ（右寄せ） */}
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-xl font-bold text-gray-900">
-              コミュニティメンバー
-            </h1>
+            <h1 className="text-xl font-bold text-gray-900">コミュニティメンバー</h1>
+            {members && <span className="text-xs text-gray-400">{members.length}人</span>}
             <div className="flex gap-1 flex-shrink-0 ml-auto">
               {(["全て", "法人", "個人"] as const).map((type) => (
                 <button
@@ -119,7 +128,7 @@ export default function MembersPage() {
                   className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
                     memberTypeFilter === type
                       ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-500 border border-gray-200 hover:border-gray-300"
+                      : "bg-white text-gray-500 border border-gray-200"
                   }`}
                 >
                   {type === "法人" && <Building2 className="w-3 h-3" />}
@@ -129,96 +138,31 @@ export default function MembersPage() {
               ))}
             </div>
           </div>
-
-          {/* 検索 + ジャンル絞り込み（左右に並べる） */}
-          <div className="flex items-center gap-2 mt-3">
-            {/* 検索 */}
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="名前・職種で検索..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-              />
-            </div>
-            {/* ジャンルドロップダウン */}
-            <div ref={genreRef} className="relative flex-shrink-0">
-              <button
-                onClick={() => { setGenreOpen(!genreOpen); setGenreSearch(""); }}
-                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                  activeFilter !== "全員"
-                    ? "bg-gray-900 text-white"
-                    : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                <Search className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="truncate max-w-[88px] sm:max-w-none">{activeFilter === "全員" ? "絞り込み" : activeFilter}</span>
-                {activeFilter !== "全員" ? (
-                  <X
-                    className="w-3.5 h-3.5 flex-shrink-0 hover:opacity-70"
-                    onClick={(e) => { e.stopPropagation(); setActiveFilter("全員"); setGenreOpen(false); }}
-                  />
-                ) : (
-                  <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${genreOpen ? "rotate-180" : ""}`} />
-                )}
-              </button>
-
-              {genreOpen && (
-                <div className="absolute top-full right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-gray-200 shadow-lg z-20 overflow-hidden">
-                  {/* 検索入力 */}
-                  <div className="p-2 border-b border-gray-100">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="ジャンルを検索..."
-                        value={genreSearch}
-                        onChange={(e) => setGenreSearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-                  {/* ジャンルリスト */}
-                  <div className="max-h-60 overflow-y-auto py-1">
-                    {filteredGenres.map((genre) => (
-                      <button
-                        key={genre}
-                        onClick={() => { setActiveFilter(genre); setGenreOpen(false); }}
-                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                          activeFilter === genre
-                            ? "bg-gray-900 text-white"
-                            : "text-gray-700 hover:bg-gray-50"
-                        }`}
-                      >
-                        {genre}
-                      </button>
-                    ))}
-                    {filteredGenres.length === 0 && (
-                      <p className="px-4 py-3 text-sm text-gray-400 text-center">該当なし</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+          <div className="relative mt-3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="名前・呼び名・職業・会員番号で検索..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
           </div>
         </div>
       </div>
 
-      {/* メンバーグリッド */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {filtered.map((member) => (
-            <MemberCard key={member.id} member={member} />
-          ))}
-        </div>
-
-        {filtered.length === 0 && (
-          <div className="text-center py-20">
-            <p className="text-gray-400">該当するメンバーが見つかりません</p>
+        {members === null ? (
+          <p className="text-center text-gray-400 py-20">読み込み中...</p>
+        ) : loadError ? (
+          <p className="text-center text-red-600 py-20">メンバー一覧を取得できませんでした。</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {filtered.map((member) => <MemberCard key={member.id} member={member} />)}
           </div>
+        )}
+        {members && !loadError && filtered.length === 0 && (
+          <p className="text-center text-gray-400 py-20">該当するメンバーが見つかりません</p>
         )}
       </div>
     </div>

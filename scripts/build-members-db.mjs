@@ -10,12 +10,21 @@
 //   3. 氏名一致 + メール or 電話 一致 + 会員番号衝突なし → 新しい方に統合（タイムスタンプ優先）
 // ============================================================
 import * as XLSX from "xlsx";
-import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 
-const RAW_DIR = "data/raw";
-const OUT_DIR = "data/processed";
+const args = process.argv.slice(2);
+function argValue(name, fallback) {
+  const index = args.indexOf(name);
+  return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
+}
+
+const MEMBER_FILE = argValue("--members", "data/raw/入会者名簿.xlsx");
+const CONTACT_FILE = argValue("--contacts", "data/raw/連絡先情報（回答）.xlsx");
+const OUT_DIR = argValue("--out-dir", "data/processed");
+const PREVIOUS_FILE = argValue("--previous", "data/processed/members.json");
+const WRITE_PUBLIC = !args.includes("--no-public");
 mkdirSync(OUT_DIR, { recursive: true });
 
 // ============================================================
@@ -80,14 +89,16 @@ function parseStartMonth(v) {
 // 1回目更新セル → { status, fee }
 //   空=未更新（1年未到来） / 退会 / 返事待ち / 入金待ち / 数値=更新済（その金額で更新）
 function parseRenewal(v) {
-  if (v == null || String(v).trim() === "") return { status: "未更新", fee: null };
+  if (v == null || String(v).trim() === "") return { status: "未更新", fee: null, note: null };
   const s = String(v).trim();
-  if (s === "退会") return { status: "退会", fee: null };
-  if (s.includes("返事")) return { status: "返事待ち", fee: null };
-  if (s.includes("入金")) return { status: "入金待ち", fee: null };
+  if (s === "退会") return { status: "退会", fee: null, note: null };
+  if (s.includes("返事")) return { status: "返事待ち", fee: null, note: s === "返事待ち" ? null : s };
+  if (s.includes("入金")) return { status: "入金待ち", fee: null, note: s === "入金待ち" ? null : s };
+  if (s.includes("再開")) return { status: "返事待ち", fee: null, note: s };
   const n = typeof v === "number" ? v : Number(toHalfWidth(s).replace(/[,，円\s]/g, ""));
-  if (Number.isFinite(n)) return { status: "更新済", fee: n };
-  return { status: s, fee: null }; // 想定外テキストはそのまま状態として保持
+  if (Number.isFinite(n)) return { status: "更新済", fee: n, note: null };
+  // CHECK制約を壊さず原文も失わない。運営判断が必要な自由記述は返事待ちとして扱う。
+  return { status: "返事待ち", fee: null, note: s };
 }
 
 function stringOrNull(v) {
@@ -102,11 +113,19 @@ function numberOrNull(v) {
   return isNaN(n) ? null : n;
 }
 
+function memberNoOrNull(v) {
+  if (v == null || String(v).trim() === "") return null;
+  const normalized = toHalfWidth(v).replace(/[,，\s　]/g, "");
+  if (!/^\d+$/.test(normalized)) return null;
+  const number = Number(normalized);
+  return Number.isSafeInteger(number) ? number : null;
+}
+
 // ============================================================
 // 1. 入会者名簿を読む
 // ============================================================
-console.log("📖 入会者名簿.xlsx を読み込み中...");
-const nameBook = XLSX.read(readFileSync(join(RAW_DIR, "入会者名簿.xlsx")), { type: "buffer" });
+console.log(`📖 入会者名簿を読み込み中: ${MEMBER_FILE}`);
+const nameBook = XLSX.read(readFileSync(MEMBER_FILE), { type: "buffer" });
 
 const memberRecords = [];
 const sheetsToProcess = nameBook.SheetNames.filter((n) => n !== "原本");
@@ -133,7 +152,9 @@ for (const sheetName of sheetsToProcess) {
     nick: idxOf("呼び名"),
     referrer: idxOf("紹介者"),
     startDate: idxOf("スタート月", "スタート日", "更新日"),
-    firstRenewal: idxOf("１回目更新"),
+    renewalColumns: ["１回目更新", "2026年更新", "2025年更新"]
+      .map((header) => headers.indexOf(header))
+      .filter((index) => index >= 0),
     price: idxOf("料金"),
     referralFee: idxOf("紹介料"),
     job: idxOf("職業"),
@@ -147,14 +168,18 @@ for (const sheetName of sheetsToProcess) {
     const name = stringOrNull(r[col.name]);
     if (!name) continue;
 
-    const firstRenewalVal = col.firstRenewal >= 0 ? r[col.firstRenewal] : null;
+    // 新しい名簿では「１回目更新」が「2026年更新」「2025年更新」に分かれたシートがある。
+    // 左から新しい年の列なので、最初の非空値を現在の更新状態として採用する。
+    const firstRenewalVal = col.renewalColumns
+      .map((index) => r[index])
+      .find((value) => value != null && String(value).trim() !== "") ?? null;
     const renewal = parseRenewal(firstRenewalVal);
     const sm = col.startDate >= 0 ? parseStartMonth(r[col.startDate]) : { year: null, month: null };
 
     memberRecords.push({
       source: "member",
       sheet: sheetName,
-      member_no: col.no >= 0 && typeof r[col.no] === "number" ? r[col.no] : null,
+      member_no: col.no >= 0 ? memberNoOrNull(r[col.no]) : null,
       name,
       name_normalized: normalizeName(name),
       nickname: col.nick >= 0 ? stringOrNull(r[col.nick]) : null,
@@ -163,6 +188,7 @@ for (const sheetName of sheetsToProcess) {
       start_month: sm.month,
       renewal_status: renewal.status,
       renewal_fee: renewal.fee,
+      renewal_note: renewal.note,
       price: col.price >= 0 ? numberOrNull(r[col.price]) : null,
       referral_fee: col.referralFee >= 0 ? numberOrNull(r[col.referralFee]) : null,
       job: col.job >= 0 ? stringOrNull(r[col.job]) : null,
@@ -177,9 +203,10 @@ console.log(`  → ${memberRecords.length}件 抽出`);
 // ============================================================
 // 2. 連絡先情報を読む
 // ============================================================
-console.log("📖 連絡先情報（回答）.xlsx を読み込み中...");
-const contactBook = XLSX.read(readFileSync(join(RAW_DIR, "連絡先情報（回答）.xlsx")), { type: "buffer" });
+console.log(`📖 連絡先情報を読み込み中: ${CONTACT_FILE}`);
+const contactBook = XLSX.read(readFileSync(CONTACT_FILE), { type: "buffer" });
 const contactSheet = contactBook.Sheets["フォームの回答 1"];
+if (!contactSheet) throw new Error('連絡先情報に「フォームの回答 1」シートがありません');
 const contactRows = XLSX.utils.sheet_to_json(contactSheet, { header: 1, defval: null });
 
 const contactHeaderIdx = contactRows.findIndex((r) => Array.isArray(r) && r.includes("名前"));
@@ -213,7 +240,7 @@ for (let i = contactHeaderIdx + 1; i < contactRows.length; i++) {
   contactRecords.push({
     source: "contact",
     contact_submitted_at: cc.timestamp >= 0 ? excelSerialToISO(r[cc.timestamp]) : null,
-    member_no: cc.memberNo >= 0 && typeof r[cc.memberNo] === "number" ? r[cc.memberNo] : null,
+    member_no: cc.memberNo >= 0 ? memberNoOrNull(r[cc.memberNo]) : null,
     name,
     name_normalized: normalizeName(name),
     job: cc.job >= 0 ? stringOrNull(r[cc.job]) : null,
@@ -237,10 +264,16 @@ console.log("🔗 マッチング・統合中...");
 
 // 連絡先側を氏名でインデックス化（同名複数あり得るので配列）
 const contactByName = new Map();
+const contactByMemberNo = new Map();
 for (const c of contactRecords) {
   const arr = contactByName.get(c.name_normalized) || [];
   arr.push(c);
   contactByName.set(c.name_normalized, arr);
+  if (c.member_no != null) {
+    const byNo = contactByMemberNo.get(c.member_no) || [];
+    byNo.push(c);
+    contactByMemberNo.set(c.member_no, byNo);
+  }
 }
 
 // 新しい方基準: タイムスタンプがある側を採用、なければ元の方
@@ -256,9 +289,12 @@ const usedContactIndices = new Set();
 
 // 3-1. 名簿側を起点にマッチ
 for (const m of memberRecords) {
-  const candidates = contactByName.get(m.name_normalized) || [];
-  // 会員番号衝突しない & 未使用 & 氏名一致 のもの
-  const matches = candidates.filter((c, idx) => {
+  // 会員番号を最優先する。最新版では氏名表記が変わっていても同じ会員番号の回答があるため。
+  // 番号がなければ従来どおり正規化氏名で照合する。
+  const numberedCandidates = m.member_no != null ? contactByMemberNo.get(m.member_no) || [] : [];
+  const nameCandidates = contactByName.get(m.name_normalized) || [];
+  const candidates = numberedCandidates.length > 0 ? numberedCandidates : nameCandidates;
+  const matches = candidates.filter((c) => {
     const globalIdx = contactRecords.indexOf(c);
     if (usedContactIndices.has(globalIdx)) return false;
     // 会員番号は基本的に名簿側にしかないので衝突チェックは名簿側同士のみ
@@ -288,6 +324,7 @@ for (const m of memberRecords) {
       start_month: sp.start_month,
       renewal_status: m.renewal_status,
       renewal_fee: m.renewal_fee,
+      renewal_note: m.renewal_note,
       price: m.price,
       referral_fee: m.referral_fee,
       job: m.job || matched.job,
@@ -317,6 +354,7 @@ for (const m of memberRecords) {
       start_month: m.start_month,
       renewal_status: m.renewal_status,
       renewal_fee: m.renewal_fee,
+      renewal_note: m.renewal_note,
       price: m.price,
       referral_fee: m.referral_fee,
       job: m.job,
@@ -351,6 +389,7 @@ for (let idx = 0; idx < contactRecords.length; idx++) {
     start_month: c.start_month,
     renewal_status: "未更新",
     renewal_fee: null,
+    renewal_note: null,
     price: null,
     referral_fee: null,
     job: c.job,
@@ -376,8 +415,10 @@ console.log("🔄 二次重複排除中（メール/電話一致）...");
 const beforeDedup = merged.length;
 
 function canMerge(a, b) {
+  // 同じ会員番号は氏名表記が違っても同一人物として統合する。
+  if (a.member_no != null && b.member_no != null && a.member_no === b.member_no) return true;
   if (a.name_normalized !== b.name_normalized) return false;
-  // 会員番号が両方埋まってて異なる → 別人
+  // 会員番号が両方埋まっていて異なる → 別人
   if (a.member_no != null && b.member_no != null && a.member_no !== b.member_no) return false;
   // メールかフォンのどちらかが一致（かつ空でない）
   const emailMatch = a.email && b.email && normalizeEmail(a.email) === normalizeEmail(b.email);
@@ -386,10 +427,17 @@ function canMerge(a, b) {
 }
 
 function mergeTwo(newer, older) {
-  // 新しい方をベースに、古い方で空欄を埋める
-  const out = { ...newer };
+  // 名簿由来の項目は名簿側を正とし、連絡先項目だけ最新フォーム回答を優先する。
+  const roster = newer.import_sheet ? newer : older.import_sheet ? older : null;
+  const out = { ...(roster || newer) };
   for (const k of Object.keys(older)) {
     if (out[k] == null && older[k] != null) out[k] = older[k];
+  }
+  for (const k of [
+    "email", "phone", "gender", "age_range", "membership_type",
+    "payment_method", "contact_submitted_at",
+  ]) {
+    if (newer[k] != null && newer[k] !== "") out[k] = newer[k];
   }
   // source更新: どちらかがbothならboth、それ以外は新しい方のsource
   if (newer.source === "both" || older.source === "both") out.source = "both";
@@ -444,6 +492,95 @@ for (const r of merged) {
 console.log(`🔧 法人個人欄(T列)の金額を入会時金額(K列/price)へ移動: ${shiftedFee}件`);
 
 // ============================================================
+// 3-5. 旧統合データとの照合
+//      既存UUIDを維持し、最新版で空欄になった補助項目だけ旧値で補完する。
+// ============================================================
+let preservedIds = 0;
+let generatedIds = 0;
+let supplementedCells = 0;
+
+function uniqueIndex(rows, keyFn) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const key = keyFn(row);
+    if (!key) continue;
+    const values = grouped.get(key) || [];
+    values.push(row);
+    grouped.set(key, values);
+  }
+  return new Map([...grouped].filter(([, values]) => values.length === 1).map(([key, values]) => [key, values[0]]));
+}
+
+if (existsSync(PREVIOUS_FILE)) {
+  const previousRows = JSON.parse(readFileSync(PREVIOUS_FILE, "utf8"));
+  const indexes = [
+    uniqueIndex(previousRows, (r) => r.member_no == null ? "" : String(r.member_no)),
+    uniqueIndex(previousRows, (r) => normalizeEmail(r.email)),
+    uniqueIndex(previousRows, (r) => normalizePhone(r.phone)),
+    uniqueIndex(previousRows, (r) => normalizeName(r.name)),
+  ];
+  const usedPreviousIds = new Set();
+  const supplementFields = [
+    "nickname", "referrer", "start_year", "start_month", "price", "referral_fee",
+    "job", "grip", "frequency", "email", "phone", "gender", "age_range",
+    "membership_type", "payment_method", "contact_submitted_at",
+  ];
+
+  for (const row of merged) {
+    const keys = [
+      row.member_no == null ? "" : String(row.member_no),
+      normalizeEmail(row.email),
+      normalizePhone(row.phone),
+      normalizeName(row.name),
+    ];
+    let previous = null;
+    for (let i = 0; i < indexes.length; i++) {
+      const candidate = keys[i] ? indexes[i].get(keys[i]) : null;
+      if (candidate && !usedPreviousIds.has(candidate.id)) {
+        previous = candidate;
+        break;
+      }
+    }
+
+    if (!previous) {
+      generatedIds++;
+      continue;
+    }
+
+    row.id = previous.id;
+    usedPreviousIds.add(previous.id);
+    preservedIds++;
+    for (const field of supplementFields) {
+      if ((row[field] == null || row[field] === "") && previous[field] != null && previous[field] !== "") {
+        row[field] = previous[field];
+        supplementedCells++;
+      }
+    }
+    if (row.renewal_status === "更新済" && row.renewal_fee == null && previous.renewal_fee != null) {
+      row.renewal_fee = previous.renewal_fee;
+      supplementedCells++;
+    }
+  }
+} else {
+  generatedIds = merged.length;
+}
+
+console.log(`🧩 旧統合データ照合: UUID維持 ${preservedIds}件 / 新規 ${generatedIds}件 / 空欄補完 ${supplementedCells}セル`);
+
+// Supabase投入前に、ここで判定できる致命的な不整合を止める。
+const allowedRenewalStatuses = new Set(["未更新", "退会", "更新済", "返事待ち", "入金待ち"]);
+const seenMemberNos = new Set();
+const buildErrors = [];
+for (const [index, row] of merged.entries()) {
+  if (!allowedRenewalStatuses.has(row.renewal_status)) buildErrors.push(`[${index}] 更新状態が不正`);
+  if (row.member_no != null) {
+    if (seenMemberNos.has(row.member_no)) buildErrors.push(`[${index}] 会員番号が重複: ${row.member_no}`);
+    seenMemberNos.add(row.member_no);
+  }
+}
+if (buildErrors.length) throw new Error(`統合データの検証に失敗:\n${buildErrors.join("\n")}`);
+
+// ============================================================
 // 4. 件数サマリ
 // ============================================================
 const counts = merged.reduce((acc, r) => {
@@ -463,7 +600,7 @@ console.log(`  - うち退会者  : ${counts.withdrawn || 0}件`);
 // ============================================================
 const csvColumns = [
   "id", "member_no", "name", "name_normalized", "nickname",
-  "referrer", "start_year", "start_month", "renewal_status", "renewal_fee", "price", "referral_fee",
+  "referrer", "start_year", "start_month", "renewal_status", "renewal_fee", "renewal_note", "price", "referral_fee",
   "job", "grip", "frequency",
   "email", "phone", "gender", "age_range", "membership_type",
   "payment_method", "contact_submitted_at",
@@ -487,11 +624,13 @@ const csv = [
 writeFileSync(join(OUT_DIR, "members.csv"), "﻿" + csv, "utf8"); // BOM付き（Excel互換）
 writeFileSync(join(OUT_DIR, "members.json"), JSON.stringify(merged, null, 2), "utf8");
 
-// Next.jsから読み込むために public 配下にも配置（gitignore済み → Vercelには上がらない）
-mkdirSync("public", { recursive: true });
-writeFileSync(join("public", "members-db.json"), JSON.stringify(merged), "utf8");
+// mockモードでNext.jsから読み込むために public 配下にも配置（gitignore済み）
+if (WRITE_PUBLIC) {
+  mkdirSync("public", { recursive: true });
+  writeFileSync(join("public", "members-db.json"), JSON.stringify(merged), "utf8");
+}
 
 console.log(`\n✅ 出力完了:`);
 console.log(`   ${join(OUT_DIR, "members.csv")}`);
 console.log(`   ${join(OUT_DIR, "members.json")}`);
-console.log(`   public/members-db.json (アプリ読み込み用)`);
+if (WRITE_PUBLIC) console.log(`   public/members-db.json (mockモード用)`);

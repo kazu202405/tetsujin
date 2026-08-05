@@ -25,11 +25,19 @@ npm run build:members-db
 ```
 → `data/processed/members.csv` が生成される。
 
+任意の最新版ファイルを直接指定する場合:
+
+```powershell
+npm run build:members-db -- --members "C:\path\to\入会者名簿.xlsx" --contacts "C:\path\to\連絡先情報（回答）.xlsx"
+```
+
+既存の統合JSONがある場合はUUIDを可能な限り維持し、最新版で空欄の補助項目だけ旧値から補完する。
+
 ### 3. 画面で確認
 ```bash
 npm run dev
 ```
-→ `/admin` の会員DBタブで閲覧可能。
+→ `/app/admin` の会員DBタブで閲覧可能。Supabase接続後はローカルJSONではなく管理APIから取得する。
 
 ## データの扱いに関する注意
 

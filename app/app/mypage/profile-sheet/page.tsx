@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
+import { useCurrentMember } from "@/lib/current-member";
 import {
   loadOwnSheet,
   saveSheetData,
@@ -133,8 +134,20 @@ const initialData: ProfileData = {
 };
 
 export default function ProfileSheetPage() {
+  const currentMember = useCurrentMember();
+  const profileOwnerId = currentMember?.id ?? CURRENT_USER_ID;
   const [mode, setMode] = useState<"edit" | "preview">("preview");
-  const [data, setData] = useState<ProfileData>(initialData);
+  const [data, setData] = useState<ProfileData>(() => ({
+    ...initialData,
+    memberNumber: currentMember?.member_no != null ? String(currentMember.member_no) : "",
+    nameKanji: currentMember?.name ?? initialData.nameKanji,
+    nameFurigana: "",
+    nickname: currentMember?.nickname ?? "",
+    job: currentMember?.job ?? "",
+    genre: currentMember?.membership_type ?? "",
+    hitokoto: currentMember?.grip ?? "",
+    photoUrl: currentMember ? "" : initialData.photoUrl,
+  }));
   const [themeIndex, setThemeIndex] = useState(0);
   const [customColor, setCustomColor] = useState("#2a2a3e");
   const [huePosition, setHuePosition] = useState(0);
@@ -175,9 +188,26 @@ export default function ProfileSheetPage() {
 
   // 保存済みのシート（本人）を初期ロード（無ければ initialData のまま）
   useEffect(() => {
-    const loaded = loadOwnSheet(CURRENT_USER_ID);
-    setData((prev) => ({ ...prev, ...loaded.data }));
-    if (hasOwnSheet(CURRENT_USER_ID)) {
+    const loaded = loadOwnSheet(profileOwnerId);
+    setData((prev) => ({
+      ...prev,
+      ...loaded.data,
+      ...(currentMember
+        ? {
+            memberNumber:
+              currentMember.member_no != null
+                ? String(currentMember.member_no)
+                : "",
+            nameKanji: currentMember.name,
+            nickname: currentMember.nickname ?? "",
+            job: currentMember.job ?? "",
+            genre: currentMember.membership_type ?? "",
+            hitokoto: currentMember.grip ?? "",
+            photoUrl: "",
+          }
+        : {}),
+    }));
+    if (hasOwnSheet(profileOwnerId)) {
       const idx = themeColors.findIndex((t) => t.primary === loaded.themeColor);
       if (idx >= 0) {
         setThemeIndex(idx);
@@ -188,7 +218,7 @@ export default function ProfileSheetPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentMember, profileOwnerId]);
 
   const theme = useCustom
     ? { name: "カスタム", primary: customColor }
@@ -258,7 +288,7 @@ export default function ProfileSheetPage() {
 
   const [savedSheet, setSavedSheet] = useState(false);
   const handleSaveSheet = () => {
-    saveSheetData(CURRENT_USER_ID, data, theme.primary);
+    saveSheetData(profileOwnerId, data, theme.primary);
     setSavedSheet(true);
     setTimeout(() => setSavedSheet(false), 2000);
   };

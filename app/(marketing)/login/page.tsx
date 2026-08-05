@@ -118,6 +118,13 @@ function LoginForm() {
                   className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--tetsu-pink)] focus:border-transparent focus:bg-white transition-all"
                 />
               </div>
+              {isSupabaseConfigured && (
+                <div className="text-right mt-2">
+                  <Link href="/forgot-password" className="text-xs font-bold text-[var(--tetsu-pink)] hover:underline">
+                    パスワードを忘れた方
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* ログインボタン */}

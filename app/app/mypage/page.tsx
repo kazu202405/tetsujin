@@ -19,26 +19,34 @@ import { EventCalendar } from "@/components/app/event-calendar";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { useJoinedEvents } from "@/lib/event-participation";
 import { mockPosts } from "@/app/app/board/data";
-
-// --- Mock: my profile ---
-const myProfile = {
-  name: "田中 一郎",
-  photoUrl:
-    "https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face",
-  roleTitle: "代表取締役",
-  jobTitle: "経営コンサルタント",
-  headline: "人の可能性を信じ、組織を変える",
-};
+import { useCurrentMember } from "@/lib/current-member";
 
 function formatMonth(year: number, month: number) {
   return `${year}年${month + 1}月`;
 }
 
 export default function MyPage() {
+  const currentMember = useCurrentMember();
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const myProfile = {
+    name: currentMember?.name ?? "会員",
+    roleTitle:
+      currentMember?.role === "admin"
+        ? "運営"
+        : currentMember?.role === "manager"
+          ? "部長"
+          : currentMember?.membership_type || "会員",
+    jobTitle: currentMember?.job || "職業未登録",
+    headline:
+      currentMember?.grip ||
+      (currentMember?.member_no != null
+        ? `会員番号 ${currentMember.member_no}`
+        : "プロフィール情報を登録してください"),
+  };
+  const profileInitial = myProfile.name.trim().charAt(0) || "T";
 
   // 参加イベント（単一ソースから購読）
   const joinedEvents = useJoinedEvents();
@@ -113,11 +121,12 @@ export default function MyPage() {
         {/* Profile card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 mb-6">
           <div className="flex flex-row items-start gap-4 sm:gap-6">
-            <img
-              src={myProfile.photoUrl}
-              alt={myProfile.name}
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-4 border-white shadow-lg ring-1 ring-gray-100 flex-shrink-0"
-            />
+            <div
+              aria-label={myProfile.name}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center text-2xl font-extrabold border-4 border-white shadow-lg ring-1 ring-gray-100 flex-shrink-0"
+            >
+              {profileInitial}
+            </div>
             <div className="flex-1 min-w-0">
               <h2
                 className="text-2xl font-bold text-gray-900 mb-1"
@@ -224,9 +233,10 @@ export default function MyPage() {
         <div className="mb-8">
           <SocialLinksSection
             ownerMode={{
-              memberId: CURRENT_USER_ID,
-              initialLinks:
-                members.find((m) => m.id === CURRENT_USER_ID)?.socialLinks ?? [],
+              memberId: currentMember?.id ?? CURRENT_USER_ID,
+              initialLinks: currentMember
+                ? []
+                : members.find((m) => m.id === CURRENT_USER_ID)?.socialLinks ?? [],
             }}
           />
         </div>

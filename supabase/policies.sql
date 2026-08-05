@@ -49,9 +49,9 @@ COMMENT ON FUNCTION public.is_admin() IS 'ログイン中ユーザーが運営�
 --   - 運営(admin)は全行を読み書きできる
 --   - それ以外（未ログイン含む）は一切読めない
 --
--- ⚠️ 会員同士がお互いを見る「メンバー一覧」は、まだ画面がmockのため未対応。
---    実装する際は members を直接開放してはいけない（email/phone/price/admin_note が漏れる）。
---    RLSは行単位で列を絞れないため、安全な列だけを出すVIEWを作ってそちらを開放すること。
+-- 会員同士がお互いを見る「メンバー一覧」は、このファイル末尾の
+-- SECURITY DEFINER 関数 member_directory() から安全な列だけを返す。
+-- members 自体を一般会員へ開放しない（email/phone/price/admin_note を守る）。
 DROP POLICY IF EXISTS members_select_own   ON members;
 DROP POLICY IF EXISTS members_select_admin ON members;
 DROP POLICY IF EXISTS members_admin_all    ON members;
@@ -107,6 +107,7 @@ BEGIN
   NEW.price             := OLD.price;
   NEW.renewal_status    := OLD.renewal_status;
   NEW.renewal_fee       := OLD.renewal_fee;
+  NEW.renewal_note      := OLD.renewal_note;
   NEW.referral_fee      := OLD.referral_fee;
 
   RETURN NEW;
@@ -124,7 +125,7 @@ COMMENT ON FUNCTION public.protect_member_admin_fields() IS '会員が自分でr
 -- 4. サインアップ時の会員行の紐づけ / 作成
 -- ============================================================
 -- 🔴 これがないと会員台帳が壊れる。
---    既存567名のうち373名はメールを持っている。その人がサインアップしたとき
+--    既存会員がサインアップしたとき
 --    無条件に新規行を作ると、同じ人が台帳に2行できて「アプリが会員管理のマスター」
 --    という運用方針が最初から破綻する。
 --

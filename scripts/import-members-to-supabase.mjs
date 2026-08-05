@@ -5,26 +5,31 @@
 //   node scripts/import-members-to-supabase.mjs            # ドライラン（既定・書き込まない）
 //   node scripts/import-members-to-supabase.mjs --execute   # 実投入
 //   node scripts/import-members-to-supabase.mjs --execute --wipe  # 全削除してから投入
+//   node scripts/import-members-to-supabase.mjs --file path/to/members.json  # 入力指定
 //
 // 必要な環境変数（.env.local に置く。git管理外）:
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_ROLE_KEY   ← service_role キー。RLS全拒否のため必須
 //
 // 🔴 このスクリプトは「運用開始前」専用。
-//    build-members-db.mjs は毎回 id を randomUUID() で振り直すため、
-//    会員が触ったデータがDBに入った後に再実行すると全ての紐付けが壊れる。
+//    build-members-db.mjs は旧統合JSONがあればUUIDを維持するが、
+//    DB運用開始後のExcel全入れ替えはアプリ内更新を上書きするため禁止。
 //    運用開始後は本アプリの admin CRUD が会員データの正となる（打合せ確定方針）。
 // ============================================================
 import { readFileSync, existsSync } from "fs";
 
-const SRC = "data/processed/members.json";
+const args = process.argv.slice(2);
+const fileArgIndex = args.indexOf("--file");
+const SRC = fileArgIndex >= 0 && args[fileArgIndex + 1]
+  ? args[fileArgIndex + 1]
+  : "data/processed/members.json";
 const TABLE = "members";
 const CHUNK_SIZE = 100;
 
 // members テーブルに存在するカラムのみ送る（想定外キーがあれば投入前に検出する）
 const COLUMNS = [
   "id", "member_no", "name", "name_normalized", "nickname",
-  "referrer", "start_year", "start_month", "renewal_status", "renewal_fee",
+  "referrer", "start_year", "start_month", "renewal_status", "renewal_fee", "renewal_note",
   "price", "referral_fee", "job", "grip", "frequency",
   "email", "phone", "gender", "age_range", "membership_type",
   "payment_method", "contact_submitted_at", "is_withdrawn", "source", "import_sheet",
@@ -57,7 +62,8 @@ function validate(rows) {
   const seenMemberNo = new Set();
 
   rows.forEach((row, i) => {
-    const where = `[${i}] ${row.name ?? "(名前なし)"}`;
+    // 検証ログへ氏名・連絡先を出さない。個人情報をCIログ等に残さないため。
+    const where = `[${i}] member_no=${row.member_no ?? "なし"}`;
 
     const unknown = Object.keys(row).filter((k) => !COLUMNS.includes(k));
     if (unknown.length) errors.push(`${where}: 未知のカラム ${unknown.join(",")}`);
@@ -134,7 +140,6 @@ function makeClient(url, key) {
 // main
 // ============================================================
 async function main() {
-  const args = process.argv.slice(2);
   const execute = args.includes("--execute");
   const wipe = args.includes("--wipe");
 

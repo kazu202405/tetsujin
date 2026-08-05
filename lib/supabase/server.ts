@@ -7,6 +7,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config";
+import type { CurrentMember } from "@/lib/current-member";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -45,9 +46,9 @@ export async function getCurrentMember() {
   // RLS により「自分の行」だけが返る
   const { data } = await supabase
     .from("members")
-    .select("id, name, email, role, is_withdrawn, member_no")
+    .select("id, member_no, name, nickname, email, job, grip, membership_type, role, is_withdrawn")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
-  return data ?? null;
+  return (data as CurrentMember | null) ?? null;
 }

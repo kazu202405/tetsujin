@@ -27,6 +27,7 @@ import {
   UserCog,
   RotateCcw,
   StickyNote,
+  ShieldCheck,
 } from "lucide-react";
 import {
   useWithdrawnResolver,
@@ -42,17 +43,19 @@ import {
   MemberRole,
 } from "@/lib/member-roles";
 import { RoleBadge } from "@/components/app/role-badge";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 // ============================================================
 // タブ定義
 // ============================================================
-type AdminTab = "applications" | "activity" | "participation" | "member-manage" | "members-db" | "members-db-raw";
+type AdminTab = "applications" | "activity" | "participation" | "member-manage" | "roles" | "members-db" | "members-db-raw";
 
 const tabs: { id: AdminTab; label: string; icon: typeof Clock }[] = [
   { id: "applications", label: "入会申請", icon: ClipboardList },
   { id: "activity", label: "メンバーの状況", icon: Activity },
   { id: "participation", label: "参加状況", icon: CalendarDays },
   { id: "member-manage", label: "会員管理", icon: UserCog },
+  { id: "roles", label: "権限管理", icon: ShieldCheck },
   { id: "members-db", label: "会員DB", icon: Database },
   { id: "members-db-raw", label: "生会員DB", icon: Database },
 ];
@@ -238,6 +241,7 @@ export default function AdminPage() {
         {activeTab === "activity" && <ActivityTab />}
         {activeTab === "participation" && <ParticipationTab />}
         {activeTab === "member-manage" && <MemberManageTab />}
+        {activeTab === "roles" && <RoleManagementTab />}
         {activeTab === "members-db" && <MembersDbTab />}
         {activeTab === "members-db-raw" && <MembersDbRawTab />}
 
@@ -1081,8 +1085,8 @@ function ParticipationTab() {
 // ============================================================
 // タブ4: 会員DB（統合データビューア）
 // ============================================================
-// データソース: public/members-db.json（ローカル専用、gitignore）
-// Vercel環境ではCSVが無いため allMembers をフォールバック表示
+// データソース: Supabase接続時は /api/admin/members、未接続mock時は public/members-db.json
+// mock用JSONが無い場合だけ allMembers をフォールバック表示
 interface MemberDbRow {
   id: string;
   member_no: number | string | null;  // 実データは number、フォールバック("00A"等)は string
@@ -1093,6 +1097,7 @@ interface MemberDbRow {
   start_month: number | null;
   renewal_status: string | null;
   renewal_fee: number | null;
+  renewal_note: string | null;
   price: number | null;
   referral_fee: number | null;
   job: string | null;
@@ -1108,6 +1113,8 @@ interface MemberDbRow {
   source: "both" | "member_only" | "contact_only";
   is_withdrawn: boolean;
   import_sheet: string | null;
+  auth_user_id: string | null;
+  role: "admin" | "manager" | "user";
 }
 
 type MembersDbFilter = "all" | "both" | "member_only" | "contact_only" | "withdrawn";
@@ -1221,14 +1228,15 @@ function useMembersDbView(rows: MemberDbRow[] | null, defaults?: { showWithdrawn
   };
 }
 
-// 会員DBデータのフェッチ（ローカル: 実データ / Vercel: allMembersフォールバック）
+// 会員DBデータのフェッチ（Supabase接続時は認証済み管理API、mock時だけローカルJSON）
 function useMembersDb() {
   const [rows, setRows] = useState<MemberDbRow[] | null>(null);
-  const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "fallback">("loading");
+  const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "fallback" | "error">("loading");
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/members-db.json")
+    const endpoint = isSupabaseConfigured ? "/api/admin/members" : "/members-db.json";
+    fetch(endpoint, { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error("not found");
         return res.json();
@@ -1240,6 +1248,11 @@ function useMembersDb() {
       })
       .catch(() => {
         if (cancelled) return;
+        if (isSupabaseConfigured) {
+          setRows([]);
+          setLoadStatus("error");
+          return;
+        }
         // Vercel等でCSVが無い場合: 既存allMembersを暫定表示（空を避ける）
         // ダミー番号は実データ(1〜450番)と衝突しないよう "00A"〜"00J" を使用
         const fallback: MemberDbRow[] = allMembers.map((m, i) => ({
@@ -1252,6 +1265,7 @@ function useMembersDb() {
           start_month: null,
           renewal_status: "未更新",
           renewal_fee: null,
+          renewal_note: null,
           price: null,
           referral_fee: null,
           job: m.job,
@@ -1267,6 +1281,8 @@ function useMembersDb() {
           source: "both",
           is_withdrawn: false,
           import_sheet: null,
+          auth_user_id: null,
+          role: "user",
         }));
         setRows(fallback);
         setLoadStatus("fallback");
@@ -1275,6 +1291,109 @@ function useMembersDb() {
   }, []);
 
   return { rows, loadStatus };
+}
+
+function RoleManagementTab() {
+  const { rows, loadStatus } = useMembersDb();
+  const [localRows, setLocalRows] = useState<MemberDbRow[]>([]);
+  const [search, setSearch] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (rows) setLocalRows(rows);
+  }, [rows]);
+
+  const linkedRows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return localRows
+      .filter((row) => row.auth_user_id && !row.is_withdrawn)
+      .filter((row) =>
+        !query ||
+        row.name.toLowerCase().includes(query) ||
+        row.email?.toLowerCase().includes(query) ||
+        String(row.member_no ?? "").includes(query),
+      );
+  }, [localRows, search]);
+
+  const changeRole = async (row: MemberDbRow, role: MemberDbRow["role"]) => {
+    if (row.role === role) return;
+    setSavingId(row.id);
+    setMessage(null);
+    const response = await fetch(`/api/admin/members/${row.id}/role`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+    const result = await response.json().catch(() => null) as { error?: string } | null;
+    setSavingId(null);
+    if (!response.ok) {
+      setMessage({ type: "error", text: result?.error || "ロールを変更できませんでした" });
+      return;
+    }
+    setLocalRows((current) => current.map((item) => item.id === row.id ? { ...item, role } : item));
+    setMessage({ type: "success", text: `${row.name}さんの権限を変更しました` });
+  };
+
+  if (loadStatus === "loading") return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
+  if (loadStatus === "error") return <div className="text-center text-red-600 py-20">権限情報を取得できませんでした。</div>;
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-4">
+        <h2 className="font-bold text-gray-900 mb-1">ログイン権限管理</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          ログインアカウントと紐づいている会員だけを表示しています。最後の運営は降格できません。
+        </p>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="氏名・メール・会員番号で検索"
+            className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+        </div>
+        {message && (
+          <p className={`mt-3 text-sm rounded-lg px-3 py-2 ${
+            message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+          }`}>
+            {message.text}
+          </p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm divide-y divide-gray-100">
+        {linkedRows.map((row) => (
+          <div key={row.id} className="flex items-center gap-4 p-4">
+            <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center font-bold flex-shrink-0">
+              {row.name.trim().charAt(0) || "T"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm text-gray-900 truncate">{row.name}</p>
+              <p className="text-xs text-gray-400 truncate">
+                {row.email || "メールなし"}{row.member_no != null ? ` ・ 会員番号 ${row.member_no}` : ""}
+              </p>
+            </div>
+            <select
+              value={row.role}
+              onChange={(event) => changeRole(row, event.target.value as MemberDbRow["role"])}
+              disabled={savingId === row.id}
+              className="px-3 py-2 text-sm font-bold border border-gray-200 rounded-lg bg-white disabled:opacity-60"
+              aria-label={`${row.name}の権限`}
+            >
+              <option value="user">一般</option>
+              <option value="manager">部長</option>
+              <option value="admin">運営</option>
+            </select>
+          </div>
+        ))}
+        {linkedRows.length === 0 && (
+          <p className="text-center text-gray-400 py-12 text-sm">該当するログインユーザーがいません</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ソート可能なテーブルヘッダーセル（クリックで昇降切替）
@@ -1404,6 +1523,9 @@ function MembersDbTab() {
 
   if (loadStatus === "loading") {
     return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
+  }
+  if (loadStatus === "error") {
+    return <div className="text-center text-red-600 py-20">会員データを取得できませんでした。Supabaseの接続と権限を確認してください。</div>;
   }
 
   return (
@@ -1595,6 +1717,9 @@ function MembersDbRawTab() {
   if (loadStatus === "loading") {
     return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
   }
+  if (loadStatus === "error") {
+    return <div className="text-center text-red-600 py-20">会員データを取得できませんでした。Supabaseの接続と権限を確認してください。</div>;
+  }
 
   // 全カラム定義（表示順・幅・値の取得関数・ソートキー）
   const columns: { label: string; width: string; align?: "left" | "right" | "center"; sortKey?: MembersDbSortKey; render: (r: MemberDbRow) => React.ReactNode }[] = [
@@ -1616,6 +1741,7 @@ function MembersDbRawTab() {
       <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded border ${renewalStatusStyle[r.renewal_status] || "bg-gray-50 text-gray-600 border-gray-200"}`}>{r.renewal_status}</span>
     ) : <span className="text-gray-300">—</span> },
     { label: "更新時金額", width: "80px", align: "right", render: (r) => r.renewal_fee != null ? <span className="font-mono text-xs">¥{r.renewal_fee.toLocaleString()}</span> : <span className="text-gray-300">—</span> },
+    { label: "更新メモ", width: "140px", render: (r) => r.renewal_note || <span className="text-gray-300">—</span> },
     { label: "入会時金額", width: "80px", align: "right", sortKey: "price", render: (r) => r.price != null ? <span className="font-mono text-xs">¥{r.price.toLocaleString()}</span> : <span className="text-gray-300">—</span> },
     { label: "紹介料", width: "80px", align: "right", render: (r) => r.referral_fee != null ? <span className="font-mono text-xs">¥{r.referral_fee.toLocaleString()}</span> : <span className="text-gray-300">—</span> },
     { label: "グリップ", width: "90px", render: (r) => r.grip || <span className="text-gray-300">—</span> },

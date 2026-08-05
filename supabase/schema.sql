@@ -8,7 +8,7 @@
 -- 元データ:
 --   - 入会者名簿.xlsx（会員番号付き、退会者含む）
 --   - 連絡先情報（回答）.xlsx（Googleフォーム回答）
---   → scripts/build-members-db.mjs が統合し data/processed/members.json を生成（567件）
+--   → scripts/build-members-db.mjs が統合し data/processed/members.json を生成
 --
 -- v1 からの変更点:
 --   - start_month TEXT      → start_year(SMALLINT) + start_month(SMALLINT 1-12) に分割
@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS members (
   renewal_status        TEXT            NOT NULL
                         CHECK (renewal_status IN ('未更新', '退会', '更新済', '返事待ち', '入金待ち')),
   renewal_fee           INTEGER,                    -- 更新時の金額（renewal_status='更新済' のみ）
+  renewal_note          TEXT,                       -- 更新欄の自由記述原文（例: 再開検討など）
   price                 INTEGER,                    -- 入会時の金額
   referral_fee          INTEGER,                    -- 紹介料
   job                   TEXT,                       -- 職業
@@ -67,7 +68,7 @@ CREATE TABLE IF NOT EXISTS members (
   withdrawal_reason     TEXT,                       -- 退会理由（運営入力）
 
   -- 認証（Supabase Auth との紐づけ）
-  -- 既存567名はアカウント未作成のため NULL。ログインできるようになった会員だけ埋まる。
+  -- 既存会員はアカウント未作成のため NULL。ログインできるようになった会員だけ埋まる。
   -- ∴ members.id を auth.users.id と同一にはできず、別カラムで 1:1 に紐づける。
   auth_user_id          UUID            UNIQUE REFERENCES auth.users(id) ON DELETE SET NULL,
 
@@ -115,8 +116,8 @@ CREATE TRIGGER trg_members_set_updated_at
 -- ============================================================
 -- RLS（行レベルセキュリティ）
 -- ============================================================
--- 🔴 重要: members は実在会員567名の個人情報（email/phone 373件）を含む。
--- 認証方式が未確定（依頼主回答待ち）の間は「誰にも読ませない」を既定とする。
+-- 🔴 重要: members は実在会員の個人情報（email/phone）を含む。
+-- メール＋パスワード認証を前提とし、許可は policies.sql で明示する。
 --
 -- RLS を有効化する。この時点ではポリシーが1つもない＝全拒否。
 --   → anon キー / authenticated キーからは全行アクセス不可（0件が返る）
@@ -141,6 +142,7 @@ COMMENT ON COLUMN members.start_year        IS 'スタート年。月のみ記�
 COMMENT ON COLUMN members.start_month       IS 'スタート月（1-12）';
 COMMENT ON COLUMN members.renewal_status    IS '1年経過時の更新状況。空欄=未更新（1年未到来）、退会=更新をやめた';
 COMMENT ON COLUMN members.renewal_fee       IS '更新時の金額。renewal_status=更新済 のときのみ入る';
+COMMENT ON COLUMN members.renewal_note      IS '更新欄の自由記述を失わないための原文メモ';
 COMMENT ON COLUMN members.price             IS '入会時の金額';
 COMMENT ON COLUMN members.role              IS 'admin=運営 / manager=部長 / user=一般。当面は肩書き表示のみで特権なし';
 COMMENT ON COLUMN members.admin_note        IS '運営メモ。会員には非表示';

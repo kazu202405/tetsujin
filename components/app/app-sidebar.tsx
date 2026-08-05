@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarSearch,
   // UtensilsCrossed,
@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   Settings,
+  LogOut,
 } from "lucide-react";
 import { communityStats } from "@/lib/dashboard-data";
 import { NotificationBell } from "./notification-bell";
@@ -25,8 +26,16 @@ import { useNotifications } from "@/lib/notifications-data";
 import { useBoardUnreadCount } from "@/lib/board-data";
 import { usePendingIncomingCount } from "@/lib/disclosure-data";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
+import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { useCurrentMember } from "@/lib/current-member";
 
-const navItems = [
+const navItems: {
+  href: string;
+  label: string;
+  icon: typeof User;
+  adminOnly?: boolean;
+}[] = [
   { href: "/app/mypage", label: "マイページ", icon: User },
   { href: "/app/members", label: "メンバー", icon: Users },
   { href: "/app/board", label: "掲示板", icon: MessageCircle },
@@ -35,18 +44,34 @@ const navItems = [
   { href: "/app/connections", label: "出会い", icon: Handshake },
   { href: "/app/tree", label: "紹介ツリー", icon: GitBranch },
   { href: "/app/requests", label: "つながり申請", icon: UserPlus },
-  { href: "/app/members-admin", label: "つながり", icon: UserCog },
-  { href: "/app/admin", label: "管理画面", icon: ShieldCheck },
+  { href: "/app/members-admin", label: "つながり", icon: UserCog, adminOnly: true },
+  { href: "/app/admin", label: "管理画面", icon: ShieldCheck, adminOnly: true },
   { href: "/app/settings", label: "設定", icon: Settings },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const currentMember = useCurrentMember();
   const { unreadCount } = useNotifications();
   const boardUnread = useBoardUnreadCount();
   const requestsPending = usePendingIncomingCount(CURRENT_USER_ID);
   // モバイル/タブレット用ドロワー（ハンバーガー）
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const visibleNavItems = navItems.filter(
+    (item) => !item.adminOnly || currentMember?.role === "admin",
+  );
+  const displayName = currentMember?.name ?? "会員";
+  const displayJob = currentMember?.job ?? "職業未登録";
+  const initial = displayName.trim().charAt(0) || "T";
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await createClient().auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   // ページ遷移したらドロワーを閉じる
   useEffect(() => {
@@ -97,23 +122,21 @@ export function AppSidebar() {
             href="/app/mypage"
             className="flex items-center gap-3 group"
           >
-            <img
-              src="https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face"
-              alt="田中 一郎"
-              className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm ring-1 ring-gray-100 group-hover:ring-[var(--tetsu-pink)] transition-all"
-            />
+            <div className="w-10 h-10 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center font-extrabold border-2 border-white shadow-sm ring-1 ring-gray-100 group-hover:ring-[var(--tetsu-pink)] transition-all">
+              {initial}
+            </div>
             <div className="min-w-0">
               <p className="text-sm font-bold text-gray-900 truncate group-hover:text-[var(--tetsu-pink)] transition-colors">
-                田中 一郎
+                {displayName}
               </p>
-              <p className="text-xs text-gray-400">経営コンサルタント</p>
+              <p className="text-xs text-gray-400 truncate">{displayJob}</p>
             </div>
           </Link>
         </div>
 
         {/* ナビゲーション */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = pathname.startsWith(item.href);
             const badge = badgeFor(item.href);
             return (
@@ -168,6 +191,20 @@ export function AppSidebar() {
             </div>
           </div>
         </div>
+
+        {/* ログアウトは常に見つけられるようサイドバー最下部へ置く */}
+        {isSupabaseConfigured && (
+          <div className="px-3 pb-4">
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition-all disabled:opacity-60"
+            >
+              <LogOut className="w-5 h-5 flex-shrink-0" />
+              <span>{loggingOut ? "ログアウト中..." : "ログアウト"}</span>
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* モバイル/タブレット用トップバー（ロゴ + お知らせ + ハンバーガー） */}
@@ -231,16 +268,14 @@ export function AppSidebar() {
               href="/app/mypage"
               className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 group flex-shrink-0"
             >
-              <img
-                src="https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face"
-                alt="田中 一郎"
-                className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm ring-1 ring-gray-100 group-hover:ring-[var(--tetsu-pink)] transition-all"
-              />
+            <div className="w-10 h-10 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center font-extrabold border-2 border-white shadow-sm ring-1 ring-gray-100 group-hover:ring-[var(--tetsu-pink)] transition-all">
+              {initial}
+            </div>
               <div className="min-w-0">
                 <p className="text-sm font-bold text-gray-900 truncate group-hover:text-[var(--tetsu-pink)] transition-colors">
-                  田中 一郎
+                  {displayName}
                 </p>
-                <p className="text-xs text-gray-400">経営コンサルタント</p>
+                <p className="text-xs text-gray-400 truncate">{displayJob}</p>
               </div>
             </Link>
 
@@ -273,7 +308,7 @@ export function AppSidebar() {
                   </Link>
                 );
               })()}
-              {navItems.map((item) => {
+              {visibleNavItems.map((item) => {
                 const isActive = pathname.startsWith(item.href);
                 const badge = badgeFor(item.href);
                 return (
@@ -327,6 +362,20 @@ export function AppSidebar() {
                 </span>
               </div>
             </div>
+
+            {/* モバイルでもメニュー最下部から直接ログアウトできる */}
+            {isSupabaseConfigured && (
+              <div className="px-3 py-3 border-t border-gray-100 flex-shrink-0">
+                <button
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="flex w-full items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all disabled:opacity-60"
+                >
+                  <LogOut className="w-5 h-5 flex-shrink-0" />
+                  <span>{loggingOut ? "ログアウト中..." : "ログアウト"}</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

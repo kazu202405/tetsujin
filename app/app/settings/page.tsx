@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   User,
   Bell,
@@ -9,17 +8,14 @@ import {
   Check,
   MessageCircle,
   RotateCcw,
-  LogOut,
 } from "lucide-react";
 import { PushNotificationSetup } from "@/components/app/push-notification-setup";
 import { resetOnboardingDemo } from "@/lib/onboarding-data";
 import { CURRENT_USER_ID } from "@/lib/connections-data";
-import { createClient } from "@/lib/supabase/client";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { useCurrentMember } from "@/lib/current-member";
 
 export default function SettingsPage() {
-  const router = useRouter();
-  const [loggingOut, setLoggingOut] = useState(false);
+  const currentMember = useCurrentMember();
   const [saved, setSaved] = useState(false);
   const [notifications, setNotifications] = useState({
     newRecommendation: true,
@@ -29,18 +25,12 @@ export default function SettingsPage() {
   });
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const displayName = currentMember?.name ?? "会員";
+  const initial = displayName.trim().charAt(0) || "T";
 
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  };
-
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    await createClient().auth.signOut();
-    // Server Component 側のセッションも捨てさせる
-    router.push("/login");
-    router.refresh();
   };
 
   const handleResetOnboarding = () => {
@@ -68,11 +58,12 @@ export default function SettingsPage() {
           </h2>
           <div className="space-y-5">
             <div className="flex items-center gap-4">
-              <img
-                src="https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face"
-                alt="田中 一郎"
-                className="w-16 h-16 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100"
-              />
+              <div
+                aria-label={displayName}
+                className="w-16 h-16 rounded-full bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center text-xl font-extrabold border-2 border-white shadow ring-1 ring-gray-100"
+              >
+                {initial}
+              </div>
               <button className="text-sm font-medium text-gray-600 px-4 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
                 写真を変更
               </button>
@@ -84,7 +75,7 @@ export default function SettingsPage() {
                 </label>
                 <input
                   type="text"
-                  defaultValue="田中 一郎"
+                  defaultValue={displayName}
                   className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
                 />
               </div>
@@ -94,7 +85,7 @@ export default function SettingsPage() {
                 </label>
                 <input
                   type="text"
-                  defaultValue="代表取締役"
+                  defaultValue={currentMember?.membership_type || ""}
                   className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
                 />
               </div>
@@ -105,7 +96,7 @@ export default function SettingsPage() {
               </label>
               <input
                 type="text"
-                defaultValue="人の可能性を信じ、組織を変える"
+                defaultValue={currentMember?.grip || ""}
                 className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
               />
             </div>
@@ -115,7 +106,7 @@ export default function SettingsPage() {
               </label>
               <input
                 type="email"
-                defaultValue="tanaka@example.com"
+                defaultValue={currentMember?.email || ""}
                 className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
               />
             </div>
@@ -208,25 +199,6 @@ export default function SettingsPage() {
             )}
           </button>
         </div>
-
-        {/* ログアウト（Supabase接続時のみ。mockモードではセッションが存在しない） */}
-        {isSupabaseConfigured && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
-            <h2 className="text-base font-bold text-gray-900 mb-2">ログアウト</h2>
-            <p className="text-sm text-gray-600 leading-relaxed mb-5">
-              このブラウザからログアウトします。次回はメールアドレスとパスワードで
-              ログインしてください。
-            </p>
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-60"
-            >
-              <LogOut className="w-4 h-4" />
-              {loggingOut ? "ログアウト中..." : "ログアウト"}
-            </button>
-          </div>
-        )}
 
         {/* 退会について（運営のみが処理。本人はLINEで申請） */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
