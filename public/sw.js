@@ -1,16 +1,15 @@
 /*
- * テツジン会 PWA Service Worker（通知の土台）
+ * テツジン会 PWA Service Worker
  *
  * 役割:
  *  - PWA としてインストール可能にする要件のひとつ
- *  - 将来の Web Push 受信（push イベント）
+ *  - サーバからの Web Push を受け取って通知を出す
  *  - 通知クリックで該当ページを開く
  *
- * 注意:
- *  実際のサーバ配信（購読情報を保存 → サーバから push 送信）は
- *  Supabase バックエンド連携（入金後）で実装する。
- *  現状はローカルのテスト通知（registration.showNotification）で
- *  「端末に通知が出るか」を実機確認できる段階。
+ * 送信側の流れ:
+ *  notifications へINSERT → Supabase の Database Webhook →
+ *  /api/push/dispatch が購読先へ送信 → ここの push イベントで表示。
+ *  受け取る中身は { title, body, url }。
  */
 
 self.addEventListener("install", () => {
@@ -22,7 +21,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-// 将来の Web Push 受信（サーバからのプッシュ）
+// サーバからのプッシュを受け取る
 self.addEventListener("push", (event) => {
   let data = {};
   try {

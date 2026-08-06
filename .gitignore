@@ -34,3 +34,7 @@ public/members-db.json
 # 作業用メモ・ツール出力
 .playwright-mcp/
 z copy.md
+# Vercel CLI のリンク情報（プロジェクトIDなど）
+.vercel
+# ※ .env*.local は上で無視済み。ここで .env* まで広げると
+#    テンプレートの .env.local.example まで無視されるので広げない。
