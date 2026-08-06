@@ -17,7 +17,6 @@ import {
 import { useCurrentMember } from "@/lib/current-member";
 import { AvatarUpload } from "@/components/app/avatar-upload";
 import { AutoTextarea } from "@/components/app/auto-textarea";
-import { ToastStack, useToasts } from "@/components/app/toast";
 import {
   SheetSnsLink,
   snsLabel,
@@ -163,14 +162,14 @@ export default function ProfileSheetPage() {
     photoUrl: currentMember ? "" : initialData.photoUrl,
   }));
 
-  const { toast, showToast } = useToasts();
-
   // 保存状態（自動保存と保存ボタンの両方でここを更新する）
   const [sheetLoaded, setSheetLoaded] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "dirty" | "saving" | "saved" | "error">(
     "idle"
   );
   const [saveError, setSaveError] = useState<string | null>(null);
+  // 直近の保存が自動保存だったか（ボタンの文言を出し分けるため）
+  const [savedByAuto, setSavedByAuto] = useState(true);
   // 直近で保存に成功した内容。変化が無いときに無駄な保存を投げないための比較用。
   const lastSavedRef = useRef<string | null>(null);
   const [themeIndex, setThemeIndex] = useState(0);
@@ -369,19 +368,17 @@ export default function ProfileSheetPage() {
           const message = body?.error || "保存できませんでした";
           setSaveError(message);
           setSaveState("error");
-          showToast(message, "error");
           return;
         }
         lastSavedRef.current = payloadJson;
+        setSavedByAuto(auto);
         setSaveState("saved");
-        showToast(auto ? "自動保存しました" : "保存しました", "success");
       } catch {
         setSaveError("保存できませんでした（通信エラー）");
         setSaveState("error");
-        showToast("保存できませんでした（通信エラー）", "error");
       }
     },
-    [showToast]
+    []
   );
 
   // 自動保存：入力が止まって1.5秒後に保存する
@@ -397,10 +394,8 @@ export default function ProfileSheetPage() {
   // 保存ボタン：待たずにすぐ保存する
   const handleSaveSheet = () => {
     if (!sheetLoaded) {
-      const message = "ログイン情報を確認できないため保存できません";
-      setSaveError(message);
+      setSaveError("ログイン情報を確認できないため保存できません");
       setSaveState("error");
-      showToast(message, "error");
       return;
     }
     void saveSheet(payloadJson, false);
@@ -603,7 +598,8 @@ export default function ProfileSheetPage() {
               >
                 {savedSheet ? (
                   <>
-                    <Check className="w-4 h-4" /> 保存しました
+                    <Check className="w-4 h-4" />
+                    {savedByAuto ? "自動保存しました" : "保存しました"}
                   </>
                 ) : (
                   <>
@@ -627,9 +623,6 @@ export default function ProfileSheetPage() {
           <div className="mt-2 text-xs min-h-[1.25rem]">
             {saveState === "dirty" && <span className="text-gray-400">未保存の変更があります</span>}
             {saveState === "saving" && <span className="text-gray-400">保存中...</span>}
-            {saveState === "saved" && (
-              <span className="text-green-600">保存しました（自動保存されています）</span>
-            )}
             {saveState === "error" && <span className="text-red-600">{saveError}</span>}
           </div>
         </div>
@@ -1007,8 +1000,9 @@ export default function ProfileSheetPage() {
                     <div className="flex-1">
                       <BarHeader>趣味</BarHeader>
                       <div className="px-5 py-2 text-base text-white/80 leading-relaxed">
+                        {/* 趣味も書かれたとおりに出す（●は自分で入れてもらう） */}
                         {data.hobbies.split("\n").map((line, i) => (
-                          <p key={i}>{line.startsWith("●") ? line : `●${line}`}</p>
+                          <p key={i}>{line}</p>
                         ))}
                       </div>
                     </div>
@@ -1064,7 +1058,6 @@ export default function ProfileSheetPage() {
         </div>
       </div>
 
-      <ToastStack toast={toast} />
     </div>
   );
 }

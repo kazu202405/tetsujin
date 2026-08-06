@@ -189,8 +189,9 @@ export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Pro
                 <div className="flex-1">
                   <BarHeader>趣味</BarHeader>
                   <div className="px-5 py-2 text-base text-white/80 leading-relaxed">
+                    {/* 趣味も書かれたとおりに出す（●は自分で入れてもらう） */}
                     {data.hobbies.split("\n").map((line, i) => (
-                      <p key={i}>{line.startsWith("●") ? line : `●${line}`}</p>
+                      <p key={i}>{line}</p>
                     ))}
                   </div>
                 </div>
