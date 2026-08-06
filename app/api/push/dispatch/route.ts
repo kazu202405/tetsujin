@@ -84,10 +84,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ sent: 0, reason: "no_subscription" }, { headers: HEADERS });
   }
 
+  // アイコンのバッジ用に、その人の未読数を数えて一緒に送る。
+  // 通知が届いてもバッジは自動では付かないため、端末側で明示的に設定する。
+  const { count: unread } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("recipient_id", record.recipient_id)
+    .is("read_at", null);
+
   const payload = JSON.stringify({
     title: record.title,
     body: record.message ?? "",
     url: record.href ?? "/app/notifications",
+    badge: unread ?? 0,
   });
 
   let sent = 0;

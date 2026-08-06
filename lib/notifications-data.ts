@@ -38,6 +38,26 @@ export interface UseNotificationsResult {
 /** 他の画面にも更新を知らせるためのイベント名 */
 const UPDATED_EVENT = "tetsujin-notifications-updated";
 
+/**
+ * アプリアイコンのバッジ（右上の数字）を未読数に合わせる。
+ * プッシュ受信時は Service Worker 側でも設定しているが、
+ * アプリを開いて既読にしたときはこちらで消す必要がある。
+ * 非対応の環境では何も起きない。
+ */
+function syncAppBadge(unread: number) {
+  if (typeof navigator === "undefined") return;
+  const nav = navigator as Navigator & {
+    setAppBadge?: (n?: number) => Promise<void>;
+    clearAppBadge?: () => Promise<void>;
+  };
+  try {
+    if (unread > 0) void nav.setAppBadge?.(unread);
+    else void nav.clearAppBadge?.();
+  } catch {
+    /* 非対応環境 */
+  }
+}
+
 export function useNotifications(): UseNotificationsResult {
   const [notifications, setNotifications] = useState<
     (NotificationItem & { read: boolean })[]
@@ -89,6 +109,11 @@ export function useNotifications(): UseNotificationsResult {
   };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // 未読数が変わるたびにアイコンのバッジを合わせる
+  useEffect(() => {
+    syncAppBadge(unreadCount);
+  }, [unreadCount]);
 
   return { notifications, unreadCount, markRead, markAllRead };
 }

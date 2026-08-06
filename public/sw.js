@@ -36,7 +36,22 @@ self.addEventListener("push", (event) => {
     badge: "/icon.svg",
     data: { url: data.url || "/app/notifications" },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+
+  // アイコン右上の数字（未読件数）。通知が届いても自動では付かないため明示的に設定する。
+  // 非対応の環境（Android Chrome など）では何も起きないだけなので握りつぶす。
+  const updateBadge = async () => {
+    if (typeof data.badge !== "number" || !self.navigator || !self.navigator.setAppBadge) return;
+    try {
+      if (data.badge > 0) await self.navigator.setAppBadge(data.badge);
+      else await self.navigator.clearAppBadge();
+    } catch (e) {
+      /* 非対応環境 */
+    }
+  };
+
+  event.waitUntil(
+    Promise.all([self.registration.showNotification(title, options), updateBadge()])
+  );
 });
 
 // 通知クリック → 既存タブにフォーカス or 新規で開く
