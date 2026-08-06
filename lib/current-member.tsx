@@ -16,6 +16,11 @@ export type CurrentMember = {
   avatar_path?: string | null;
   /** 表示用の署名URL。非公開バケットのためサーバー側（AppLayout）で発行する。 */
   avatar_url?: string | null;
+  // 会費の表示に使う（設定画面）
+  price?: number | null;
+  start_year?: number | null;
+  start_month?: number | null;
+  renewal_status?: string | null;
 };
 
 const CurrentMemberContext = createContext<CurrentMember | null>(null);

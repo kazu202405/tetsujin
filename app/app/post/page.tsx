@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { CalendarDays, Plus, ChevronLeft } from "lucide-react";
 import type { Event, MyProfile, ParticipantRole, ToastMessage } from "./types";
-import { myProfile } from "./data";
+import { useCurrentMember } from "@/lib/current-member";
 import EventCard from "./components/EventCard";
 import CreateForm from "./components/CreateForm";
 import ManagePanel from "./components/ManagePanel";
@@ -31,8 +31,6 @@ function formatMonth(year: number, month: number) {
 }
 
 // DBの行を画面が使っている Event 型へ寄せる。
-// 参加承認・副管理者・オーナー委譲はまだ設計していないため、
-// pendingParticipants は常に空、参加者のロールも持たせない。
 function toEvent(record: EventRecord, todayIso: string): Event {
   return {
     id: record.id,
@@ -124,7 +122,28 @@ export default function PostPage() {
     [eventRecords]
   );
   const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
-  const [currentProfile, setCurrentProfile] = useState<MyProfile>(myProfile);
+  // 参加モーダルに出す自分の情報。以前は固定値だったのでログイン会員から作る。
+  const me = useCurrentMember();
+  const [currentProfile, setCurrentProfile] = useState<MyProfile>({
+    id: "",
+    name: "会員",
+    photoUrl: "",
+    company: "",
+    position: "",
+    bio: "",
+  });
+
+  useEffect(() => {
+    if (!me) return;
+    setCurrentProfile({
+      id: me.id,
+      name: me.name,
+      photoUrl: me.avatar_url ?? "",
+      company: "",
+      position: me.membership_type ?? "",
+      bio: me.grip ?? "",
+    });
+  }, [me]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   // トースト通知

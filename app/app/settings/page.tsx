@@ -75,6 +75,28 @@ export default function SettingsPage() {
   const displayName = currentMember?.name ?? "会員";
   const initial = displayName.trim().charAt(0) || "T";
 
+  // 会費の表示（会員台帳の内容をそのまま出す。分からない項目は「未登録」と書く）
+  const membership = {
+    label: currentMember?.membership_type
+      ? `${currentMember.membership_type}会員`
+      : "会員種別 未登録",
+    amount:
+      currentMember?.price != null
+        ? `入会時 ¥${currentMember.price.toLocaleString()}（年額）`
+        : currentMember?.membership_type === "個人"
+          ? "個人 ¥19,800（年額）"
+          : currentMember?.membership_type === "法人"
+            ? "法人 ¥30,000（年額）"
+            : "金額は運営にご確認ください",
+    started:
+      currentMember?.start_year && currentMember?.start_month
+        ? `${currentMember.start_year}年${currentMember.start_month}月`
+        : currentMember?.start_year
+          ? `${currentMember.start_year}年`
+          : "未登録",
+    renewal: currentMember?.renewal_status ?? "未登録",
+  };
+
   // 本人が変更してよいのは一言（グリップ）だけ
   const [grip, setGrip] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
@@ -275,25 +297,46 @@ export default function SettingsPage() {
         {/* 端末プッシュ通知（PWA / Web Push） */}
         <PushNotificationSetup />
 
-        {/* Plan */}
+        {/* 会費（会員台帳の内容をそのまま表示する。
+            以前は「月額¥3,980・Visa ****4242」という固定表示だったが、
+            実際の会費は年額で、支払いは銀行振込かPayPay。カード決済は無い） */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
           <h2 className="text-base font-bold text-gray-900 mb-5 flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-gray-400" />
-            プラン・お支払い
+            会費
           </h2>
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl mb-4">
-            <div>
+
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl mb-4 gap-3">
+            <div className="min-w-0">
               <p className="text-sm font-bold text-gray-900">
-                スタンダードプラン
+                {membership.label}
               </p>
-              <p className="text-xs text-gray-500">月額 ¥3,980（税込）</p>
+              <p className="text-xs text-gray-500">{membership.amount}</p>
             </div>
-            <span className="px-2.5 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold">
-              有効
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0 ${
+                currentMember?.is_withdrawn
+                  ? "bg-gray-100 text-gray-500"
+                  : "bg-green-100 text-green-700"
+              }`}
+            >
+              {currentMember?.is_withdrawn ? "退会済み" : "在籍中"}
             </span>
           </div>
-          <p className="text-xs text-gray-400">
-            次回請求日: 2026年3月14日 ・ Visa **** 4242
+
+          <dl className="space-y-1.5 text-xs text-gray-500">
+            <div className="flex justify-between gap-3">
+              <dt>開始</dt>
+              <dd className="text-gray-700">{membership.started}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt>更新状況</dt>
+              <dd className="text-gray-700">{membership.renewal}</dd>
+            </div>
+          </dl>
+
+          <p className="mt-4 text-[11px] text-gray-400 leading-relaxed">
+            会費は1年契約です。お支払い方法の変更・更新のご相談は運営までご連絡ください。
           </p>
         </div>
 

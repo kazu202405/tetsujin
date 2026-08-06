@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Building2, Search, User } from "lucide-react";
-import { dashboardMembers } from "@/lib/dashboard-data";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { RoleBadge } from "@/components/app/role-badge";
 import { MemberAvatar } from "@/components/app/member-avatar";
 
@@ -18,19 +16,6 @@ type DirectoryMember = {
   role: "admin" | "manager" | "user";
   avatar_url?: string | null;
 };
-
-const mockDirectory: DirectoryMember[] = dashboardMembers
-  .filter((member) => !member.isWithdrawn)
-  .map((member) => ({
-    id: member.id,
-    member_no: Number(member.id) || null,
-    name: member.name,
-    nickname: null,
-    job: member.jobTitle,
-    grip: member.headline,
-    membership_type: member.memberType,
-    role: "user",
-  }));
 
 function roleLabel(role: DirectoryMember["role"]) {
   return role === "admin" ? "運営" : role === "manager" ? "部長" : "ユーザー";
@@ -76,10 +61,6 @@ export default function MembersPage() {
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
-      setMembers(mockDirectory);
-      return;
-    }
     let active = true;
     fetch("/api/members", { cache: "no-store" })
       .then((response) => {

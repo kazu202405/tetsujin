@@ -31,22 +31,10 @@ import {
   Megaphone,
   Send,
 } from "lucide-react";
-import {
-  useWithdrawnResolver,
-  useWithdrawalMeta,
-  setMemberWithdrawn,
-} from "@/lib/withdrawal-data";
-import { useMemberNotes, setMemberNote } from "@/lib/member-notes";
-import {
-  useMemberRoles,
-  getMemberRole,
-  setMemberRole,
-  MemberRole,
-} from "@/lib/member-roles";
+import type { MemberRole } from "@/lib/member-roles";
 import { RoleBadge } from "@/components/app/role-badge";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { useEvents } from "@/lib/events-api";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 // ============================================================
 // タブ定義
@@ -68,18 +56,7 @@ const tabs: { id: AdminTab; label: string; icon: typeof Clock }[] = [
 // ============================================================
 // 共通メンバー情報
 // ============================================================
-const allMembers = [
-  { id: "1", name: "田中 一郎", short: "田中", photoUrl: "https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face", job: "経営コンサルタント", industry: "コンサル/研修/講師", memberType: "法人" as const },
-  { id: "2", name: "佐藤 裕樹", short: "佐藤", photoUrl: "https://images.unsplash.com/photo-1619193597120-1d1edb42e34b?w=400&h=400&fit=crop&crop=face", job: "IT起業家", industry: "AI/IT/SE", memberType: "法人" as const },
-  { id: "3", name: "山本 恵美", short: "山本", photoUrl: "https://images.unsplash.com/photo-1613020092739-5d01102e080b?w=400&h=400&fit=crop&crop=face", job: "飲食店経営", industry: "飲食/BAR/カフェ", memberType: "個人" as const },
-  { id: "4", name: "鈴木 健二", short: "鈴木", photoUrl: "https://images.unsplash.com/photo-1720467438431-c1b5659a933e?w=400&h=400&fit=crop&crop=face", job: "不動産デベロッパー", industry: "不動産/住宅関連", memberType: "法人" as const },
-  { id: "5", name: "中村 明子", short: "中村", photoUrl: "https://images.unsplash.com/photo-1624091844772-554661d10173?w=400&h=400&fit=crop&crop=face", job: "医師・クリニック経営", industry: "医療", memberType: "法人" as const },
-  { id: "6", name: "渡辺 剛", short: "渡辺", photoUrl: "https://images.unsplash.com/photo-1590799159581-0ef74a3bac90?w=400&h=400&fit=crop&crop=face", job: "ファイナンシャルアドバイザー", industry: "金融/生命保険/投資", memberType: "個人" as const },
-  { id: "7", name: "小川 理沙", short: "小川", photoUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=400&fit=crop&crop=face", job: "デザイナー", industry: "WEBデザイン", memberType: "個人" as const },
-  { id: "8", name: "森田 駿", short: "森田", photoUrl: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&h=400&fit=crop&crop=face", job: "人材紹介業", industry: "人材業/人事", memberType: "法人" as const },
-  { id: "9", name: "藤田 舞", short: "藤田", photoUrl: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&h=400&fit=crop&crop=face", job: "Eコマース経営", industry: "小売り/卸/物販", memberType: "個人" as const },
-  { id: "10", name: "本田 浩二", short: "本田", photoUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face", job: "飲食店グループ経営", industry: "飲食/BAR/カフェ", memberType: "法人" as const },
-];
+
 
 // ============================================================
 // タブ1: 入会申請 モックデータ
@@ -131,26 +108,6 @@ const activityStatusConfig: Record<ActivityStatus, { label: string; color: strin
 // ============================================================
 // タブ4: 紹介ランキング モックデータ
 // ============================================================
-interface ReferralRecord {
-  referrerId: string;
-  referredId: string;
-  referredName: string;
-  referredPhotoUrl: string;
-  referredJob: string;
-  joinedAt: string;
-}
-
-const referralRecords: ReferralRecord[] = [
-  { referrerId: "1", referredId: "2", referredName: "佐藤 裕樹", referredPhotoUrl: allMembers[1].photoUrl, referredJob: "IT起業家", joinedAt: "2024-02-10" },
-  { referrerId: "1", referredId: "3", referredName: "山本 恵美", referredPhotoUrl: allMembers[2].photoUrl, referredJob: "飲食店経営", joinedAt: "2024-03-05" },
-  { referrerId: "1", referredId: "8", referredName: "森田 駿", referredPhotoUrl: allMembers[7].photoUrl, referredJob: "人材紹介業", joinedAt: "2025-01-15" },
-  { referrerId: "6", referredId: "4", referredName: "鈴木 健二", referredPhotoUrl: allMembers[3].photoUrl, referredJob: "不動産デベロッパー", joinedAt: "2024-03-20" },
-  { referrerId: "3", referredId: "5", referredName: "中村 明子", referredPhotoUrl: allMembers[4].photoUrl, referredJob: "医師・クリニック経営", joinedAt: "2024-04-01" },
-  { referrerId: "3", referredId: "10", referredName: "本田 浩二", referredPhotoUrl: allMembers[9].photoUrl, referredJob: "飲食店グループ経営", joinedAt: "2024-06-15" },
-  { referrerId: "2", referredId: "7", referredName: "小川 理沙", referredPhotoUrl: allMembers[6].photoUrl, referredJob: "デザイナー", joinedAt: "2025-02-20" },
-  { referrerId: "5", referredId: "9", referredName: "藤田 舞", referredPhotoUrl: allMembers[8].photoUrl, referredJob: "Eコマース経営", joinedAt: "2025-03-10" },
-];
-
 // ============================================================
 // メインコンポーネント
 // ============================================================
@@ -1086,7 +1043,6 @@ function ParticipationTab() {
 // タブ4: 会員DB（統合データビューア）
 // ============================================================
 // データソース: Supabase接続時は /api/admin/members、未接続mock時は public/members-db.json
-// mock用JSONが無い場合だけ allMembers をフォールバック表示
 interface MemberDbRow {
   id: string;
   member_no: number | string | null;  // 実データは number、フォールバック("00A"等)は string
@@ -1237,12 +1193,11 @@ function useMembersDbView(rows: MemberDbRow[] | null, defaults?: { showWithdrawn
 // 会員DBデータのフェッチ（Supabase接続時は認証済み管理API、mock時だけローカルJSON）
 function useMembersDb() {
   const [rows, setRows] = useState<MemberDbRow[] | null>(null);
-  const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "fallback" | "error">("loading");
+  const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "error">("loading");
 
   useEffect(() => {
     let cancelled = false;
-    const endpoint = isSupabaseConfigured ? "/api/admin/members" : "/members-db.json";
-    fetch(endpoint, { cache: "no-store" })
+    fetch("/api/admin/members", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error("not found");
         return res.json();
@@ -1253,45 +1208,11 @@ function useMembersDb() {
         setLoadStatus("loaded");
       })
       .catch(() => {
+        // 取得できないときはダミーへ落とさない。
+        // 実データのつもりで偽の会員を見てしまう方が危ない。
         if (cancelled) return;
-        if (isSupabaseConfigured) {
-          setRows([]);
-          setLoadStatus("error");
-          return;
-        }
-        // Vercel等でCSVが無い場合: 既存allMembersを暫定表示（空を避ける）
-        // ダミー番号は実データ(1〜450番)と衝突しないよう "00A"〜"00J" を使用
-        const fallback: MemberDbRow[] = allMembers.map((m, i) => ({
-          id: m.id,
-          member_no: `00${String.fromCharCode(65 + i)}`,
-          name: m.name,
-          nickname: m.short,
-          referrer: null,
-          start_year: null,
-          start_month: null,
-          renewal_status: "未更新",
-          renewal_fee: null,
-          renewal_note: null,
-          price: null,
-          referral_fee: null,
-          job: m.job,
-          grip: null,
-          frequency: null,
-          email: null,
-          phone: null,
-          gender: null,
-          age_range: null,
-          membership_type: m.memberType,
-          payment_method: null,
-          contact_submitted_at: null,
-          source: "both",
-          is_withdrawn: false,
-          import_sheet: null,
-          auth_user_id: null,
-          role: "user",
-        }));
-        setRows(fallback);
-        setLoadStatus("fallback");
+        setRows([]);
+        setLoadStatus("error");
       });
     return () => { cancelled = true; };
   }, []);
@@ -1433,16 +1354,6 @@ function MembersDbTab() {
 
   return (
     <>
-      {/* ステータスバナー（fallback時のみ表示） */}
-      {loadStatus === "fallback" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-          <p className="text-sm text-amber-800">
-            <span className="font-bold">⚠ デモ表示中</span> — 実データ（入会者名簿 / 連絡先情報）を読み込むには、ローカル環境で
-            <code className="mx-1 px-1.5 py-0.5 bg-amber-100 rounded text-xs">node scripts/build-members-db.mjs</code>
-            を実行してください。
-          </p>
-        </div>
-      )}
 
       {/* 統計カード（クリックでフィルタ切替、全て排他的） */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
@@ -1676,15 +1587,6 @@ function MembersDbRawTab() {
 
   return (
     <>
-      {loadStatus === "fallback" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-          <p className="text-sm text-amber-800">
-            <span className="font-bold">⚠ デモ表示中</span> — 実データを読み込むには、ローカル環境で
-            <code className="mx-1 px-1.5 py-0.5 bg-amber-100 rounded text-xs">node scripts/build-members-db.mjs</code>
-            を実行してください。
-          </p>
-        </div>
-      )}
 
       {/* 統計カード */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
@@ -1807,14 +1709,8 @@ interface ManageRow {
 const MANAGE_PAGE_SIZE = 100;
 
 function MemberManageTab() {
-  // 実DB接続時は members テーブルが正。未接続のmockデモでは従来どおり localStorage が正。
-  const useRealData = isSupabaseConfigured;
   const { rows: dbRows, loadStatus } = useMembersDb();
 
-  const isWithdrawn = useWithdrawnResolver();
-  const meta = useWithdrawalMeta();
-  const notes = useMemberNotes();
-  const roles = useMemberRoles();
 
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState(MANAGE_PAGE_SIZE);
@@ -1835,46 +1731,26 @@ function MemberManageTab() {
   const [referrerSearch, setReferrerSearch] = useState("");
 
   const allRows: ManageRow[] = useMemo(() => {
-    const base: ManageRow[] = useRealData
-      ? (dbRows ?? []).map((r) => ({
-          id: r.id,
-          name: r.name,
-          job: r.job ?? "",
-          memberNo: r.member_no,
-          role: r.role,
-          hasLogin: Boolean(r.auth_user_id),
-          isWithdrawn: r.is_withdrawn,
-          withdrawnAt: r.withdrawn_at ?? null,
-          withdrawalReason: r.withdrawal_reason ?? null,
-          note: r.admin_note ?? null,
-          avatarUrl: r.avatar_url ?? null,
-          referrerText: r.referrer ?? null,
-          referrerMemberId: r.referrer_member_id ?? null,
-        }))
-      : allMembers.map((m) => ({
-          id: m.id,
-          name: m.name,
-          job: m.job,
-          memberNo: null,
-          role: getMemberRole(roles, m.id) === "運営"
-            ? "admin"
-            : getMemberRole(roles, m.id) === "部長"
-              ? "manager"
-              : "user",
-          hasLogin: true, // mockデモでは全員がログインできる想定
-          isWithdrawn: isWithdrawn(m.id),
-          withdrawnAt: meta[m.id]?.at ?? null,
-          withdrawalReason: meta[m.id]?.reason ?? null,
-          note: notes[m.id] ?? null,
-          avatarUrl: m.photoUrl,
-          referrerText: null,
-          referrerMemberId: null,
-        }));
+    const base: ManageRow[] = (dbRows ?? []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      job: r.job ?? "",
+      memberNo: r.member_no,
+      role: r.role,
+      hasLogin: Boolean(r.auth_user_id),
+      isWithdrawn: r.is_withdrawn,
+      withdrawnAt: r.withdrawn_at ?? null,
+      withdrawalReason: r.withdrawal_reason ?? null,
+      note: r.admin_note ?? null,
+      avatarUrl: r.avatar_url ?? null,
+      referrerText: r.referrer ?? null,
+      referrerMemberId: r.referrer_member_id ?? null,
+    }));
 
     return base.map((row) =>
       overrides[row.id] ? { ...row, ...overrides[row.id] } : row
     );
-  }, [useRealData, dbRows, roles, isWithdrawn, meta, notes, overrides]);
+  }, [dbRows, overrides]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -1898,11 +1774,6 @@ function MemberManageTab() {
     optimistic: Partial<ManageRow>,
     successText: string
   ): Promise<boolean> => {
-    if (!useRealData) {
-      setOverrides((cur) => ({ ...cur, [row.id]: { ...cur[row.id], ...optimistic } }));
-      return true;
-    }
-
     setSavingId(row.id);
     setMessage(null);
     const response = await fetch(`/api/admin/members/${row.id}`, {
@@ -1926,11 +1797,6 @@ function MemberManageTab() {
   // set_member_role 側で「最後の運営は降格不可」を担保している。
   const changeRole = async (row: ManageRow, role: ManageRow["role"]) => {
     if (row.role === role) return;
-
-    if (!useRealData) {
-      setMemberRole(row.id, roleLabelOf(role));
-      return;
-    }
 
     setSavingId(row.id);
     setMessage(null);
@@ -1966,7 +1832,6 @@ function MemberManageTab() {
       },
       `${withdrawTarget.name}さんを退会にしました`
     );
-    if (!useRealData) setMemberWithdrawn(withdrawTarget.id, true, trimmed);
     if (ok) {
       setWithdrawTarget(null);
       setReason("");
@@ -1981,16 +1846,11 @@ function MemberManageTab() {
       { isWithdrawn: false, withdrawnAt: null, withdrawalReason: null },
       `${reactivateTarget.name}さんを復帰させました`
     );
-    if (!useRealData) setMemberWithdrawn(reactivateTarget.id, false);
     if (ok) setReactivateTarget(null);
   };
 
   // 紹介者を会員へ紐づける（解除は null）
   const linkReferrer = async (row: ManageRow, referrerMemberId: string | null) => {
-    if (!useRealData) {
-      setReferrerTarget(null);
-      return;
-    }
     setSavingId(row.id);
     setMessage(null);
     const response = await fetch(`/api/admin/members/${row.id}/referrer`, {
@@ -2023,14 +1883,13 @@ function MemberManageTab() {
       { note: trimmed || null },
       `${noteTarget.name}さんの備考を保存しました`
     );
-    if (!useRealData) setMemberNote(noteTarget.id, trimmed);
     if (ok) setNoteTarget(null);
   };
 
-  if (useRealData && loadStatus === "loading") {
+  if (loadStatus === "loading") {
     return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
   }
-  if (useRealData && loadStatus === "error") {
+  if (loadStatus === "error") {
     return (
       <div className="text-center text-red-600 py-20">
         会員データを取得できませんでした。

@@ -46,7 +46,9 @@ export async function getCurrentMember() {
   // RLS により「自分の行」だけが返る
   const { data } = await supabase
     .from("members")
-    .select("id, member_no, name, nickname, email, job, grip, membership_type, role, is_withdrawn, avatar_path")
+    .select(
+      "id, member_no, name, nickname, email, job, grip, membership_type, role, is_withdrawn, avatar_path, price, start_year, start_month, renewal_status",
+    )
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
