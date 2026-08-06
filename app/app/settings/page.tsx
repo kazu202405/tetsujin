@@ -17,13 +17,59 @@ import { useCurrentMember } from "@/lib/current-member";
 
 export default function SettingsPage() {
   const currentMember = useCurrentMember();
-  const [saved, setSaved] = useState(false);
-  const [notifications, setNotifications] = useState({
-    newRecommendation: true,
-    eventInvite: true,
-    newConnection: true,
-    weeklyDigest: false,
+  // 通知の受け取り設定（種類ごと）。押した時点で保存する。
+  const [prefs, setPrefs] = useState({
+    board: true,
+    events: true,
+    connections: true,
+    weekly_digest: false,
   });
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [prefsMessage, setPrefsMessage] = useState<
+    { type: "success" | "error"; text: string } | null
+  >(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/me/notification-prefs", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("failed");
+        const body = (await res.json()) as typeof prefs;
+        if (!cancelled) setPrefs(body);
+      })
+      .catch(() => {
+        /* 取れなければ既定のまま表示する */
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggleNotificationPref = async (key: keyof typeof prefs) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next); // 先に画面へ反映してから保存する
+    setSavingPrefs(true);
+    setPrefsMessage(null);
+    try {
+      const response = await fetch("/api/me/notification-prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      if (!response.ok) {
+        setPrefs(prefs); // 失敗したら元に戻す
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        setPrefsMessage({ type: "error", text: body?.error || "保存できませんでした" });
+      } else {
+        setPrefsMessage({ type: "success", text: "保存しました" });
+      }
+    } catch {
+      setPrefs(prefs);
+      setPrefsMessage({ type: "error", text: "保存できませんでした（通信エラー）" });
+    }
+    setSavingPrefs(false);
+  };
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const displayName = currentMember?.name ?? "会員";
@@ -59,11 +105,6 @@ export default function SettingsPage() {
       setProfileMessage({ type: "error", text: "保存できませんでした（通信エラー）" });
     }
     setSavingProfile(false);
-  };
-
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   };
 
   const handleResetOnboarding = () => {
@@ -168,42 +209,67 @@ export default function SettingsPage() {
             通知設定
           </h2>
           <div className="space-y-4">
-            {[
-              { key: "newRecommendation" as const, label: "新しいおすすめ投稿", desc: "フォロー中のメンバーが投稿した時" },
-              { key: "eventInvite" as const, label: "会への招待", desc: "新しいイベントに招待された時" },
-              { key: "newConnection" as const, label: "新しいつながり", desc: "メンバーがあなたを紹介した時" },
-              { key: "weeklyDigest" as const, label: "週間ダイジェスト", desc: "毎週月曜にコミュニティの動きをまとめて配信" },
-            ].map((item) => (
-              <div
-                key={item.key}
-                className="flex items-center justify-between py-2"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {item.label}
-                  </p>
+            {(
+              [
+                {
+                  key: "board",
+                  label: "掲示板",
+                  desc: "自分の投稿にコメント・返信・いいねがあった時",
+                },
+                {
+                  key: "events",
+                  label: "会（イベント）",
+                  desc: "参加の申し込み・承認、フォロー中のシリーズの新しい会",
+                },
+                {
+                  key: "connections",
+                  label: "つながり",
+                  desc: "出会いを記録された時、SNS開示の申請と承認",
+                },
+                {
+                  key: "weekly_digest",
+                  label: "週間ダイジェスト",
+                  desc: "毎週月曜にコミュニティの動きをまとめて受け取る",
+                },
+              ] as const
+            ).map((item) => (
+              <div key={item.key} className="flex items-center justify-between py-2 gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">{item.label}</p>
                   <p className="text-xs text-gray-500">{item.desc}</p>
                 </div>
                 <button
-                  onClick={() =>
-                    setNotifications((prev) => ({
-                      ...prev,
-                      [item.key]: !prev[item.key],
-                    }))
-                  }
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
-                    notifications[item.key] ? "bg-amber-500" : "bg-gray-200"
+                  onClick={() => toggleNotificationPref(item.key)}
+                  disabled={savingPrefs}
+                  className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-60 ${
+                    prefs[item.key] ? "bg-amber-500" : "bg-gray-200"
                   }`}
+                  aria-label={item.label}
                 >
                   <span
                     className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                      notifications[item.key] ? "translate-x-5" : ""
+                      prefs[item.key] ? "translate-x-5" : ""
                     }`}
                   />
                 </button>
               </div>
             ))}
           </div>
+
+          <p className="mt-4 text-[11px] text-gray-400 leading-relaxed">
+            オフにした種類は、アプリ内のお知らせにも端末の通知にも届かなくなります。
+            運営からのお知らせと会費のご案内は、大切な内容のため常にお届けします。
+          </p>
+
+          {prefsMessage && (
+            <p
+              className={`mt-3 text-xs ${
+                prefsMessage.type === "success" ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {prefsMessage.text}
+            </p>
+          )}
         </div>
 
         {/* 端末プッシュ通知（PWA / Web Push） */}
@@ -231,21 +297,9 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {/* Save */}
+        {/* 各セクションがその場で保存するため、まとめて保存するボタンは置かない
+            （押しても何も起きないボタンがあると、保存できたと誤解される） */}
         <div className="flex justify-end">
-          <button
-            onClick={handleSave}
-            className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-xl bg-gray-900 text-white font-bold hover:bg-gray-800 transition-colors"
-          >
-            {saved ? (
-              <>
-                <Check className="w-4 h-4" />
-                保存しました
-              </>
-            ) : (
-              "変更を保存"
-            )}
-          </button>
         </div>
 
         {/* 退会について（運営のみが処理。本人はLINEで申請） */}
