@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCurrentMember } from "@/lib/current-member";
 import { AvatarUpload } from "@/components/app/avatar-upload";
+import { AutoTextarea } from "@/components/app/auto-textarea";
 import { ToastStack, useToasts } from "@/components/app/toast";
 import {
   SheetSnsLink,
@@ -431,7 +432,7 @@ export default function ProfileSheetPage() {
   const inputClass =
     "w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all";
   const textareaClass =
-    "w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all resize-none";
+    "w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all";
 
   // 左カラム用ヘッダー（白文字 + 白の薄い下線、左右余白あり）
   const BarHeader = ({ children }: { children: React.ReactNode }) => (
@@ -727,10 +728,10 @@ export default function ProfileSheetPage() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">
                       職業
                     </label>
-                    <textarea
-                      rows={2}
+                    <AutoTextarea
+                      minRows={2}
                       value={data.job}
-                      onChange={(e) => update("job", e.target.value)}
+                      onChange={(v) => update("job", v)}
                       className={textareaClass}
                     />
                   </div>
@@ -761,10 +762,10 @@ export default function ProfileSheetPage() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">
                       趣味
                     </label>
-                    <textarea
-                      rows={2}
+                    <AutoTextarea
+                      minRows={2}
                       value={data.hobbies}
-                      onChange={(e) => update("hobbies", e.target.value)}
+                      onChange={(v) => update("hobbies", v)}
                       className={textareaClass}
                     />
                   </div>
@@ -780,10 +781,10 @@ export default function ProfileSheetPage() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">
                       MY生歴
                     </label>
-                    <textarea
-                      rows={5}
+                    <AutoTextarea
+                      minRows={5}
                       value={data.myHistory}
-                      onChange={(e) => update("myHistory", e.target.value)}
+                      onChange={(v) => update("myHistory", v)}
                       className={textareaClass}
                       placeholder="こんな人間でこんな生き方してきて、今こんなことしてます。"
                     />
@@ -792,10 +793,10 @@ export default function ProfileSheetPage() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">
                       TETSUJIN特典
                     </label>
-                    <textarea
-                      rows={3}
+                    <AutoTextarea
+                      minRows={3}
                       value={data.tetsujinBenefit}
-                      onChange={(e) => update("tetsujinBenefit", e.target.value)}
+                      onChange={(v) => update("tetsujinBenefit", v)}
                       className={textareaClass}
                       placeholder="メンバーにだけの特典をアピール！"
                     />
@@ -804,11 +805,12 @@ export default function ProfileSheetPage() {
                     <label className="block text-xs font-medium text-gray-500 mb-1">
                       一言
                     </label>
-                    <textarea
-                      rows={3}
+                    <AutoTextarea
+                      minRows={3}
                       value={data.hitokoto}
-                      onChange={(e) => update("hitokoto", e.target.value)}
+                      onChange={(v) => update("hitokoto", v)}
                       className={textareaClass}
+                      placeholder="改行して複数行で書けます"
                     />
                   </div>
                 </div>

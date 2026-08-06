@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, MapPin, UtensilsCrossed, Plus, Trash2, X } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
+import { AutoTextarea } from "@/components/app/auto-textarea";
 
 interface RecommendationItem {
   id: string;
@@ -177,12 +178,12 @@ export default function DiscoverPage() {
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
             </div>
-            <textarea
+            <AutoTextarea
               value={story}
-              onChange={(e) => setStory(e.target.value)}
-              rows={3}
+              onChange={setStory}
+              minRows={3}
               placeholder="どんなときに使えるお店か、ひとこと"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
             />
             <input
               value={tagsInput}

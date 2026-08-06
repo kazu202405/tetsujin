@@ -23,6 +23,7 @@ import {
   Search,
 } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
+import { AutoTextarea } from "@/components/app/auto-textarea";
 import {
   type ConnectionRecord,
   DEFAULT_CONNECTION_TAGS,
@@ -343,12 +344,12 @@ export default function ConnectionsPage() {
 
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1.5">メモ</label>
-              <textarea
+              <AutoTextarea
                 value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={3}
+                onChange={setNote}
+                minRows={3}
                 placeholder="話した内容や次のアクションなど（自分だけに見えます）"
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
             </div>
 

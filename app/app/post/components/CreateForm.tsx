@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Event, Series, ParticipantRole, Participant } from "../types";
+import { AutoTextarea } from "@/components/app/auto-textarea";
 
 interface CreateFormProps {
   myProfile: Participant;
@@ -160,12 +161,12 @@ export default function CreateForm({
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
             説明
           </label>
-          <textarea
-            rows={3}
+          <AutoTextarea
+            minRows={3}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={setDescription}
             placeholder="会の趣旨や備考を記入..."
-            className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent resize-none"
+            className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
           />
         </div>
         <div className="flex gap-3 justify-end pt-2">

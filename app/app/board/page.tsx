@@ -38,6 +38,7 @@ import {
 import { markBoardVisited } from "@/lib/board-data";
 import { useCurrentMember } from "@/lib/current-member";
 import { MemberAvatar } from "@/components/app/member-avatar";
+import { AutoTextarea } from "@/components/app/auto-textarea";
 import {
   type BoardChannel,
   type BoardComment,
@@ -644,12 +645,13 @@ export default function BoardPage() {
             <div className="flex items-start gap-3">
               <MemberAvatar name={me?.name ?? "会員"} size="md" className="mt-0.5" />
               <div className="flex-1">
-                <textarea
+                <AutoTextarea
                   value={newPost}
-                  onChange={(e) => setNewPost(e.target.value)}
+                  onChange={setNewPost}
                   placeholder={`${activeChannel?.name ?? "チャンネル"}に投稿...`}
-                  rows={2}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent focus:bg-white transition-all resize-none"
+                  minRows={2}
+                  maxRows={16}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent focus:bg-white transition-all"
                 />
                 {imagePreview && (
                   <div className="relative mt-2 inline-block">
