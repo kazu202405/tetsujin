@@ -7,7 +7,6 @@
 
 import { useEffect, useState } from "react";
 import { resetBoardVisited } from "./board-data";
-import { resetDisclosureForNewMember } from "./disclosure-data";
 
 const VIDEO_KEY = "tetsujin-onboarding-video-watched";
 const DISMISSED_KEY = "tetsujin-onboarding-dismissed";
@@ -48,13 +47,13 @@ export function dismissOnboarding() {
 // 注意：デフォルト（初回シード）は 3/6 のまま。この 0/6 化はリセット押下時のみ。
 // 開示申請は「自分が送った分」だけ消し、他人→自分の受信申請（受信タブ・通知）は残す。
 //
-// 🔴 プロフィールシートとイベント参加はリセット対象から外している。
-//    どちらもDBの実データになったため、ここで消すと本人が書いた名刺や
-//    実際の参加登録が「ガイドをもう一度見る」を押しただけで失われてしまう。
+// 🔴 プロフィールシート・イベント参加・開示申請はリセット対象から外している。
+//    いずれもDBの実データになったため、ここで消すと本人が書いた名刺や
+//    実際の参加登録・申請が「ガイドをもう一度見る」を押しただけで失われてしまう。
 //    ∴ すでに済んでいるステップは完了のままになる。
-export function resetOnboardingDemo(userId: string) {
+//    リセットで戻せるのは、端末ローカルで完結している2つ（動画・掲示板の訪問）だけ。
+export function resetOnboardingDemo() {
   resetBoardVisited(); // 掲示板の訪問記録をクリア → 未完了
-  resetDisclosureForNewMember(userId); // 自分の送信申請だけ消す → 開示 未完了（受信は残る）
   writeFlag(VIDEO_KEY, false); // 動画視聴フラグをクリア → 未完了
   writeFlag(DISMISSED_KEY, false); // ×閉じフラグをクリア → 再表示
 }

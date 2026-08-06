@@ -13,8 +13,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { SocialLinksSection } from "@/components/app/social-links-section";
-import { members } from "@/lib/mock-data";
-import { CURRENT_USER_ID } from "@/lib/connections-data";
 import { EventCalendar } from "@/components/app/event-calendar";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { useJoinedEvents } from "@/lib/events-api";
@@ -251,14 +249,7 @@ export default function MyPage() {
 
         {/* SNSリンク */}
         <div className="mb-8">
-          <SocialLinksSection
-            ownerMode={{
-              memberId: currentMember?.id ?? CURRENT_USER_ID,
-              initialLinks: currentMember
-                ? []
-                : members.find((m) => m.id === CURRENT_USER_ID)?.socialLinks ?? [],
-            }}
-          />
+          <SocialLinksSection ownerMode />
         </div>
 
         {/* カレンダー（参加イベント） + 参加リスト */}

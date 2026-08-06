@@ -1,118 +1,373 @@
 "use client";
 
-import { useState, useMemo } from "react";
+// ============================================================
+// おすすめ（会員が投稿するお店）
+// ============================================================
+// 旧mockは固定のお店リストだった。会員が自分で投稿し、
+// 誰のおすすめかが分かる形にしている。
+// ============================================================
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, MapPin, UtensilsCrossed, Shield, SlidersHorizontal } from "lucide-react";
-import { getAllRecommendations, DiscoverRecommendation } from "@/lib/dashboard-data";
+import { Search, MapPin, UtensilsCrossed, Plus, Trash2, X } from "lucide-react";
+import { MemberAvatar } from "@/components/app/member-avatar";
 
-const tagFilters = ["すべて", "接待・会食向き", "経営者同士の会食", "一人で集中", "カジュアル", "大人数OK", "個室あり", "ヘルシー", "ワインが充実"];
-const genreFilters = ["すべて", "寿司", "和食", "フレンチ", "イタリアン", "焼肉", "焼鳥", "カフェ", "ワインバー", "自然食", "天ぷら", "日本料理", "蕎麦"];
-
-function RecommendationCard({ rec }: { rec: DiscoverRecommendation }) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-6">
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div>
-          <h3 className="text-base font-bold text-gray-900">{rec.restaurantName}</h3>
-          <div className="flex items-center gap-2 text-sm text-gray-500 mt-0.5">
-            <MapPin className="w-3.5 h-3.5" /><span>{rec.area}</span>
-            <span className="text-gray-300">|</span><span>{rec.genre}</span>
-          </div>
-        </div>
-        <UtensilsCrossed className="w-5 h-5 text-amber-400 flex-shrink-0" />
-      </div>
-      <p className="text-sm text-gray-600 leading-relaxed mb-4">{rec.story}</p>
-      <div className="flex flex-wrap gap-1.5 mb-4">
-        {rec.contextTags.map((tag) => (
-          <span key={tag} className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[11px] font-medium border border-amber-200">{tag}</span>
-        ))}
-      </div>
-      <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-        <Link href={`/app/profile/${rec.memberId}`} className="flex items-center gap-2.5 group">
-          <img src={rec.memberPhotoUrl} alt={rec.memberName} className="w-8 h-8 rounded-full object-cover border-2 border-white shadow ring-1 ring-gray-100" />
-          <p className="text-sm font-bold text-gray-800 group-hover:text-amber-700 transition-colors">{rec.memberName}</p>
-        </Link>
-        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200">
-          <Shield className="w-3 h-3 text-amber-500" />
-          <span className="text-[11px] font-bold text-amber-700">{rec.memberTrustScore}</span>
-        </div>
-      </div>
-    </div>
-  );
+interface RecommendationItem {
+  id: string;
+  restaurantName: string;
+  area: string;
+  genre: string;
+  story: string;
+  tags: string[];
+  createdAt: string;
+  isMine: boolean;
+  member: {
+    id: string;
+    name: string;
+    job: string;
+    avatarUrl: string | null;
+    isWithdrawn: boolean;
+  };
 }
 
 export default function DiscoverPage() {
-  const allRecs = useMemo(() => getAllRecommendations(), []);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeTag, setActiveTag] = useState("すべて");
+  const [items, setItems] = useState<RecommendationItem[]>([]);
+  const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
+  const [search, setSearch] = useState("");
   const [activeGenre, setActiveGenre] = useState("すべて");
-  const [showFilters, setShowFilters] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const [restaurantName, setRestaurantName] = useState("");
+  const [area, setArea] = useState("");
+  const [genre, setGenre] = useState("");
+  const [story, setStory] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch("/api/recommendations", { cache: "no-store" });
+      if (!response.ok) throw new Error("failed");
+      setItems((await response.json()) as RecommendationItem[]);
+      setStatus("loaded");
+    } catch {
+      setItems([]);
+      setStatus("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // ジャンルは投稿された内容から作る（固定リストにしない）
+  const genres = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => i.genre && set.add(i.genre));
+    return ["すべて", ...Array.from(set).sort()];
+  }, [items]);
 
   const filtered = useMemo(() => {
-    return allRecs.filter((rec) => {
-      const matchesSearch = !searchQuery || rec.restaurantName.includes(searchQuery) || rec.area.includes(searchQuery) || rec.memberName.includes(searchQuery) || rec.story.includes(searchQuery);
-      const matchesTag = activeTag === "すべて" || rec.contextTags.includes(activeTag);
-      const matchesGenre = activeGenre === "すべて" || rec.genre.includes(activeGenre);
-      return matchesSearch && matchesTag && matchesGenre;
+    const q = search.trim().toLowerCase();
+    return items
+      .filter((i) => activeGenre === "すべて" || i.genre === activeGenre)
+      .filter(
+        (i) =>
+          !q ||
+          i.restaurantName.toLowerCase().includes(q) ||
+          i.area.toLowerCase().includes(q) ||
+          i.story.toLowerCase().includes(q) ||
+          i.member.name.toLowerCase().includes(q)
+      );
+  }, [items, search, activeGenre]);
+
+  const submit = async () => {
+    if (!restaurantName.trim()) {
+      setError("お店の名前を入力してください");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const response = await fetch("/api/recommendations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        restaurantName,
+        area,
+        genre,
+        story,
+        tags: tagsInput
+          .split(/[,、\s]+/)
+          .map((t) => t.trim())
+          .filter(Boolean),
+      }),
     });
-  }, [allRecs, searchQuery, activeTag, activeGenre]);
+    setSaving(false);
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      setError(body?.error || "投稿できませんでした");
+      return;
+    }
+    setRestaurantName("");
+    setArea("");
+    setGenre("");
+    setStory("");
+    setTagsInput("");
+    setShowForm(false);
+    await load();
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const response = await fetch(`/api/recommendations/${deleteTarget}`, { method: "DELETE" });
+    setDeleteTarget(null);
+    if (!response.ok) {
+      setError("削除できませんでした");
+      return;
+    }
+    await load();
+  };
 
   return (
     <div className="min-h-screen">
       <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">発見する</h1>
-              <p className="text-sm text-gray-500 mt-0.5">信頼できる人のおすすめからお店を探す</p>
+              <h1 className="text-xl font-bold text-gray-900">おすすめ</h1>
+              <p className="text-sm text-gray-500 mt-0.5">メンバーおすすめのお店</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input type="text" placeholder="店名・エリア・人名で検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent" />
-              </div>
-              <button onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium transition-colors ${showFilters ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"}`}>
-                <SlidersHorizontal className="w-4 h-4" /><span className="hidden sm:inline">絞り込み</span>
+            <button
+              onClick={() => setShowForm((v) => !v)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors flex-shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              投稿する
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24">
+        {error && (
+          <p className="mb-4 text-sm bg-red-50 text-red-700 rounded-xl px-4 py-3">{error}</p>
+        )}
+
+        {showForm && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6 space-y-3">
+            <input
+              value={restaurantName}
+              onChange={(e) => setRestaurantName(e.target.value)}
+              placeholder="お店の名前"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                placeholder="エリア（例: 大阪・北新地）"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+              <input
+                value={genre}
+                onChange={(e) => setGenre(e.target.value)}
+                placeholder="ジャンル（例: 寿司）"
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+            </div>
+            <textarea
+              value={story}
+              onChange={(e) => setStory(e.target.value)}
+              rows={3}
+              placeholder="どんなときに使えるお店か、ひとこと"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+            />
+            <input
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+              placeholder="タグ（スペース区切り。例: 接待 個室あり）"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowForm(false)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                やめる
+              </button>
+              <button
+                onClick={submit}
+                disabled={saving || !restaurantName.trim()}
+                className="px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-40"
+              >
+                {saving ? "投稿中..." : "投稿する"}
               </button>
             </div>
           </div>
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-            {tagFilters.map((tag) => (
-              <button key={tag} onClick={() => setActiveTag(tag)}
-                className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeTag === tag ? "bg-amber-500 text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-amber-300"}`}>
-                {tag}
+        )}
+
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="お店・エリア・投稿者で検索..."
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+        </div>
+
+        {genres.length > 1 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {genres.map((g) => (
+              <button
+                key={g}
+                onClick={() => setActiveGenre(g)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  activeGenre === g
+                    ? "bg-gray-900 text-white border-gray-900"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                {g}
               </button>
             ))}
           </div>
-          {showFilters && (
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <p className="text-xs font-medium text-gray-500 mb-2">ジャンル</p>
-              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-                {genreFilters.map((genre) => (
-                  <button key={genre} onClick={() => setActiveGenre(genre)}
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${activeGenre === genre ? "bg-gray-900 text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"}`}>
-                    {genre}
-                  </button>
-                ))}
+        )}
+
+        {status === "loading" && (
+          <p className="text-center text-gray-400 py-20 text-sm">読み込み中...</p>
+        )}
+        {status === "error" && (
+          <p className="text-center text-red-600 py-20 text-sm">おすすめを取得できませんでした。</p>
+        )}
+
+        {status === "loaded" && (
+          <div className="space-y-4">
+            {filtered.map((rec) => (
+              <div
+                key={rec.id}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6"
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-gray-900">{rec.restaurantName}</h3>
+                    <div className="flex items-center gap-2 text-sm text-gray-500 mt-0.5 flex-wrap">
+                      {rec.area && (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5" />
+                          {rec.area}
+                        </span>
+                      )}
+                      {rec.genre && (
+                        <>
+                          <span className="text-gray-300">|</span>
+                          <span className="inline-flex items-center gap-1">
+                            <UtensilsCrossed className="w-3.5 h-3.5" />
+                            {rec.genre}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {rec.isMine && (
+                    <button
+                      onClick={() => setDeleteTarget(rec.id)}
+                      className="p-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                      aria-label="削除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {rec.story && (
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-3">
+                    {rec.story}
+                  </p>
+                )}
+
+                {rec.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {rec.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border border-gray-200 text-[10px]"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+                  {rec.member.isWithdrawn ? (
+                    <MemberAvatar name={rec.member.name} url={rec.member.avatarUrl} size="sm" grayscale />
+                  ) : (
+                    <Link href={`/app/profile/${rec.member.id}`}>
+                      <MemberAvatar name={rec.member.name} url={rec.member.avatarUrl} size="sm" />
+                    </Link>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    {rec.member.name}さんのおすすめ
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <p className="text-sm text-gray-400 mb-6">{filtered.length}件のおすすめ</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {filtered.map((rec) => (<RecommendationCard key={rec.id} rec={rec} />))}
-        </div>
-        {filtered.length === 0 && (
-          <div className="text-center py-20">
-            <UtensilsCrossed className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-400">該当するおすすめが見つかりません</p>
+            ))}
+
+            {filtered.length === 0 && (
+              <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
+                <UtensilsCrossed className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">
+                  {items.length === 0 ? "まだ投稿がありません" : "条件に合うお店がありません"}
+                </p>
+                {items.length === 0 && (
+                  <p className="text-xs text-gray-300 mt-1">
+                    お気に入りのお店を「投稿する」から教えてください
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-base font-bold text-gray-900">この投稿を削除しますか？</h2>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex gap-3 justify-end mt-5">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                やめる
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors"
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

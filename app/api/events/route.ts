@@ -21,11 +21,16 @@ interface EventRow {
   description: string | null;
   capacity: number | null;
   is_canceled: boolean;
+  requires_approval: boolean;
   host_id: string | null;
   host_name: string | null;
   participant_count: number;
-  joined_by_me: boolean;
+  pending_count: number;
+  my_status: "pending" | "approved" | "declined" | null;
+  my_role: "owner" | "admin" | "member" | null;
+  is_manager: boolean;
   is_mine: boolean;
+  following_series: boolean;
 }
 
 interface ParticipantRow {
@@ -34,6 +39,9 @@ interface ParticipantRow {
   name: string;
   job: string | null;
   avatar_path: string | null;
+  status: "pending" | "approved" | "declined";
+  role: "owner" | "admin" | "member";
+  message: string | null;
   joined_at: string;
 }
 
@@ -63,15 +71,31 @@ export async function GET() {
     participants.map((p) => p.avatar_path),
   );
 
-  const byEvent = new Map<string, { id: string; name: string; avatarUrl: string | null }[]>();
+  type Person = {
+    id: string;
+    name: string;
+    job: string;
+    avatarUrl: string | null;
+    role: "owner" | "admin" | "member";
+    message: string | null;
+  };
+  const approved = new Map<string, Person[]>();
+  const pending = new Map<string, Person[]>();
+
   for (const p of participants) {
-    const list = byEvent.get(p.event_id) ?? [];
-    list.push({
+    const person: Person = {
       id: p.member_id,
       name: p.name,
+      job: p.job ?? "",
       avatarUrl: p.avatar_path ? avatarUrls[p.avatar_path] ?? null : null,
-    });
-    byEvent.set(p.event_id, list);
+      role: p.role,
+      message: p.message,
+    };
+    const bucket = p.status === "pending" ? pending : p.status === "approved" ? approved : null;
+    if (!bucket) continue;
+    const list = bucket.get(p.event_id) ?? [];
+    list.push(person);
+    bucket.set(p.event_id, list);
   }
 
   return NextResponse.json(
@@ -85,12 +109,19 @@ export async function GET() {
       description: e.description ?? "",
       capacity: e.capacity,
       isCanceled: e.is_canceled,
+      requiresApproval: e.requires_approval,
       hostId: e.host_id,
       hostName: e.host_name ?? "運営",
       participantCount: Number(e.participant_count),
-      joinedByMe: e.joined_by_me,
+      pendingCount: Number(e.pending_count),
+      myStatus: e.my_status,
+      myRole: e.my_role,
+      isManager: e.is_manager,
       isMine: e.is_mine,
-      participants: byEvent.get(e.id) ?? [],
+      followingSeries: e.following_series,
+      participants: approved.get(e.id) ?? [],
+      // 承認待ちは管理できる人にだけ返す
+      pendingParticipants: e.is_manager ? pending.get(e.id) ?? [] : [],
     })),
     { headers: NO_STORE_HEADERS },
   );
@@ -109,6 +140,7 @@ export async function POST(request: Request) {
     location?: string;
     description?: string;
     capacity?: number | null;
+    requiresApproval?: boolean;
   } | null;
 
   const title = body?.title?.trim();
@@ -140,6 +172,7 @@ export async function POST(request: Request) {
       location: body?.location?.trim() || null,
       description: body?.description?.trim() || null,
       capacity,
+      requires_approval: body?.requiresApproval === true,
       host_id: member.id,
     })
     .select("id")

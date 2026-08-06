@@ -652,9 +652,6 @@ export default function ProfileSheetPage() {
                     <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
                       {data.memberNumber || "未採番"}
                     </div>
-                    <p className="mt-1 text-[11px] text-gray-400">
-                      会員番号と氏名は運営が管理しています。変更が必要な場合は運営へご連絡ください。
-                    </p>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">

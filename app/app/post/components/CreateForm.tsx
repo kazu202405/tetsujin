@@ -23,6 +23,8 @@ export default function CreateForm({
   const [description, setDescription] = useState("");
   const [selectedSeriesId, setSelectedSeriesId] = useState("");
   const [capacity, setCapacity] = useState("");
+  // 通常の交流会まで承認待ちにすると手間が増えるだけなので、既定はオフ
+  const [requiresApproval, setRequiresApproval] = useState(false);
 
   const handleSubmit = () => {
     if (!title || !date) return;
@@ -43,6 +45,7 @@ export default function CreateForm({
       status: "upcoming",
       isHost: true,
       seriesId: selectedSeriesId || undefined,
+      requiresApproval,
     };
     onCreate(newEvent);
   };
@@ -117,6 +120,22 @@ export default function CreateForm({
             />
           </div>
         </div>
+
+        {/* 参加承認 */}
+        <label className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer">
+          <input
+            type="checkbox"
+            checked={requiresApproval}
+            onChange={(e) => setRequiresApproval(e.target.checked)}
+            className="w-4 h-4 mt-0.5"
+          />
+          <span className="text-sm text-gray-700 leading-relaxed">
+            参加に承認を必要とする
+            <span className="block text-xs text-gray-400 mt-0.5">
+              申し込みが「承認待ち」になり、あなたが承認するまで参加は確定しません。定員のある会や少人数の会におすすめです。
+            </span>
+          </span>
+        </label>
 
         {/* シリーズ紐付け */}
         <div>

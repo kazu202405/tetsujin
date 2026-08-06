@@ -20,16 +20,42 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
-import { communityStats } from "@/lib/dashboard-data";
 import { NotificationBell } from "./notification-bell";
 import { MemberAvatar } from "./member-avatar";
 import { useNotifications } from "@/lib/notifications-data";
 import { useBoardUnread } from "@/lib/board-api";
-import { usePendingIncomingCount } from "@/lib/disclosure-data";
-import { CURRENT_USER_ID } from "@/lib/connections-data";
+import { usePendingIncomingCount } from "@/lib/social-api";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { useCurrentMember } from "@/lib/current-member";
+
+/** サイドバーに出すコミュニティの実数（旧: 固定値） */
+function useCommunityStats() {
+  const [stats, setStats] = useState({
+    memberCount: 0,
+    eventsThisMonth: 0,
+    postsThisMonth: 0,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/stats", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("failed");
+        const body = (await res.json()) as typeof stats;
+        if (!cancelled) setStats(body);
+      })
+      .catch(() => {
+        /* 取れなければ0のまま（作った数字は出さない） */
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return stats;
+}
 
 const navItems: {
   href: string;
@@ -56,7 +82,8 @@ export function AppSidebar() {
   const currentMember = useCurrentMember();
   const { unreadCount } = useNotifications();
   const boardUnread = useBoardUnread();
-  const requestsPending = usePendingIncomingCount(CURRENT_USER_ID);
+  const requestsPending = usePendingIncomingCount();
+  const stats = useCommunityStats();
   // モバイル/タブレット用ドロワー（ハンバーガー）
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -179,7 +206,7 @@ export function AppSidebar() {
                 <span>メンバー</span>
               </div>
               <span className="font-bold text-gray-700">
-                {communityStats.memberCount}人
+                {stats.memberCount}人
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -188,7 +215,7 @@ export function AppSidebar() {
                 <span>今月の会</span>
               </div>
               <span className="font-bold text-gray-700">
-                {communityStats.monthlyPosts}件
+                {stats.eventsThisMonth}件
               </span>
             </div>
           </div>
@@ -353,7 +380,7 @@ export function AppSidebar() {
                   <span>メンバー</span>
                 </div>
                 <span className="font-bold text-gray-700">
-                  {communityStats.memberCount}人
+                  {stats.memberCount}人
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs text-gray-500">
@@ -362,7 +389,7 @@ export function AppSidebar() {
                   <span>今月の会</span>
                 </div>
                 <span className="font-bold text-gray-700">
-                  {communityStats.monthlyPosts}件
+                  {stats.eventsThisMonth}件
                 </span>
               </div>
             </div>

@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { CalendarDays, Plus, ChevronLeft } from "lucide-react";
 import type { Event, MyProfile, ParticipantRole, ToastMessage } from "./types";
-import { myProfile, seriesList } from "./data";
+import { myProfile } from "./data";
 import EventCard from "./components/EventCard";
 import CreateForm from "./components/CreateForm";
 import ManagePanel from "./components/ManagePanel";
@@ -13,7 +13,15 @@ import Toast from "./components/Toast";
 import {
   type EventRecord,
   createEvent,
+  deleteEvent as deleteEventApi,
+  isJoined,
+  updateEvent,
+  removeParticipant as removeEventParticipant,
+  reviewParticipant,
   setEventJoined,
+  setParticipantRole,
+  setSeriesFollowing,
+  transferOwnership,
   useEvents,
 } from "@/lib/events-api";
 import { EventCalendar } from "@/components/app/event-calendar";
@@ -43,11 +51,19 @@ function toEvent(record: EventRecord, todayIso: string): Event {
       id: p.id,
       name: p.name,
       photoUrl: p.avatarUrl ?? "",
+      role: p.role,
     })),
-    pendingParticipants: [],
+    pendingParticipants: record.pendingParticipants.map((p) => ({
+      id: p.id,
+      name: p.name,
+      photoUrl: p.avatarUrl ?? "",
+      appliedAt: "",
+      message: p.message ?? undefined,
+    })),
     capacity: record.capacity,
     status: record.date >= todayIso ? "upcoming" : "past",
-    isHost: record.isMine,
+    // 名簿の管理は主催者だけでなく副管理者もできる
+    isHost: record.isManager,
     seriesId: record.seriesName ?? undefined,
   };
 }
@@ -66,14 +82,46 @@ export default function PostPage() {
     setEvents(eventRecords.map((r) => toEvent(r, todayIso)));
   }, [eventRecords, todayIso]);
 
+  // 承認待ちも「参加ボタンを押した状態」として扱う（取り消しできるように）
   const joinedIds = useMemo(
-    () => new Set(eventRecords.filter((r) => r.joinedByMe).map((r) => r.id)),
+    () => new Set(eventRecords.filter((r) => isJoined(r)).map((r) => r.id)),
     [eventRecords]
   );
   const [showCreate, setShowCreate] = useState(false);
   const [managingEventId, setManagingEventId] = useState<string | null>(null);
-  const [followedSeriesIds, setFollowedSeriesIds] = useState<Set<string>>(
-    new Set(["s1"])
+  // シリーズは events.series_name の自由入力なので、実データから組み立てる
+  const seriesList = useMemo(() => {
+    const map = new Map<string, { count: number; hostId: string; hostName: string }>();
+    for (const r of eventRecords) {
+      const name = r.seriesName?.trim();
+      if (!name) continue;
+      const entry = map.get(name);
+      if (entry) entry.count += 1;
+      else
+        map.set(name, {
+          count: 1,
+          hostId: r.hostId ?? "",
+          hostName: r.hostName,
+        });
+    }
+    return Array.from(map.entries()).map(([name, v]) => ({
+      id: name,
+      name,
+      description: "",
+      organizer: { id: v.hostId, name: v.hostName, photoUrl: "" },
+      totalEvents: v.count,
+    }));
+  }, [eventRecords]);
+
+  // フォロー中のシリーズはサーバーの状態から組み立てる
+  const followedSeriesIds = useMemo(
+    () =>
+      new Set(
+        eventRecords
+          .filter((r) => r.followingSeries && r.seriesName)
+          .map((r) => r.seriesName as string)
+      ),
+    [eventRecords]
   );
   const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
   const [currentProfile, setCurrentProfile] = useState<MyProfile>(myProfile);
@@ -164,164 +212,120 @@ export default function PostPage() {
     addToast("参加しました");
   };
 
-  const toggleFollowSeries = (seriesId: string) => {
+  const toggleFollowSeries = async (seriesId: string) => {
     const wasFollowed = followedSeriesIds.has(seriesId);
-    setFollowedSeriesIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(seriesId)) {
-        next.delete(seriesId);
-      } else {
-        next.add(seriesId);
+    const result = await setSeriesFollowing(seriesId, !wasFollowed);
+    if (!result.ok) {
+      addToast(result.error, "error");
+      return;
+    }
+    await reloadEvents();
+    addToast(
+      wasFollowed ? "フォローを解除しました" : "シリーズをフォローしました",
+      wasFollowed ? "info" : "success"
+    );
+  };
+
+  // ---------- 参加者の管理（主催者・副管理者） ----------
+  // 権限の判定はDB側（is_event_manager）で行うため、ここでは結果を反映するだけ。
+  const runManage = async (
+    action: () => Promise<{ ok: true } | { ok: false; error: string }>,
+    successText: string,
+    tone: ToastMessage["type"] = "success"
+  ) => {
+    const result = await action();
+    if (!result.ok) {
+      addToast(result.error, "error");
+      return;
+    }
+    await reloadEvents();
+    addToast(successText, tone);
+  };
+
+  const approveParticipant = (eventId: string, participantId: string) =>
+    runManage(
+      () => reviewParticipant(eventId, participantId, "approve"),
+      "参加を承認しました"
+    );
+
+  const approveAllParticipants = async (eventId: string) => {
+    const target = eventRecords.find((e) => e.id === eventId);
+    if (!target || target.pendingParticipants.length === 0) return;
+
+    for (const p of target.pendingParticipants) {
+      const result = await reviewParticipant(eventId, p.id, "approve");
+      if (!result.ok) {
+        addToast(result.error, "error");
+        await reloadEvents();
+        return;
       }
-      return next;
-    });
-    addToast(wasFollowed ? "フォローを解除しました" : "シリーズをフォローしました", wasFollowed ? "info" : "success");
-  };
-
-  // 参加申請を承認
-  const approveParticipant = (eventId: string, participantId: string) => {
-    setEvents((prev) =>
-      prev.map((ev) => {
-        if (ev.id !== eventId) return ev;
-        const pending = ev.pendingParticipants.find(
-          (p) => p.id === participantId
-        );
-        if (!pending) return ev;
-        return {
-          ...ev,
-          participants: [
-            ...ev.participants,
-            {
-              id: pending.id,
-              name: pending.name,
-              photoUrl: pending.photoUrl,
-              role: "member" as ParticipantRole,
-            },
-          ],
-          pendingParticipants: ev.pendingParticipants.filter(
-            (p) => p.id !== participantId
-          ),
-          participantCount: ev.participantCount + 1,
-        };
-      })
-    );
-    addToast("参加を承認しました");
-  };
-
-  // 全員承認
-  const approveAllParticipants = (eventId: string) => {
-    setEvents((prev) =>
-      prev.map((ev) => {
-        if (ev.id !== eventId) return ev;
-        const newParticipants = ev.pendingParticipants.map((p) => ({
-          id: p.id,
-          name: p.name,
-          photoUrl: p.photoUrl,
-          role: "member" as ParticipantRole,
-        }));
-        return {
-          ...ev,
-          participants: [...ev.participants, ...newParticipants],
-          pendingParticipants: [],
-          participantCount:
-            ev.participantCount + ev.pendingParticipants.length,
-        };
-      })
-    );
+    }
+    await reloadEvents();
     addToast("全員を承認しました");
   };
 
-  // 参加申請を拒否
-  const rejectParticipant = (eventId: string, participantId: string) => {
-    setEvents((prev) =>
-      prev.map((ev) => {
-        if (ev.id !== eventId) return ev;
-        return {
-          ...ev,
-          pendingParticipants: ev.pendingParticipants.filter(
-            (p) => p.id !== participantId
-          ),
-        };
-      })
+  const rejectParticipant = (eventId: string, participantId: string) =>
+    runManage(
+      () => reviewParticipant(eventId, participantId, "decline"),
+      "参加申請を拒否しました",
+      "info"
     );
-    addToast("参加申請を拒否しました", "info");
-  };
 
-  // 参加者を削除
-  const removeParticipant = (eventId: string, participantId: string) => {
-    setEvents((prev) =>
-      prev.map((ev) => {
-        if (ev.id !== eventId) return ev;
-        return {
-          ...ev,
-          participants: ev.participants.filter((p) => p.id !== participantId),
-          participantCount: ev.participantCount - 1,
-        };
-      })
+  const removeParticipant = (eventId: string, participantId: string) =>
+    runManage(
+      () => removeEventParticipant(eventId, participantId),
+      "参加者を削除しました",
+      "info"
     );
-    addToast("参加者を削除しました", "info");
-  };
 
-  // ロール変更
   const changeRole = (
     eventId: string,
     participantId: string,
     newRole: ParticipantRole
   ) => {
-    setEvents((prev) =>
-      prev.map((ev) => {
-        if (ev.id !== eventId) return ev;
-        return {
-          ...ev,
-          participants: ev.participants.map((p) =>
-            p.id === participantId ? { ...p, role: newRole } : p
-          ),
-        };
-      })
+    if (newRole === "owner") {
+      // 主催者は「委譲」でしか変えられない（主催者が2人になるのを防ぐ）
+      void runManage(
+        () => transferOwnership(eventId, participantId),
+        "主催者権限を委譲しました"
+      );
+      return;
+    }
+    void runManage(
+      () => setParticipantRole(eventId, participantId, newRole),
+      `${newRole === "admin" ? "副管理者" : "一般メンバー"}に変更しました`
     );
-    const roleLabel = newRole === "admin" ? "副管理者" : "一般メンバー";
-    addToast(`${roleLabel}に変更しました`);
   };
 
-  // オーナー権限を委譲
-  const transferOwnership = (eventId: string, newOwnerId: string) => {
-    setEvents((prev) =>
-      prev.map((ev) => {
-        if (ev.id !== eventId) return ev;
-        const newOwner = ev.participants.find((p) => p.id === newOwnerId);
-        if (!newOwner) return ev;
-        return {
-          ...ev,
-          organizer: {
-            id: newOwner.id,
-            name: newOwner.name,
-            photoUrl: newOwner.photoUrl,
-          },
-          participants: ev.participants.map((p) => {
-            if (p.id === newOwnerId)
-              return { ...p, role: "owner" as ParticipantRole };
-            if (p.role === "owner")
-              return { ...p, role: "admin" as ParticipantRole };
-            return p;
-          }),
-        };
-      })
-    );
-    addToast("主催者権限を委譲しました");
-  };
+  const transferOwnershipTo = (eventId: string, newOwnerId: string) =>
+    runManage(() => transferOwnership(eventId, newOwnerId), "主催者権限を委譲しました");
+
 
   // イベント編集
-  const editEvent = (eventId: string, updates: Partial<Event>) => {
-    setEvents((prev) =>
-      prev.map((ev) => (ev.id === eventId ? { ...ev, ...updates } : ev))
+  const editEvent = (eventId: string, updates: Partial<Event>) =>
+    runManage(
+      () =>
+        updateEvent(eventId, {
+          title: updates.title,
+          seriesName: updates.seriesId ?? undefined,
+          date: updates.date,
+          time: updates.time,
+          location: updates.location,
+          description: updates.description,
+          capacity: updates.capacity,
+        }),
+      "イベント情報を更新しました"
     );
-    addToast("イベント情報を更新しました");
-  };
 
   // イベント削除
-  const deleteEvent = (eventId: string) => {
-    setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
+  const deleteEvent = async (eventId: string) => {
+    const result = await deleteEventApi(eventId);
+    if (!result.ok) {
+      addToast(result.error, "error");
+      return;
+    }
     setManagingEventId(null);
+    await reloadEvents();
     addToast("イベントを削除しました", "info");
   };
 
@@ -335,6 +339,7 @@ export default function PostPage() {
       location: newEvent.location,
       description: newEvent.description,
       capacity: newEvent.capacity,
+      requiresApproval: newEvent.requiresApproval === true,
     });
     if (!result.ok) {
       addToast(result.error, "error");
@@ -497,7 +502,7 @@ export default function PostPage() {
             onApproveAll={approveAllParticipants}
             onRemove={removeParticipant}
             onChangeRole={changeRole}
-            onTransferOwnership={transferOwnership}
+            onTransferOwnership={transferOwnershipTo}
             onEditEvent={editEvent}
             onDeleteEvent={deleteEvent}
             onCopyReminder={handleCopyReminder}

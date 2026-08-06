@@ -13,19 +13,30 @@ import {
 
 type PermState = "default" | "granted" | "denied" | "unsupported";
 
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+
+/** VAPID公開鍵（base64url）をブラウザが要求するバイト列へ変換する */
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(base64);
+  const buffer = new ArrayBuffer(raw.length);
+  const view = new Uint8Array(buffer);
+  for (let i = 0; i < raw.length; i += 1) view[i] = raw.charCodeAt(i);
+  return buffer;
+}
+
 /**
  * 端末プッシュ通知（Web Push / PWA）の設定＆動作確認カード。
  *
- * 現段階は「土台＋実機テスト」用:
  *  - Service Worker を登録
  *  - 通知の許可を取得
- *  - ローカルのテスト通知を出して「端末に通知が出るか」を確認できる
+ *  - この端末を購読先としてサーバーへ登録（ここまでやると閉じていても届く）
+ *  - ローカルのテスト通知で「端末に通知が出るか」を確認できる
  *
- * iOS は Safari で開いただけでは通知不可。「ホーム画面に追加」して
- * そのアイコンから開いた時だけ許可できる（iOS 16.4+）。その案内も出す。
- *
- * ※ 実際の自動配信（誰かが申請したらサーバから push）は
- *    Supabase バックエンド連携（入金後）で実装する。
+ * 🔴 iOS は Safari で開いただけでは通知不可。「ホーム画面に追加」して
+ *    そのアイコンから開いた時だけ許可できる（iOS 16.4+）。その案内も出す。
+ *    ∴ iPhone の会員に確実に届けたいなら LINE 公式アカウントの併用が要る。
  */
 export function PushNotificationSetup() {
   const [mounted, setMounted] = useState(false);
@@ -34,6 +45,8 @@ export function PushNotificationSetup() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // この端末がサーバーに購読先として登録されているか
+  const [subscribed, setSubscribed] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -57,9 +70,17 @@ export function PushNotificationSetup() {
     setIsStandalone(standalone);
 
     // Service Worker 登録（push 受信と通知表示の土台）
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      /* 登録失敗時はテスト通知でエラー表示するので握りつぶし */
-    });
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then(async () => {
+        // すでにこの端末が購読済みかを見て表示を合わせる
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        setSubscribed(Boolean(sub));
+      })
+      .catch(() => {
+        /* 登録失敗時はテスト通知でエラー表示するので握りつぶし */
+      });
   }, []);
 
   const requestPermission = async () => {
@@ -72,7 +93,75 @@ export function PushNotificationSetup() {
         setMsg(
           "通知がブロックされています。端末の「設定」アプリ → このアプリ → 通知 から許可してください。"
         );
+        return;
       }
+      if (result === "granted") {
+        await subscribe();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // この端末を購読先としてサーバーへ登録する。
+  // ここまでやって初めて「アプリを開いていなくても届く」状態になる。
+  const subscribe = async () => {
+    if (!VAPID_PUBLIC_KEY) {
+      setMsg("配信用のキーが未設定のため、この端末を登録できませんでした（運営にご連絡ください）。");
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      const sub =
+        existing ??
+        (await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        }));
+
+      const json = sub.toJSON() as {
+        endpoint?: string;
+        keys?: { p256dh?: string; auth?: string };
+      };
+
+      const response = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint: json.endpoint,
+          keys: json.keys,
+          userAgent: navigator.userAgent,
+        }),
+      });
+
+      if (!response.ok) {
+        setMsg("この端末の登録に失敗しました。時間をおいて再度お試しください。");
+        return;
+      }
+      setSubscribed(true);
+      setMsg("この端末で通知を受け取れるようになりました。");
+    } catch {
+      setMsg("この端末の登録に失敗しました。");
+    }
+  };
+
+  const unsubscribe = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`, {
+          method: "DELETE",
+        });
+        await sub.unsubscribe();
+      }
+      setSubscribed(false);
+      setMsg("この端末への通知を止めました。");
+    } catch {
+      setMsg("解除に失敗しました。");
     } finally {
       setBusy(false);
     }
@@ -169,16 +258,47 @@ export function PushNotificationSetup() {
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-green-700">
             <Check className="w-4 h-4" />
-            通知は許可されています
+            {subscribed
+              ? "この端末で通知を受け取れます"
+              : "通知は許可されています（この端末はまだ登録されていません）"}
           </div>
-          <button
-            onClick={sendTest}
-            disabled={busy}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-gray-900 border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-60"
-          >
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
-            テスト通知を送る
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {subscribed ? (
+              <button
+                onClick={unsubscribe}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                この端末への通知を止める
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setBusy(true);
+                  void subscribe().finally(() => setBusy(false));
+                }}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-[var(--tetsu-pink)] hover:opacity-90 transition-opacity disabled:opacity-60"
+              >
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                この端末を登録する
+              </button>
+            )}
+
+            <button
+              onClick={sendTest}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-gray-900 border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-60"
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+              テスト通知を送る
+            </button>
+          </div>
+
+          <p className="text-[11px] text-gray-400 leading-relaxed">
+            「テスト通知」はこの端末の中だけで表示を確かめるものです。実際のお知らせ（コメント・参加申請・承認など）は、この端末を登録しておくとアプリを閉じていても届きます。
+          </p>
         </div>
       )}
 

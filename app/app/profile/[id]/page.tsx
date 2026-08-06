@@ -11,6 +11,7 @@ import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, UserX } from "lucide-react";
 import { ProfileSheetCard, type ProfileSheetData } from "@/components/app/profile-sheet-card";
+import { SocialLinksSection } from "@/components/app/social-links-section";
 import { RoleBadge } from "@/components/app/role-badge";
 import type { MemberRole } from "@/lib/member-roles";
 
@@ -184,6 +185,9 @@ export default function ProfilePage({
             scale={scale}
           />
         </div>
+
+        {/* SNS・リンク（見える分だけ。見えない分は開示申請できる） */}
+        {!profile.isMe && <SocialLinksSection viewerMode={{ ownerId: profile.id }} />}
 
         {profile.isMe && (
           <p className="text-center text-xs text-gray-400">

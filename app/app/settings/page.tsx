@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   User,
   Bell,
@@ -12,7 +13,6 @@ import {
 import { PushNotificationSetup } from "@/components/app/push-notification-setup";
 import { AvatarUpload } from "@/components/app/avatar-upload";
 import { resetOnboardingDemo } from "@/lib/onboarding-data";
-import { CURRENT_USER_ID } from "@/lib/connections-data";
 import { useCurrentMember } from "@/lib/current-member";
 
 export default function SettingsPage() {
@@ -29,13 +29,45 @@ export default function SettingsPage() {
   const displayName = currentMember?.name ?? "会員";
   const initial = displayName.trim().charAt(0) || "T";
 
+  // 本人が変更してよいのは一言（グリップ）だけ
+  const [grip, setGrip] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<
+    { type: "success" | "error"; text: string } | null
+  >(null);
+
+  useEffect(() => {
+    setGrip(currentMember?.grip ?? "");
+  }, [currentMember?.grip]);
+
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    setProfileMessage(null);
+    try {
+      const response = await fetch("/api/me/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grip }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        setProfileMessage({ type: "error", text: body?.error || "保存できませんでした" });
+      } else {
+        setProfileMessage({ type: "success", text: "保存しました" });
+      }
+    } catch {
+      setProfileMessage({ type: "error", text: "保存できませんでした（通信エラー）" });
+    }
+    setSavingProfile(false);
+  };
+
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   const handleResetOnboarding = () => {
-    resetOnboardingDemo(CURRENT_USER_ID);
+    resetOnboardingDemo();
     setResetConfirm(false);
     setResetDone(true);
     setTimeout(() => setResetDone(false), 4000);
@@ -61,47 +93,70 @@ export default function SettingsPage() {
             プロフィール
           </h2>
           <div className="space-y-5">
+            {/* 会員台帳が正本の項目は表示のみ（本人が書き換えると台帳と食い違うため） */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  氏名
-                </label>
-                <input
-                  type="text"
-                  defaultValue={displayName}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">氏名</label>
+                <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
+                  {displayName}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  役職
+                  会員種別
                 </label>
-                <input
-                  type="text"
-                  defaultValue={currentMember?.membership_type || ""}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                />
+                <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
+                  {currentMember?.membership_type || "未設定"}
+                </div>
               </div>
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                一言
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">一言</label>
               <input
                 type="text"
-                defaultValue={currentMember?.grip || ""}
+                value={grip}
+                onChange={(e) => setGrip(e.target.value)}
+                placeholder="メンバー一覧に表示される短い紹介文"
                 className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
               />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 メールアドレス
               </label>
-              <input
-                type="email"
-                defaultValue={currentMember?.email || ""}
-                className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-              />
+              <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
+                {currentMember?.email || "未登録"}
+              </div>
+            </div>
+
+            <p className="text-[11px] text-gray-400 leading-relaxed">
+              氏名・会員種別・メールアドレスは会員台帳で管理しています（メールはログインIDも兼ねています）。
+              変更が必要な場合は運営へご連絡ください。職業やニックネームは
+              <Link href="/app/mypage/profile-sheet" className="text-gray-600 underline mx-1">
+                プロフィールシート
+              </Link>
+              から編集できます。
+            </p>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={saveProfile}
+                disabled={savingProfile}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-60"
+              >
+                {savingProfile ? "保存中..." : "保存"}
+              </button>
+              {profileMessage && (
+                <span
+                  className={`text-xs ${
+                    profileMessage.type === "success" ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {profileMessage.text}
+                </span>
+              )}
             </div>
           </div>
         </div>

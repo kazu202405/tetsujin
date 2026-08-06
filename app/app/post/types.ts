@@ -42,6 +42,8 @@ export interface Event {
   status: "upcoming" | "past";
   isHost: boolean;
   seriesId?: string;
+  /** 参加に主催者の承認が必要か（定員のある部活動や少人数会向け） */
+  requiresApproval?: boolean;
 }
 
 export interface ToastMessage {

@@ -8,10 +8,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Circle, X, Play, ChevronRight } from "lucide-react";
-import { CURRENT_USER_ID } from "@/lib/connections-data";
 import { useJoinedEvents } from "@/lib/events-api";
 import { useBoardVisited } from "@/lib/board-data";
-import { useDisclosureRequests } from "@/lib/disclosure-data";
+import { useDisclosureRequests } from "@/lib/social-api";
 import {
   useOnboardingFlags,
   markOnboardingVideoWatched,
@@ -54,13 +53,11 @@ export function OnboardingChecklist() {
   const joinedEvents = useJoinedEvents();
   const boardVisited = useBoardVisited();
   const hasSheet = useHasProfileSheet();
-  const requests = useDisclosureRequests();
+  const { requests } = useDisclosureRequests();
   const [showVideo, setShowVideo] = useState(false);
 
   // 自分が出した開示申請が1件でもあるか
-  const hasSentRequest = requests.some(
-    (r) => r.fromMemberId === CURRENT_USER_ID
-  );
+  const hasSentRequest = requests.some((r) => r.direction === "outgoing");
 
   const steps: StepDef[] = [
     {
