@@ -170,12 +170,9 @@ export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Pro
                 <div className="flex-1">
                   <BarHeader>職業</BarHeader>
                   <div className="px-5 py-2 text-base text-white/80 leading-relaxed">
+                    {/* 職業は書かれたとおりに出す（●は自動で付けない） */}
                     {data.job.split("\n").map((line, i) => (
-                      <p key={i}>
-                        {line.startsWith("●") || line.startsWith("（") || line.startsWith("(")
-                          ? line
-                          : `●${line}`}
-                      </p>
+                      <p key={i}>{line}</p>
                     ))}
                   </div>
                 </div>
