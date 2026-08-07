@@ -16,6 +16,7 @@ import { RoleBadge } from "@/components/app/role-badge";
 import type { MemberRole } from "@/lib/member-roles";
 import { type MemberDbRow, formatStartMonth, useMembersDb } from "./members-data";
 import { MemberList, type MemberSort } from "./member-list";
+import { LedgerEditor } from "./ledger-editor";
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -639,6 +640,9 @@ function MemberDetailModal({
               </div>
             </div>
           </div>
+
+          {/* 台帳の編集 */}
+          <LedgerEditor row={row} saving={saving} onPatch={onPatch} />
 
           {/* 全項目 */}
           <div>
