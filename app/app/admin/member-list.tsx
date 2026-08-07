@@ -11,7 +11,7 @@
 // スマホだけはカード表示に切り替えている。
 // ============================================================
 
-import { StickyNote, Handshake, ChevronRight } from "lucide-react";
+import { StickyNote, ChevronRight } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { RoleBadge } from "@/components/app/role-badge";
 import type { MemberRole } from "@/lib/member-roles";
@@ -29,7 +29,7 @@ const COLUMNS: { key: MemberSort | null; label: string; align?: "right" | "cente
   { key: "renewal", label: "更新状況" },
   { key: null, label: "権限", align: "center" },
   { key: null, label: "状態", align: "center" },
-  { key: null, label: "印", align: "center" },
+  { key: null, label: "メモ", align: "center" },
 ];
 
 function StatusBadge({ withdrawn }: { withdrawn: boolean }) {
@@ -44,23 +44,13 @@ function StatusBadge({ withdrawn }: { withdrawn: boolean }) {
   );
 }
 
-/** 備考あり・紹介者が未紐づけ を小さな印で示す（本文は詳細で見る） */
-function Marks({ row }: { row: MemberDbRow }) {
+/** 運営メモの有無。本文は行の高さが崩れるので出さず、詳細で見る。
+    マウスを乗せたときだけ本文が読めるようにしている。 */
+function NoteMark({ row }: { row: MemberDbRow }) {
+  if (!row.admin_note) return <span className="text-gray-200">—</span>;
   return (
-    <span className="inline-flex items-center gap-1">
-      {row.admin_note && (
-        <span title="運営メモあり">
-          <StickyNote className="w-3.5 h-3.5 text-amber-500" />
-        </span>
-      )}
-      {row.referrer && !row.referrer_member_id && (
-        <span title="紹介者が会員と紐づいていません">
-          <Handshake className="w-3.5 h-3.5 text-amber-500" />
-        </span>
-      )}
-      {!row.admin_note && !(row.referrer && !row.referrer_member_id) && (
-        <span className="text-gray-200">—</span>
-      )}
+    <span title={row.admin_note}>
+      <StickyNote className="w-3.5 h-3.5 text-amber-500" />
     </span>
   );
 }
@@ -183,7 +173,7 @@ export function MemberList({
                 </td>
 
                 <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                  <Marks row={m} />
+                  <NoteMark row={m} />
                 </td>
               </tr>
             ))}
@@ -232,7 +222,7 @@ export function MemberList({
               </p>
               <div className="flex items-center gap-2 mt-0.5">
                 <Contact row={m} />
-                <Marks row={m} />
+                <NoteMark row={m} />
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />

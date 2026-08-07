@@ -36,7 +36,7 @@ function roleLabelOf(role: MemberDbRow["role"]): MemberRole {
 /** 626名を一度に描画すると重いので、既定はこの件数まで（検索で絞り込む運用） */
 const PAGE_SIZE = 100;
 
-type MemberFilter = "all" | "active" | "withdrawn" | "login" | "no_contact";
+type MemberFilter = "all" | "active" | "withdrawn" | "login" | "no_contact" | "no_referrer_link";
 
 export function MemberTab() {
   const { rows, loadStatus } = useMembersDb();
@@ -63,6 +63,8 @@ export function MemberTab() {
       withdrawn: merged.filter((r) => r.is_withdrawn).length,
       login: merged.filter((r) => r.auth_user_id).length,
       noContact: merged.filter((r) => !r.email && !r.phone).length,
+      // 台帳に紹介者の記載はあるが、まだ会員と紐づけていない人
+      noReferrerLink: merged.filter((r) => r.referrer && !r.referrer_member_id).length,
     }),
     [merged]
   );
@@ -75,6 +77,8 @@ export function MemberTab() {
     if (filter === "withdrawn") list = list.filter((r) => r.is_withdrawn);
     if (filter === "login") list = list.filter((r) => r.auth_user_id);
     if (filter === "no_contact") list = list.filter((r) => !r.email && !r.phone);
+    if (filter === "no_referrer_link")
+      list = list.filter((r) => r.referrer && !r.referrer_member_id);
 
     if (q) {
       list = list.filter(
@@ -204,6 +208,7 @@ export function MemberTab() {
     { key: "withdrawn", label: "退会", count: counts.withdrawn },
     { key: "login", label: "ログインあり", count: counts.login },
     { key: "no_contact", label: "連絡先なし", count: counts.noContact },
+    { key: "no_referrer_link", label: "紹介者 未紐づけ", count: counts.noReferrerLink },
   ];
 
   return (
