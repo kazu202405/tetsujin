@@ -15,6 +15,9 @@ import { AvatarUpload } from "@/components/app/avatar-upload";
 import { resetOnboardingDemo } from "@/lib/onboarding-data";
 import { useCurrentMember } from "@/lib/current-member";
 
+const FIELD =
+  "block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent";
+
 export default function SettingsPage() {
   const currentMember = useCurrentMember();
   // 通知の受け取り設定（種類ごと）。押した時点で保存する。
@@ -97,8 +100,12 @@ export default function SettingsPage() {
     renewal: currentMember?.renewal_status ?? "未登録",
   };
 
-  // 本人が変更してよいのは一言（グリップ）だけ
+  // 自分の氏名・連絡先・一言は本人が直せる。
+  // 会員番号・会員種別・入会年月などは契約の事実なので運営が管理する。
   const [grip, setGrip] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<
     { type: "success" | "error"; text: string } | null
@@ -106,7 +113,10 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setGrip(currentMember?.grip ?? "");
-  }, [currentMember?.grip]);
+    setName(currentMember?.name ?? "");
+    setEmail(currentMember?.email ?? "");
+    setPhone(currentMember?.phone ?? "");
+  }, [currentMember?.grip, currentMember?.name, currentMember?.email, currentMember?.phone]);
 
   const saveProfile = async () => {
     setSavingProfile(true);
@@ -115,7 +125,7 @@ export default function SettingsPage() {
       const response = await fetch("/api/me/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ grip }),
+        body: JSON.stringify({ grip, name, email, phone }),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -156,15 +166,18 @@ export default function SettingsPage() {
             プロフィール
           </h2>
           <div className="space-y-5">
-            {/* 会員台帳が正本の項目は表示のみ（本人が書き換えると台帳と食い違うため） */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">氏名</label>
-                <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
-                  {displayName}
-                </div>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={FIELD}
+                />
               </div>
               <div>
+                {/* 会員種別は契約の内容なので運営が管理する */}
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   会員種別
                 </label>
@@ -181,22 +194,40 @@ export default function SettingsPage() {
                 value={grip}
                 onChange={(e) => setGrip(e.target.value)}
                 placeholder="メンバー一覧に表示される短い紹介文"
-                className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                className={FIELD}
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                メールアドレス
-              </label>
-              <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
-                {currentMember?.email || "未登録"}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  メールアドレス
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="未登録"
+                  className={FIELD}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  電話番号
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="未登録"
+                  className={FIELD}
+                />
               </div>
             </div>
 
             <p className="text-[11px] text-gray-400 leading-relaxed">
-              氏名・会員種別・メールアドレスは会員台帳で管理しています（メールはログインIDも兼ねています）。
-              変更が必要な場合は運営へご連絡ください。職業やニックネームは
+              メールアドレスは運営からのご連絡先です。ここを変えてもログインに使うメールアドレスは変わりません。
+              会員番号・会員種別・入会時期は運営が管理しています。職業やニックネームは
               <Link href="/app/mypage/profile-sheet" className="text-gray-600 underline mx-1">
                 プロフィールシート
               </Link>

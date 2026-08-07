@@ -8,6 +8,7 @@ export type CurrentMember = {
   name: string;
   nickname: string | null;
   email: string | null;
+  phone: string | null;
   job: string | null;
   grip: string | null;
   membership_type: string | null;

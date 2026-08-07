@@ -29,10 +29,12 @@ import {
   Handshake,
   Megaphone,
   Send,
+  Link2,
 } from "lucide-react";
 import { RoleBadge } from "@/components/app/role-badge";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { MemberTab } from "./member-tab";
+import { MemberPicker, type MemberHit } from "./member-picker";
 import { useEvents } from "@/lib/events-api";
 
 // ============================================================
@@ -181,6 +183,9 @@ function ApplicationsTab() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  // 既存の会員に紐づけて承認する場合の選択状態（申請ごと）
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [linkTarget, setLinkTarget] = useState<MemberHit | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -209,13 +214,17 @@ function ApplicationsTab() {
     return matchSearch && matchStatus;
   });
 
-  const review = async (id: string, action: "approve" | "reject") => {
+  const review = async (
+    id: string,
+    action: "approve" | "reject",
+    memberId?: string | null,
+  ) => {
     setSavingId(id);
     setMessage(null);
     const response = await fetch(`/api/admin/applications/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, memberId: memberId ?? null }),
     });
     const result = (await response.json().catch(() => null)) as { error?: string } | null;
     setSavingId(null);
@@ -226,8 +235,15 @@ function ApplicationsTab() {
     }
     setMessage({
       type: "success",
-      text: action === "approve" ? "承認して会員台帳に追加しました" : "却下しました",
+      text:
+        action !== "approve"
+          ? "却下しました"
+          : memberId
+            ? "既存の会員に紐づけて承認しました"
+            : "承認して会員台帳に追加しました",
     });
+    setPickerFor(null);
+    setLinkTarget(null);
     await reload();
   };
 
@@ -339,21 +355,67 @@ function ApplicationsTab() {
                     <span>年代: {app.age_range ?? "未記入"}</span><span>・</span><span>性別: {app.gender ?? "未記入"}</span><span>・</span><span>紹介者: {app.referrer ?? "未記入"}</span>
                   </div>
                   {app.status === "pending" && (
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => review(app.id, "approve")}
-                        disabled={savingId === app.id}
-                        className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-60"
-                      >
-                        <UserCheck className="w-4 h-4" />承認して会員に追加
-                      </button>
-                      <button
-                        onClick={() => review(app.id, "reject")}
-                        disabled={savingId === app.id}
-                        className="inline-flex items-center gap-2 px-6 py-2.5 bg-white border-2 border-red-200 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 transition-colors disabled:opacity-60"
-                      >
-                        <UserX className="w-4 h-4" />却下する
-                      </button>
+                    <div className="space-y-3">
+                      {/* 既に会員の方からの申請なら、新しく作らず台帳の行に紐づける。
+                          台帳にメールが入っていない会員は自動では一致しないため、
+                          運営が番号と氏名を見て選ぶ。 */}
+                      {pickerFor === app.id && (
+                        <MemberPicker
+                          defaultQuery={app.name}
+                          selected={linkTarget}
+                          onSelect={setLinkTarget}
+                          onCancel={() => {
+                            setPickerFor(null);
+                            setLinkTarget(null);
+                          }}
+                        />
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        {pickerFor === app.id && linkTarget ? (
+                          <button
+                            onClick={() => review(app.id, "approve", linkTarget.id)}
+                            disabled={savingId === app.id}
+                            className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-60"
+                          >
+                            <Link2 className="w-4 h-4" />
+                            この会員に紐づけて承認
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => review(app.id, "approve")}
+                            disabled={savingId === app.id || pickerFor === app.id}
+                            className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-60"
+                          >
+                            <UserCheck className="w-4 h-4" />新しい会員として追加
+                          </button>
+                        )}
+
+                        {pickerFor !== app.id && (
+                          <button
+                            onClick={() => {
+                              setPickerFor(app.id);
+                              setLinkTarget(null);
+                            }}
+                            disabled={savingId === app.id}
+                            className="inline-flex items-center gap-2 px-6 py-2.5 bg-white border-2 border-blue-200 text-blue-600 rounded-xl text-sm font-bold hover:bg-blue-50 transition-colors disabled:opacity-60"
+                          >
+                            <Link2 className="w-4 h-4" />既存の会員に紐づける
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => review(app.id, "reject")}
+                          disabled={savingId === app.id}
+                          className="inline-flex items-center gap-2 px-6 py-2.5 bg-white border-2 border-red-200 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 transition-colors disabled:opacity-60"
+                        >
+                          <UserX className="w-4 h-4" />却下する
+                        </button>
+                      </div>
+
+                      <p className="text-[11px] text-gray-400">
+                        メールアドレスが台帳の会員と一致すれば、「新しい会員として追加」でもその会員に紐づきます。
+                      </p>
                     </div>
                   )}
                   {app.status === "approved" && (

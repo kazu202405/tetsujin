@@ -21,6 +21,8 @@ export async function PATCH(
   const body = (await request.json().catch(() => null)) as {
     action?: "approve" | "reject" | "reopen";
     reviewNote?: string;
+    /** 既存の会員に紐づける場合の会員ID。省略するとメール一致 → 無ければ新規作成。 */
+    memberId?: string | null;
   } | null;
 
   const { id } = await params;
@@ -28,12 +30,17 @@ export async function PATCH(
   if (body?.action === "approve") {
     const { data, error } = await supabase.rpc("approve_application", {
       p_application_id: id,
+      p_member_id: body.memberId || null,
     });
 
     if (error) {
+      // 23505 は「承認済み」と「メールが他の会員に取られている」の両方で返る。
+      // 後者はメッセージに会員名が入っているので、そのまま運営に見せる。
       const message =
         error.code === "23505"
-          ? "この申請はすでに承認済みです"
+          ? error.message?.includes("登録されています")
+            ? error.message
+            : "この申請はすでに承認済みです"
           : "承認できませんでした";
       console.error("approve_application failed", { code: error.code });
       return NextResponse.json({ error: message }, { status: 400, headers: NO_STORE_HEADERS });
