@@ -10,20 +10,12 @@
 // ============================================================
 
 import { useMemo, useState } from "react";
-import {
-  Search,
-  UserCog,
-  UserX,
-  RotateCcw,
-  StickyNote,
-  Handshake,
-  ChevronRight,
-  X,
-} from "lucide-react";
+import { Search, UserCog, UserX, RotateCcw, Handshake, X } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { RoleBadge } from "@/components/app/role-badge";
 import type { MemberRole } from "@/lib/member-roles";
 import { type MemberDbRow, formatStartMonth, useMembersDb } from "./members-data";
+import { MemberList, type MemberSort } from "./member-list";
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -45,7 +37,6 @@ function roleLabelOf(role: MemberDbRow["role"]): MemberRole {
 const PAGE_SIZE = 100;
 
 type MemberFilter = "all" | "active" | "withdrawn" | "login" | "no_contact";
-type MemberSort = "member_no" | "name" | "start" | "price";
 
 export function MemberTab() {
   const { rows, loadStatus } = useMembersDb();
@@ -101,8 +92,21 @@ export function MemberTab() {
     const noAsNumber = (v: MemberDbRow["member_no"]) =>
       typeof v === "number" ? v : Number.MAX_SAFE_INTEGER;
 
+    // 更新状況は「対応が要るもの」から並べる（運営が上から片付けられるように）
+    const renewalOrder: Record<string, number> = {
+      入金待ち: 0,
+      返事待ち: 1,
+      未更新: 2,
+      更新済: 3,
+      退会: 4,
+    };
+
     return [...list].sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name, "ja");
+      if (sort === "renewal") {
+        const key = (r: MemberDbRow) => renewalOrder[r.renewal_status ?? ""] ?? 9;
+        return key(a) - key(b);
+      }
       if (sort === "price") return (b.price ?? 0) - (a.price ?? 0);
       if (sort === "start") {
         const key = (r: MemberDbRow) => (r.start_year ?? 0) * 100 + (r.start_month ?? 0);
@@ -256,6 +260,7 @@ export function MemberTab() {
           <option value="member_no">会員番号順</option>
           <option value="name">氏名順</option>
           <option value="start">入会が新しい順</option>
+          <option value="renewal">更新状況（要対応から）</option>
           <option value="price">入会時金額が高い順</option>
         </select>
       </div>
@@ -274,94 +279,26 @@ export function MemberTab() {
         {filtered.length}件中 {visible.length}件を表示
       </p>
 
-      <div className="space-y-2">
-        {visible.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => setDetailId(m.id)}
-            className={`w-full flex items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm text-left hover:border-gray-300 transition-colors ${
-              m.is_withdrawn ? "border-red-100" : "border-gray-100"
-            }`}
-          >
-            <MemberAvatar
-              name={m.name}
-              url={m.avatar_url}
-              grayscale={m.is_withdrawn}
-              className="ring-1 ring-gray-100"
-            />
+      <MemberList
+        rows={visible}
+        roleLabelOf={roleLabelOf}
+        sort={sort}
+        onSort={(key) => {
+          setSort(key);
+          setVisibleCount(PAGE_SIZE);
+        }}
+        onSelect={setDetailId}
+      />
 
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold text-gray-900 truncate">{m.name}</span>
-                {m.member_no != null && (
-                  <span className="text-[10px] font-mono text-gray-400">No.{m.member_no}</span>
-                )}
-                {m.is_withdrawn ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold border border-red-200">
-                    退会
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[10px] font-bold border border-green-200">
-                    在籍
-                  </span>
-                )}
-                <RoleBadge role={roleLabelOf(m.role)} />
-                {!m.auth_user_id && <span className="text-[10px] text-gray-400">未ログイン</span>}
-              </div>
+      {visible.length < filtered.length && (
+        <button
+          onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+          className="mt-3 w-full py-3 rounded-2xl border border-gray-200 bg-white text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          さらに{Math.min(PAGE_SIZE, filtered.length - visible.length)}件を表示
+        </button>
+      )}
 
-              <p className="text-xs text-gray-500 truncate mt-0.5">
-                {m.job || "職業未登録"}
-                {m.membership_type ? `・${m.membership_type}` : ""}
-                {formatStartMonth(m) ? `・${formatStartMonth(m)}開始` : ""}
-                {m.renewal_status ? `・${m.renewal_status}` : ""}
-              </p>
-
-              <p className="text-[11px] text-gray-400 truncate mt-0.5">
-                {m.email || m.phone ? (
-                  <span className="font-mono">
-                    {[m.email, m.phone].filter(Boolean).join("・")}
-                  </span>
-                ) : (
-                  <span className="text-amber-600">連絡先なし</span>
-                )}
-                {m.referrer && (
-                  <>
-                    {"・紹介 "}
-                    {m.referrer}
-                    {m.referrer_member_id ? (
-                      <span className="text-green-600">（紐づけ済み）</span>
-                    ) : (
-                      <span className="text-amber-600">（未紐づけ）</span>
-                    )}
-                  </>
-                )}
-              </p>
-
-              {m.admin_note && (
-                <p className="flex items-start gap-1 text-[11px] text-gray-600 mt-1 bg-amber-50/70 border border-amber-100 rounded-lg px-2 py-1 whitespace-pre-wrap break-words">
-                  <StickyNote className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <span>{m.admin_note}</span>
-                </p>
-              )}
-            </div>
-
-            <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
-          </button>
-        ))}
-
-        {filtered.length === 0 && (
-          <div className="text-center text-gray-400 py-12 text-sm">該当する会員がいません</div>
-        )}
-
-        {visible.length < filtered.length && (
-          <button
-            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-            className="w-full py-3 rounded-2xl border border-gray-200 bg-white text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            さらに{Math.min(PAGE_SIZE, filtered.length - visible.length)}件を表示
-          </button>
-        )}
-      </div>
 
       {detail && (
         <MemberDetailModal
