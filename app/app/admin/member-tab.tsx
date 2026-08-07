@@ -434,10 +434,12 @@ function MemberDetailModal({
           <div className="space-y-4">
             <h4 className="text-sm font-bold text-gray-900">運営操作</h4>
 
-            {/* 権限 */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-20 flex-shrink-0">権限</span>
-              {row.auth_user_id ? (
+            {/* 権限。
+                まだログインしていない会員にも設定できる。
+                運営を先に決めておけば、その人がログインした時点で運営として入れる。 */}
+            <div className="flex items-start gap-3">
+              <span className="text-xs text-gray-500 w-20 flex-shrink-0 pt-2">権限</span>
+              <div className="min-w-0">
                 <select
                   value={row.role}
                   onChange={(e) => onChangeRole(row, e.target.value as MemberDbRow["role"])}
@@ -448,11 +450,14 @@ function MemberDetailModal({
                   <option value="manager">部長</option>
                   <option value="admin">運営</option>
                 </select>
-              ) : (
-                <span className="text-xs text-gray-400">
-                  ログインアカウントが無いため設定できません
-                </span>
-              )}
+                {!row.auth_user_id && (
+                  <p className="mt-1.5 text-[11px] text-gray-400">
+                    {row.email
+                      ? `まだログインしていません。${row.email} でアカウントを作ると、この権限のまま入れます。`
+                      : "まだログインしていません。メールアドレスを登録しておくと、その方がアカウントを作ったときにこの権限のまま入れます。"}
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* 紹介者 */}

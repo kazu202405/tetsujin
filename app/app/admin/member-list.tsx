@@ -160,11 +160,12 @@ export function MemberList({
                   {m.renewal_status ?? <span className="text-gray-300">—</span>}
                 </td>
 
+                {/* 権限はログイン前でも設定できるので常に出す。
+                    まだログインしていないことは薄字で添える。 */}
                 <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                  {m.auth_user_id ? (
-                    <RoleBadge role={roleLabelOf(m.role)} />
-                  ) : (
-                    <span className="text-[10px] text-gray-400">未ログイン</span>
+                  <RoleBadge role={roleLabelOf(m.role)} />
+                  {!m.auth_user_id && (
+                    <span className="block text-[10px] text-gray-300 mt-0.5">未ログイン</span>
                   )}
                 </td>
 
@@ -208,10 +209,9 @@ export function MemberList({
                   <span className="text-[10px] font-mono text-gray-400">No.{m.member_no}</span>
                 )}
                 <StatusBadge withdrawn={m.is_withdrawn} />
-                {m.auth_user_id ? (
-                  <RoleBadge role={roleLabelOf(m.role)} />
-                ) : (
-                  <span className="text-[10px] text-gray-400">未ログイン</span>
+                <RoleBadge role={roleLabelOf(m.role)} />
+                {!m.auth_user_id && (
+                  <span className="text-[10px] text-gray-300">未ログイン</span>
                 )}
               </div>
               <p className="text-xs text-gray-500 truncate mt-0.5">
