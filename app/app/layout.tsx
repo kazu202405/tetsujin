@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app/app-sidebar";
+import { BottomTabs } from "@/components/app/bottom-tabs";
 import { VisitRecorder } from "@/components/app/visit-recorder";
 import { CurrentMemberProvider } from "@/lib/current-member";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -26,7 +27,9 @@ export default async function AppLayout({
       <div className="min-h-screen bg-gray-50">
         <VisitRecorder />
         <AppSidebar />
-        <main className="lg:pl-64 pt-14 lg:pt-0">{children}</main>
+        {/* スマホは下タブ。その分だけ本文の下に余白を足す */}
+        <main className="lg:pl-64 pt-14 lg:pt-0 pb-16 lg:pb-0">{children}</main>
+        <BottomTabs />
       </div>
     </CurrentMemberProvider>
   );

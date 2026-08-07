@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { AutoTextarea } from "@/components/app/auto-textarea";
+import { ConnectionsHeader } from "./connections-header";
 import {
   type ConnectionRecord,
   DEFAULT_CONNECTION_TAGS,
@@ -232,25 +233,18 @@ export default function ConnectionsPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">出会い</h1>
-              <p className="text-sm text-gray-500 mt-0.5">
-                会った人を記録すると、その方の「つながり済みのみ」のSNSが見えます
-              </p>
-            </div>
-            <button
-              onClick={() => setShowForm((v) => !v)}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors flex-shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              記録する
-            </button>
-          </div>
-        </div>
-      </div>
+      <ConnectionsHeader
+        description="会った人を記録すると、その方の「つながり済みのみ」のSNSが見えます"
+        action={
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors flex-shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            記録する
+          </button>
+        }
+      />
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24">
         {error && (

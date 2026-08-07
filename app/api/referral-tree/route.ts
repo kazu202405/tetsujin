@@ -1,6 +1,7 @@
 // 紹介ツリー。members.referrer_member_id（運営が紐づける列）から作る。
+// 誰が誰の紹介かは会員どうしの力関係が見える情報なので運営のみ。
 import { NextResponse } from "next/server";
-import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
+import { NO_STORE_HEADERS, requireAdminMember } from "@/lib/supabase/api";
 import { signAvatarPaths } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ interface Row {
 }
 
 export async function GET() {
-  const guard = await requireMember();
+  const guard = await requireAdminMember();
   if (!guard.ok) return guard.response;
   const { supabase } = guard;
 

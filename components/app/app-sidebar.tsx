@@ -14,7 +14,6 @@ import {
   MessageCircle,
   ShieldCheck,
   Bell,
-  UserPlus,
   Menu,
   X,
   Settings,
@@ -69,8 +68,7 @@ const navItems: {
   { href: "/app/post", label: "会を探す", icon: CalendarSearch },
   // { href: "/app/discover", label: "おすすめ", icon: UtensilsCrossed },
   { href: "/app/connections", label: "出会い", icon: Handshake },
-  { href: "/app/tree", label: "紹介ツリー", icon: GitBranch },
-  { href: "/app/requests", label: "つながり申請", icon: UserPlus },
+  { href: "/app/tree", label: "紹介ツリー", icon: GitBranch, adminOnly: true },
   { href: "/app/members-admin", label: "つながり", icon: UserCog, adminOnly: true },
   { href: "/app/admin", label: "管理画面", icon: ShieldCheck, adminOnly: true },
   { href: "/app/settings", label: "設定", icon: Settings },
@@ -119,10 +117,11 @@ export function AppSidebar() {
     };
   }, [drawerOpen]);
 
+  // 申請は「出会い」の中のタブになったので、バッジも出会いに出す
   const badgeFor = (href: string) =>
     href === "/app/board"
       ? boardUnread
-      : href === "/app/requests"
+      : href === "/app/connections"
       ? requestsPending
       : 0;
 
