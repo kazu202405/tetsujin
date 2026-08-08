@@ -43,6 +43,15 @@ export function PushNotificationSetup() {
   const [perm, setPerm] = useState<PermState>("default");
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [iosVersion, setIosVersion] = useState<number | null>(null);
+  // 「対応していない」と言われたときに、何が足りないのかを本人が読めるようにする
+  const [diag, setDiag] = useState<{
+    hasNotification: boolean;
+    hasServiceWorker: boolean;
+    hasPush: boolean;
+    standalone: boolean;
+    iosVersion: number | null;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   // この端末がサーバーに購読先として登録されているか
@@ -50,24 +59,35 @@ export function PushNotificationSetup() {
 
   useEffect(() => {
     setMounted(true);
-    const supported =
-      typeof window !== "undefined" &&
-      "Notification" in window &&
-      "serviceWorker" in navigator;
-    if (!supported) {
+
+    // 🔴 端末の判定を先に済ませる。
+    //    以前はここで早期returnしており、iPhoneで通知が使えないときに
+    //    「ホーム画面に追加してください」ではなく
+    //    「このブラウザは対応していません」と出てしまっていた。
+    const ua = window.navigator.userAgent;
+    const ios = /iphone|ipad|ipod/i.test(ua);
+    setIsIOS(ios);
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      // iOS Safari 独自フラグ
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    setIsStandalone(standalone);
+
+    // iOS のバージョン（Web Push は 16.4 以上が必要）
+    const m = ua.match(/OS (\d+)[._](\d+)/);
+    const version = m ? Number(m[1]) + Number(m[2]) / 10 : null;
+    setIosVersion(version);
+
+    const hasNotification = "Notification" in window;
+    const hasServiceWorker = "serviceWorker" in navigator;
+    const hasPush = "PushManager" in window;
+    setDiag({ hasNotification, hasServiceWorker, hasPush, standalone, iosVersion: version });
+
+    if (!hasNotification || !hasServiceWorker) {
       setPerm("unsupported");
       return;
     }
     setPerm(Notification.permission as PermState);
-
-    const ua = window.navigator.userAgent;
-    setIsIOS(/iphone|ipad|ipod/i.test(ua));
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      // iOS Safari 独自フラグ
-      (window.navigator as unknown as { standalone?: boolean }).standalone ===
-        true;
-    setIsStandalone(standalone);
 
     // Service Worker 登録（push 受信と通知表示の土台）
     navigator.serviceWorker
@@ -201,16 +221,56 @@ export function PushNotificationSetup() {
         アプリを開いていない時でも、スマホ・PCの通知として受け取れます。
       </p>
 
-      {/* 非対応ブラウザ */}
-      {perm === "unsupported" && (
-        <div className="flex items-start gap-2.5 p-4 rounded-xl bg-gray-50 text-sm text-gray-600">
-          <AlertCircle className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
-          <p>このブラウザは端末通知に対応していません。最新の Chrome / Safari でお試しください。</p>
+      {/* 使えないとき。何が足りないのかで案内を分ける。
+          「対応していません」だけでは、本人が次に何をすればいいか分からない。 */}
+      {perm === "unsupported" && !iosNeedsInstall && (
+        <div className="p-4 rounded-xl bg-gray-50 text-sm text-gray-600 space-y-2">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              {isIOS && iosVersion !== null && iosVersion < 16.4 ? (
+                <>
+                  <p className="font-bold text-gray-900 mb-1">
+                    iOSの更新が必要です（お使いは {iosVersion.toFixed(1)}）
+                  </p>
+                  <p className="leading-relaxed">
+                    iPhoneで通知を受け取るには iOS 16.4 以上が必要です。
+                    「設定」→「一般」→「ソフトウェアアップデート」から更新してください。
+                    機種は関係ありません（iPhone 13 は対応しています）。
+                  </p>
+                </>
+              ) : isIOS && isStandalone ? (
+                <>
+                  <p className="font-bold text-gray-900 mb-1">
+                    ホーム画面から開いていますが、通知が使えません
+                  </p>
+                  <p className="leading-relaxed">
+                    <b>Safari 以外のブラウザから「ホーム画面に追加」した</b>可能性があります。
+                    Chrome などから追加したアイコンでは通知を使えません。
+                    アイコンを削除して、<b>Safari で開き直してから</b>追加してください。
+                  </p>
+                </>
+              ) : (
+                <p className="leading-relaxed">
+                  このブラウザは端末通知に対応していません。最新の Chrome / Safari でお試しください。
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* 運営に状況を伝えるための情報。原因の切り分けに使う。 */}
+          {diag && (
+            <p className="text-[10px] text-gray-400 font-mono pl-7">
+              iOS {diag.iosVersion ?? "?"} / ホーム画面 {diag.standalone ? "○" : "×"} / 通知{" "}
+              {diag.hasNotification ? "○" : "×"} / SW {diag.hasServiceWorker ? "○" : "×"} / Push{" "}
+              {diag.hasPush ? "○" : "×"}
+            </p>
+          )}
         </div>
       )}
 
       {/* iOS: ホーム画面に追加が必要 */}
-      {perm !== "unsupported" && iosNeedsInstall && (
+      {iosNeedsInstall && (
         <div className="p-4 rounded-xl bg-[var(--tetsu-pink-pale)] border border-[var(--tetsu-pink)]/20">
           <p className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-[var(--tetsu-pink)]" />
@@ -312,9 +372,9 @@ export function PushNotificationSetup() {
 
       {msg && <p className="mt-3 text-xs text-gray-500 leading-relaxed">{msg}</p>}
 
-      {/* 開発メモ的な注記（実配信は今後） */}
       <p className="mt-5 pt-4 border-t border-gray-100 text-[11px] text-gray-400 leading-relaxed">
-        ※ 現在は「通知が届くかの動作確認」段階です。新しい申請やイベントを自動でお知らせする配信機能は、今後の対応で追加します。
+        ※ コメント・つながり申請・イベントのお知らせが、アプリを閉じていても届きます。
+        種類ごとの受け取りは下の「通知」で切り替えられます。
       </p>
     </div>
   );
