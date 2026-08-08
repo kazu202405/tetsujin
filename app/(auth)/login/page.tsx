@@ -1,22 +1,40 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LogIn, Mail, Lock, AlertCircle, Loader2 } from "lucide-react";
+import { LogIn, Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 // ログイン画面
 // - Supabase接続済み … メール＋パスワードで実際に認証する（依頼主決定 2026-07-21）
 // - Supabase未接続   … 従来どおりmock（何を入れてもマイページへ）＝実機デモを止めないため
+const REMEMBERED_EMAIL_KEY = "tetsujin-remembered-email";
+const REMEMBER_OFF_KEY = "tetsujin-remember-off";
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  // 前回ログインしたメールを覚えておくか（既定＝覚える）
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // 前回のメールアドレスを入れておく。毎回打つのが一番の手間なので。
+  // パスワードはここでは覚えない（端末のパスワード管理に任せる）。
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(REMEMBERED_EMAIL_KEY);
+      if (saved) setEmail(saved);
+      else setRemember(localStorage.getItem(REMEMBER_OFF_KEY) !== "1");
+    } catch {
+      /* 使えない端末では何もしない */
+    }
+  }, []);
 
   // ログイン後の戻り先（middlewareが ?next= を付ける）
   const nextPath = searchParams.get("next") ?? "/app/mypage";
@@ -56,6 +74,18 @@ function LoginForm() {
       return;
     }
 
+    try {
+      if (remember) {
+        localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim());
+        localStorage.removeItem(REMEMBER_OFF_KEY);
+      } else {
+        localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+        localStorage.setItem(REMEMBER_OFF_KEY, "1");
+      }
+    } catch {
+      /* 使えない端末では何もしない */
+    }
+
     // Server Component 側にも新しいセッションを反映させる
     router.push(nextPath);
     router.refresh();
@@ -93,9 +123,11 @@ function LoginForm() {
                 <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="email"
+                  name="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
+                  inputMode="email"
                   placeholder="example@email.com"
                   className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--tetsu-pink)] focus:border-transparent focus:bg-white transition-all"
                 />
@@ -110,21 +142,41 @@ function LoginForm() {
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
+                  name="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--tetsu-pink)] focus:border-transparent focus:bg-white transition-all"
+                  className="w-full pl-10 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--tetsu-pink)] focus:border-transparent focus:bg-white transition-all"
                 />
+                {/* 打ち間違いは目で見て直せる方が早い */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                  aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
-              {isSupabaseConfigured && (
-                <div className="text-right mt-2">
+
+              <div className="flex items-center justify-between mt-2">
+                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 accent-[var(--tetsu-pink)]"
+                  />
+                  メールアドレスを記憶する
+                </label>
+                {isSupabaseConfigured && (
                   <Link href="/forgot-password" className="text-xs font-bold text-[var(--tetsu-pink)] hover:underline">
                     パスワードを忘れた方
                   </Link>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* ログインボタン */}
@@ -173,10 +225,10 @@ function LoginForm() {
             <>
               まだ会員でない方は{" "}
               <Link
-                href="/contact"
+                href="/register"
                 className="font-bold text-[var(--tetsu-pink)] hover:underline"
               >
-                入会のお問い合わせ
+                入会のお申し込み
               </Link>
             </>
           )}

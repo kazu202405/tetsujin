@@ -67,13 +67,13 @@ export default function SignupPage() {
           <p className="text-sm text-gray-600 leading-relaxed">
             新規登録は現在準備中です。
             <br />
-            入会をご希望の方は お問い合わせください。
+            入会をご希望の方は 入会申込フォームからお申し込みください。
           </p>
           <Link
-            href="/contact"
+            href="/register"
             className="inline-block mt-6 px-6 py-3 bg-[var(--tetsu-pink)] text-white rounded-full text-sm font-bold hover:bg-[var(--tetsu-pink-light)] transition-all"
           >
-            入会のお問い合わせ
+            入会のお申し込み
           </Link>
         </div>
       </section>
