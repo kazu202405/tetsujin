@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { PushNotificationSetup } from "@/components/app/push-notification-setup";
 import { AvatarUpload } from "@/components/app/avatar-upload";
-import { resetOnboardingDemo } from "@/lib/onboarding-data";
+import { clearClientCache } from "@/lib/client-cache";
 import { useCurrentMember } from "@/lib/current-member";
 
 const FIELD =
@@ -139,9 +139,20 @@ export default function SettingsPage() {
     setSavingProfile(false);
   };
 
-  const handleResetOnboarding = () => {
-    resetOnboardingDemo();
+  // 各ステップの完了は実データから数えているので、ここで戻せるのは
+  // 「閉じた」状態だけ。済んでいるステップは済んだままガイドが戻る。
+  const handleResetOnboarding = async () => {
     setResetConfirm(false);
+    try {
+      await fetch("/api/me/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dismissed: false }),
+      });
+      clearClientCache();
+    } catch {
+      /* 失敗しても表示が戻らないだけ */
+    }
     setResetDone(true);
     setTimeout(() => setResetDone(false), 4000);
   };
@@ -395,18 +406,14 @@ export default function SettingsPage() {
           </a>
         </div>
 
-        {/* はじめてガイドのリセット（デモ・動作確認用） */}
+        {/* はじめてガイドをもう一度出す */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
           <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2">
             <RotateCcw className="w-5 h-5 text-gray-400" />
             はじめてガイドをもう一度見る
           </h2>
           <p className="text-sm text-gray-600 leading-relaxed mb-5">
-            マイページ上部の「はじめてガイド」を、新規会員と同じ全ステップ未完了（0/6）の状態に戻します。デモ・動作確認用の機能です。
-            <br />
-            <span className="text-xs text-gray-400">
-              ※ あなたのイベント参加・作成したプロフィール・掲示板の閲覧記録・送信した開示申請がクリアされます（他の人から届いた開示申請は残ります）。
-            </span>
+            いちど閉じた「はじめてガイド」を、マイページにもう一度表示します。すでに済んでいるステップは完了のままです。
           </p>
           {!resetConfirm ? (
             <button
@@ -414,19 +421,19 @@ export default function SettingsPage() {
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors"
             >
               <RotateCcw className="w-4 h-4" />
-              はじめてガイドをリセット
+              はじめてガイドを表示する
             </button>
           ) : (
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <p className="text-sm font-medium text-gray-900">
-                初回状態に戻します。よろしいですか？
+                マイページに表示します。よろしいですか？
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={handleResetOnboarding}
                   className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-[var(--tetsu-pink)] hover:opacity-90 transition-opacity"
                 >
-                  はい、リセット
+                  はい、表示する
                 </button>
                 <button
                   onClick={() => setResetConfirm(false)}
@@ -440,7 +447,7 @@ export default function SettingsPage() {
           {resetDone && (
             <p className="mt-3 text-sm font-medium text-green-600 flex items-center gap-1.5">
               <Check className="w-4 h-4" />
-              リセットしました。マイページでご確認ください。
+              マイページに表示しました。
             </p>
           )}
         </div>

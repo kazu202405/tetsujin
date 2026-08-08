@@ -1,242 +1,179 @@
-// 使い始めチェックリスト（マイページ上部）
-// - 6ステップ。完了は各ストアから自動判定（説明動画のみクリックで完了扱い）。
-// - × で閉じられる（tetsujin-onboarding-dismissed）。全ステップ完了で自動的に非表示。
-// - 動画は素材未提供のためプレースホルダ（準備中）。
-//   TODO: 実際の説明動画 URL が用意でき次第、VideoModal の src を差し替える。
+// ============================================================
+// はじめてガイド（マイページ上部）
+// ============================================================
+// 並びは「顔が見えて、人と繋がる」順（依頼主決定 2026-08-08）。
+// 写真と名刺を先頭に置くのは、それが無いと掲示板でもメンバー一覧でも
+// 「誰か分からない人」になってしまい、後の5つが空回りするため。
+//
+// 完了は毎回 実データから数える（フラグを持たない）。
+// フラグにすると「やったのに消えた」「やってないのに完了」がすぐ起きる。
+//
+// 閉じたかどうかだけ会員の行に持つ＝スマホとPCで進捗が揃い、
+// 機種変しても最初から出てこない（旧版は端末の localStorage だった）。
+// ============================================================
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Circle, X, Play, ChevronRight } from "lucide-react";
-import { useJoinedEvents } from "@/lib/events-api";
-import { useBoardVisited } from "@/lib/board-data";
-import { useDisclosureRequests } from "@/lib/social-api";
-import {
-  useOnboardingFlags,
-  markOnboardingVideoWatched,
-  dismissOnboarding,
-} from "@/lib/onboarding-data";
+import { CheckCircle2, Circle, X, ChevronRight } from "lucide-react";
+import { useCachedResource, setCached } from "@/lib/client-cache";
 
-interface StepDef {
-  key: string;
-  label: string;
-  done: boolean;
-  href?: string; // リンクで飛ぶステップ
-  onClick?: () => void; // 動画などその場で完了するステップ
+export interface OnboardingProgress {
+  hasAvatar: boolean;
+  hasSheet: boolean;
+  visitedBoard: boolean;
+  hasPost: boolean;
+  joinedEvent: boolean;
+  hasConnection: boolean;
+  dismissed: boolean;
 }
 
-/** プロフィールシートを作成済みか（DBに自分の行があるか）。 */
-function useHasProfileSheet(): boolean {
-  const [hasSheet, setHasSheet] = useState(false);
+const CACHE_KEY = "onboarding";
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/me/profile-sheet", { cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) return;
-        const body = (await res.json()) as { exists?: boolean };
-        if (!cancelled) setHasSheet(Boolean(body.exists));
-      })
-      .catch(() => {
-        /* 取得できないときは未作成扱い（ガイドが出るだけ） */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return hasSheet;
-}
+// 取れていないうちはガイドを出さない（ちらついて閉じ損なうのを防ぐ）
+const UNKNOWN: OnboardingProgress = {
+  hasAvatar: false,
+  hasSheet: false,
+  visitedBoard: false,
+  hasPost: false,
+  joinedEvent: false,
+  hasConnection: false,
+  dismissed: true,
+};
 
 export function OnboardingChecklist() {
-  const { mounted, videoWatched, dismissed } = useOnboardingFlags();
-  const joinedEvents = useJoinedEvents();
-  const boardVisited = useBoardVisited();
-  const hasSheet = useHasProfileSheet();
-  const { requests } = useDisclosureRequests();
-  const [showVideo, setShowVideo] = useState(false);
+  const { data, status, reload } = useCachedResource<OnboardingProgress>(
+    CACHE_KEY,
+    "/api/me/onboarding",
+    UNKNOWN,
+  );
+  const [closing, setClosing] = useState(false);
 
-  // 自分が出した開示申請が1件でもあるか
-  const hasSentRequest = requests.some((r) => r.direction === "outgoing");
-
-  const steps: StepDef[] = [
+  const steps: { key: string; label: string; hint: string; done: boolean; href: string }[] = [
     {
-      key: "video",
-      label: "説明動画を見る",
-      done: videoWatched,
-      onClick: () => {
-        setShowVideo(true);
-        markOnboardingVideoWatched();
-      },
+      key: "avatar",
+      label: "プロフィール写真を登録する",
+      hint: "掲示板やメンバー一覧で顔が出ます",
+      done: data.hasAvatar,
+      href: "/app/settings",
     },
     {
-      key: "join1",
-      label: "イベントに参加する",
-      done: joinedEvents.length > 0,
-      href: "/app/post",
+      key: "sheet",
+      label: "プロフィールシートを作る",
+      hint: "あなたの名刺になります",
+      done: data.hasSheet,
+      href: "/app/mypage/profile-sheet",
     },
     {
       key: "board",
       label: "掲示板を見る",
-      done: boardVisited,
+      hint: "会の動きはここに集まります",
+      done: data.visitedBoard,
       href: "/app/board",
     },
     {
-      key: "profile",
-      label: "プロフィールを作成する",
-      done: hasSheet,
-      href: "/app/mypage/profile-sheet",
+      key: "post",
+      label: "掲示板に投稿してみる",
+      hint: "ひとこと自己紹介でも十分です",
+      done: data.hasPost,
+      href: "/app/board",
     },
     {
-      key: "join2",
-      label: "別のイベントにも参加する",
-      done: joinedEvents.length >= 2,
+      key: "event",
+      label: "会に参加する",
+      hint: "予定を見て申し込めます",
+      done: data.joinedEvent,
       href: "/app/post",
     },
     {
-      key: "disclosure",
-      label: "誰かに開示申請する",
-      done: hasSentRequest,
-      href: "/app/members",
+      key: "connection",
+      label: "会った人を記録する",
+      hint: "記録するとその方のSNSが見えます",
+      done: data.hasConnection,
+      href: "/app/connections",
     },
   ];
 
   const doneCount = steps.filter((s) => s.done).length;
   const allDone = doneCount === steps.length;
 
-  // SSR/初期描画では出さない（hydration mismatch 回避）。閉じた or 全完了なら非表示。
-  if (!mounted || dismissed || allDone) {
-    return (
-      <>
-        {showVideo && <VideoModal onClose={() => setShowVideo(false)} />}
-      </>
-    );
-  }
+  const dismiss = async () => {
+    setClosing(true);
+    // 押した瞬間に消す。保存の返事を待たせない。
+    setCached<OnboardingProgress>(CACHE_KEY, { ...data, dismissed: true });
+    try {
+      await fetch("/api/me/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dismissed: true }),
+      });
+    } catch {
+      /* 保存できなくても、次に開いたときにまた出るだけ */
+    }
+    await reload();
+    setClosing(false);
+  };
+
+  if (status === "loading" || data.dismissed || allDone || closing) return null;
 
   return (
-    <>
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6 mb-8">
-        {/* ヘッダー */}
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-gray-900">
-              はじめてガイド
-            </h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              6ステップでTETSUJIN会を使いこなそう（{doneCount}/{steps.length}）
-            </p>
-          </div>
-          <button
-            onClick={dismissOnboarding}
-            className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
-            aria-label="ガイドを閉じる"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6 mb-8">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h3 className="text-base font-bold text-gray-900">はじめてガイド</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {doneCount}/{steps.length} 完了
+          </p>
         </div>
+        <button
+          onClick={dismiss}
+          className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
+          aria-label="ガイドを閉じる"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
 
-        {/* 進捗バー */}
-        <div className="h-1.5 w-full rounded-full bg-gray-100 mb-4 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-[var(--tetsu-pink)] transition-all"
-            style={{ width: `${(doneCount / steps.length) * 100}%` }}
-          />
-        </div>
+      <div className="h-1.5 w-full rounded-full bg-gray-100 mb-4 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-[var(--tetsu-pink)] transition-all"
+          style={{ width: `${(doneCount / steps.length) * 100}%` }}
+        />
+      </div>
 
-        {/* ステップ一覧 */}
-        <ol className="space-y-1.5">
-          {steps.map((step, i) => {
-            const inner = (
+      <ol className="space-y-1.5">
+        {steps.map((step, i) => (
+          <li key={step.key}>
+            <Link href={step.href}>
               <div
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
-                  step.done
-                    ? "bg-gray-50"
-                    : "hover:bg-[var(--tetsu-pink-pale)]"
+                  step.done ? "bg-gray-50" : "hover:bg-[var(--tetsu-pink-pale)]"
                 }`}
               >
                 {step.done ? (
                   <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-                ) : step.key === "video" ? (
-                  <Play className="w-5 h-5 text-[var(--tetsu-pink)] flex-shrink-0" />
                 ) : (
                   <Circle className="w-5 h-5 text-gray-300 flex-shrink-0" />
                 )}
-                <span
-                  className={`text-sm flex-1 ${
-                    step.done
-                      ? "text-gray-400 line-through"
-                      : "text-gray-800 font-medium"
-                  }`}
-                >
-                  <span className="text-gray-400 mr-1.5">{i + 1}.</span>
-                  {step.label}
+                <span className="flex-1 min-w-0">
+                  <span
+                    className={`block text-sm ${
+                      step.done ? "text-gray-400 line-through" : "text-gray-800 font-medium"
+                    }`}
+                  >
+                    <span className="text-gray-400 mr-1.5">{i + 1}.</span>
+                    {step.label}
+                  </span>
+                  {!step.done && (
+                    <span className="block text-[11px] text-gray-400 mt-0.5">{step.hint}</span>
+                  )}
                 </span>
-                {!step.done && (
-                  <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                )}
+                {!step.done && <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />}
               </div>
-            );
-
-            if (step.href) {
-              return (
-                <li key={step.key}>
-                  <Link href={step.href}>{inner}</Link>
-                </li>
-              );
-            }
-            return (
-              <li key={step.key}>
-                <button onClick={step.onClick} className="w-full text-left">
-                  {inner}
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-
-      {showVideo && <VideoModal onClose={() => setShowVideo(false)} />}
-    </>
-  );
-}
-
-// 説明動画のプレースホルダモーダル（素材未提供のため準備中）
-// TODO: 実際の説明動画（YouTube 等）が用意でき次第、この中身を差し替える。
-function VideoModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-bold text-gray-900">TETSUJIN会の使い方</h3>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-            aria-label="閉じる"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        {/* 動画プレースホルダ（16:9） */}
-        <div className="aspect-video bg-gray-100 flex flex-col items-center justify-center gap-2">
-          <Play className="w-10 h-10 text-gray-300" />
-          <p className="text-sm font-medium text-gray-400">説明動画は準備中です</p>
-          <p className="text-xs text-gray-300">
-            近日公開予定。もうしばらくお待ちください。
-          </p>
-        </div>
-        <div className="px-5 py-4">
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors"
-          >
-            閉じる
-          </button>
-        </div>
-      </div>
+            </Link>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
