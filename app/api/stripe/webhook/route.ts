@@ -123,9 +123,20 @@ export async function POST(request: Request) {
       }
 
       case "invoice.payment_failed": {
-        const invoice = event.data.object as Stripe.Invoice & { subscription?: string | null };
+        // 🔴 契約IDの置き場所がAPIバージョンで変わる。
+        //    古い版: invoice.subscription
+        //    新しい版: invoice.parent.subscription_details.subscription
+        //    どちらの版で設定されても拾えるように両方見る。
+        const invoice = event.data.object as Stripe.Invoice & {
+          subscription?: string | { id: string } | null;
+          parent?: { subscription_details?: { subscription?: string | { id: string } | null } };
+        };
+        const pick = (v: unknown): string | null =>
+          typeof v === "string" ? v : (v as { id?: string })?.id ?? null;
         const subId =
-          typeof invoice.subscription === "string" ? invoice.subscription : null;
+          pick(invoice.subscription) ??
+          pick(invoice.parent?.subscription_details?.subscription);
+
         if (subId) {
           const admin = createAdminClient();
           await admin
