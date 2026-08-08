@@ -35,6 +35,7 @@ import {
   useConnectionTags,
   useConnections,
 } from "@/lib/connections-api";
+import { LoadingRows } from "@/components/app/skeleton";
 
 interface DirectoryMember {
   id: string;
@@ -421,7 +422,7 @@ export default function ConnectionsPage() {
         </div>
 
         {status === "loading" && (
-          <p className="text-center text-gray-400 py-20 text-sm">読み込み中...</p>
+          <LoadingRows rows={4} />
         )}
         {status === "error" && (
           <p className="text-center text-red-600 py-20 text-sm">

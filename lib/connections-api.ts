@@ -7,6 +7,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useCachedResource } from "./client-cache";
 
 export interface ConnectionPerson {
   id: string;
@@ -42,26 +43,13 @@ async function readError(response: Response, fallback: string): Promise<string> 
 }
 
 export function useConnections() {
-  const [connections, setConnections] = useState<ConnectionRecord[]>([]);
-  const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
-
-  const reload = useCallback(async () => {
-    try {
-      const response = await fetch("/api/connections", { cache: "no-store" });
-      if (!response.ok) throw new Error("failed");
-      setConnections((await response.json()) as ConnectionRecord[]);
-      setStatus("loaded");
-    } catch {
-      setConnections([]);
-      setStatus("error");
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { connections, status, reload };
+  // 2回目以降は覚えている内容をすぐ出し、裏で取り直す
+  const { data, status, reload } = useCachedResource<ConnectionRecord[]>(
+    "connections",
+    "/api/connections",
+    EMPTY_CONNECTIONS,
+  );
+  return { connections: data, status, reload };
 }
 
 export async function createConnection(
@@ -108,24 +96,17 @@ export async function deleteConnection(
 /** 既定のタグ。会員が追加したタグと合わせて選択肢にする。 */
 export const DEFAULT_CONNECTION_TAGS = ["コラボ可能性", "商談中", "紹介予定"];
 
+// 参照が毎回変わらないよう定数にする（フックの依存が安定する）
+const EMPTY_CONNECTIONS: ConnectionRecord[] = [];
+const EMPTY_TAGS: string[] = [];
+
 export function useConnectionTags() {
-  const [tags, setTags] = useState<string[]>([]);
-
-  const reload = useCallback(async () => {
-    try {
-      const response = await fetch("/api/connections/tags", { cache: "no-store" });
-      if (!response.ok) throw new Error("failed");
-      setTags((await response.json()) as string[]);
-    } catch {
-      setTags([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { tags, reload };
+  const { data, reload } = useCachedResource<string[]>(
+    "connection-tags",
+    "/api/connections/tags",
+    EMPTY_TAGS,
+  );
+  return { tags: data, reload };
 }
 
 export async function addConnectionTag(tag: string): Promise<boolean> {

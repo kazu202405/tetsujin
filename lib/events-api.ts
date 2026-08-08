@@ -7,6 +7,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useCachedResource } from "./client-cache";
 
 export type EventParticipantRole = "owner" | "admin" | "member";
 export type ParticipationStatus = "pending" | "approved" | "declined";
@@ -141,28 +142,23 @@ export async function setEventJoined(
 }
 
 /** イベント一覧を購読する。参加操作のあと自動で読み直す。 */
-export function useEvents() {
-  const [events, setEvents] = useState<EventRecord[]>([]);
-  const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
+const EMPTY_EVENTS: EventRecord[] = [];
 
-  const reload = useCallback(async () => {
-    try {
-      setEvents(await fetchEvents());
-      setStatus("loaded");
-    } catch {
-      setEvents([]);
-      setStatus("error");
-    }
-  }, []);
+export function useEvents() {
+  // 2回目以降は覚えている内容をすぐ出し、裏で取り直す
+  const { data, status, reload } = useCachedResource<EventRecord[]>(
+    "events",
+    "/api/events",
+    EMPTY_EVENTS,
+  );
 
   useEffect(() => {
-    void reload();
     const handler = () => void reload();
     window.addEventListener("tetsujin-events-updated", handler);
     return () => window.removeEventListener("tetsujin-events-updated", handler);
   }, [reload]);
 
-  return { events, status, reload };
+  return { events: data, status, reload };
 }
 
 /** 自分が参加しているイベントだけ（マイページの参加数・カレンダー用）。承認待ちは含めない。 */

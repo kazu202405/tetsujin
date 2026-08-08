@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Building2, Search, User } from "lucide-react";
 import { RoleBadge } from "@/components/app/role-badge";
 import { MemberAvatar } from "@/components/app/member-avatar";
+import { useCachedResource } from "@/lib/client-cache";
+import { LoadingRows } from "@/components/app/skeleton";
+
+const EMPTY_MEMBERS: DirectoryMember[] = [];
 
 type DirectoryMember = {
   id: string;
@@ -55,31 +59,18 @@ function MemberCard({ member }: { member: DirectoryMember }) {
 }
 
 export default function MembersPage() {
-  const [members, setMembers] = useState<DirectoryMember[] | null>(null);
+  // 2回目以降は覚えている内容をすぐ出す（下タブで行き来しても待たない）
+  const { data: loaded, status } = useCachedResource<DirectoryMember[]>(
+    "members-directory",
+    "/api/members",
+    EMPTY_MEMBERS,
+  );
+  const members = status === "loading" ? null : loaded;
+  const loadError = status === "error";
   const [searchQuery, setSearchQuery] = useState("");
   const [memberTypeFilter, setMemberTypeFilter] = useState<"全て" | "法人" | "個人">("全て");
-  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    fetch("/api/members", { cache: "no-store" })
-      .then((response) => {
-        if (!response.ok) throw new Error("members fetch failed");
-        return response.json();
-      })
-      .then((rows: DirectoryMember[]) => {
-        if (active) setMembers(rows);
-      })
-      .catch(() => {
-        if (active) {
-          setLoadError(true);
-          setMembers([]);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+
 
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -137,7 +128,7 @@ export default function MembersPage() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24">
         {members === null ? (
-          <p className="text-center text-gray-400 py-20">読み込み中...</p>
+          <LoadingRows rows={6} />
         ) : loadError ? (
           <p className="text-center text-red-600 py-20">メンバー一覧を取得できませんでした。</p>
         ) : (

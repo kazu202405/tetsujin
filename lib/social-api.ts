@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { SocialPlatform, SocialVisibility } from "./social-links";
+import { useCachedResource } from "./client-cache";
 
 export interface OwnSocialLink {
   id?: string;
@@ -141,30 +142,22 @@ export async function cancelDisclosure(
   return { ok: true };
 }
 
-export function useDisclosureRequests() {
-  const [requests, setRequests] = useState<DisclosureRequestItem[]>([]);
-  const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
+const EMPTY_REQUESTS: DisclosureRequestItem[] = [];
 
-  const reload = useCallback(async () => {
-    try {
-      const response = await fetch("/api/disclosures", { cache: "no-store" });
-      if (!response.ok) throw new Error("failed");
-      setRequests((await response.json()) as DisclosureRequestItem[]);
-      setStatus("loaded");
-    } catch {
-      setRequests([]);
-      setStatus("error");
-    }
-  }, []);
+export function useDisclosureRequests() {
+  const { data, status, reload } = useCachedResource<DisclosureRequestItem[]>(
+    "disclosures",
+    "/api/disclosures",
+    EMPTY_REQUESTS,
+  );
 
   useEffect(() => {
-    void reload();
     const handler = () => void reload();
     window.addEventListener(UPDATED_EVENT, handler);
     return () => window.removeEventListener(UPDATED_EVENT, handler);
   }, [reload]);
 
-  return { requests, status, reload };
+  return { requests: data, status, reload };
 }
 
 /** 自分宛の未応答件数（サイドバーのバッジ用） */

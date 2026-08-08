@@ -27,6 +27,7 @@ import { usePendingIncomingCount } from "@/lib/social-api";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { useCurrentMember } from "@/lib/current-member";
+import { clearClientCache } from "@/lib/client-cache";
 
 /** サイドバーに出すコミュニティの実数（旧: 固定値） */
 function useCommunityStats() {
@@ -93,6 +94,9 @@ export function AppSidebar() {
 
   const handleLogout = async () => {
     setLoggingOut(true);
+    // 覚えている内容は必ず捨てる。同じ端末で次の人がログインしたときに
+    // 前の人のデータが一瞬でも見えてはいけない。
+    clearClientCache();
     await createClient().auth.signOut();
     router.push("/login");
     router.refresh();

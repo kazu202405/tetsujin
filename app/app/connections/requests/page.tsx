@@ -21,6 +21,7 @@ import {
   respondDisclosure,
   useDisclosureRequests,
 } from "@/lib/social-api";
+import { LoadingRows } from "@/components/app/skeleton";
 
 function platformLabel(item: DisclosureRequestItem): string {
   if (item.platform === "other") return item.linkLabel?.trim() || "リンク";
@@ -95,7 +96,7 @@ export default function RequestsPage() {
         )}
 
         {status === "loading" && (
-          <p className="text-center text-gray-400 py-20 text-sm">読み込み中...</p>
+          <LoadingRows rows={3} />
         )}
 
         {status === "error" && (

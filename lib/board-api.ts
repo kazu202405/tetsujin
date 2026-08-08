@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { POST_IMAGE_BUCKET } from "@/lib/supabase/storage";
+import { useCachedResource } from "./client-cache";
 
 export interface BoardChannel {
   id: string;
@@ -75,27 +76,15 @@ export function formatPostedAt(iso: string): string {
 
 // ============ チャンネル ============
 
+const EMPTY_CHANNELS: BoardChannel[] = [];
+
 export function useBoardChannels() {
-  const [channels, setChannels] = useState<BoardChannel[]>([]);
-  const [status, setStatus] = useState<LoadStatus>("loading");
-
-  const reload = useCallback(async () => {
-    try {
-      const response = await fetch("/api/board/channels", { cache: "no-store" });
-      if (!response.ok) throw new Error("failed");
-      setChannels((await response.json()) as BoardChannel[]);
-      setStatus("loaded");
-    } catch {
-      setChannels([]);
-      setStatus("error");
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { channels, status, reload };
+  const { data, status, reload } = useCachedResource<BoardChannel[]>(
+    "board-channels",
+    "/api/board/channels",
+    EMPTY_CHANNELS,
+  );
+  return { channels: data, status, reload };
 }
 
 export async function createChannel(input: {

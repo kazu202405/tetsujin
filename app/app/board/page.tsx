@@ -56,6 +56,7 @@ import {
   uploadPostImage,
   useBoardChannels,
 } from "@/lib/board-api";
+import { CardSkeleton, LoadingRows } from "@/components/app/skeleton";
 
 // アイコンマップ（文字列キー → コンポーネント）
 const iconMap: Record<string, LucideIcon> = {
@@ -361,7 +362,7 @@ export default function BoardPage() {
 
   // ---------- 読み込み前・未ログイン ----------
   if (channelStatus === "loading") {
-    return <div className="text-center text-gray-400 py-24">読み込み中...</div>;
+    return <CardSkeleton rows={3} />;
   }
   if (channelStatus === "error") {
     return (
@@ -708,7 +709,7 @@ export default function BoardPage() {
         {/* 投稿一覧 */}
         <div className="space-y-4 pb-24">
           {postsStatus === "loading" && (
-            <div className="text-center text-gray-400 py-16 text-sm">読み込み中...</div>
+            <LoadingRows rows={3} />
           )}
 
           {postsStatus === "loaded" &&
