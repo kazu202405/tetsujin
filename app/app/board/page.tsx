@@ -109,6 +109,10 @@ function renderMentionText(text: string) {
 }
 
 // 退会者はプロフィールへ飛ばさない（既存方針＝名前は残すがクリック不可）
+//
+// 🔴 whitespace-nowrap は必須。日本語は文字と文字の間どこでも改行できるので、
+//    フレックスの中に置くと「この要素の最小幅＝1文字」と見なされ、
+//    幅が足りないときに名前が縦一列に潰れる。
 function AuthorName({
   author,
   className,
@@ -116,11 +120,12 @@ function AuthorName({
   author: BoardPost["author"];
   className: string;
 }) {
+  const base = `${className} whitespace-nowrap`;
   if (author.isWithdrawn) {
-    return <span className={`${className} text-gray-400`}>{author.name}（退会）</span>;
+    return <span className={`${base} text-gray-400`}>{author.name}（退会）</span>;
   }
   return (
-    <Link href={`/app/profile/${author.id}`} className={className}>
+    <Link href={`/app/profile/${author.id}`} className={base}>
       {author.name}
     </Link>
   );
@@ -536,7 +541,7 @@ export default function BoardPage() {
                       className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-xl transition-colors group"
                     >
                       <Icon className={`w-4 h-4 ${colorCls}`} />
-                      <span className="text-sm text-gray-700 flex-1">{ch.name}</span>
+                      <span className="text-sm text-gray-700 flex-1 truncate">{ch.name}</span>
                       <span className="text-[10px] text-gray-400">{ch.post_count}件</span>
                       <button
                         onClick={() => {
@@ -735,16 +740,19 @@ export default function BoardPage() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <AuthorName
-                          author={post.author}
-                          className="text-sm font-bold text-gray-900 hover:text-amber-700 transition-colors"
-                        />
-                        {post.author.job && (
-                          <span className="text-xs text-gray-400 truncate">
-                            {post.author.job}
-                          </span>
-                        )}
-                        <span className="text-xs text-gray-300 ml-auto flex-shrink-0">
+                        {/* 幅が足りないときは職業から削る。名前は削らない */}
+                        <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                          <AuthorName
+                            author={post.author}
+                            className="text-sm font-bold text-gray-900 hover:text-amber-700 transition-colors"
+                          />
+                          {post.author.job && (
+                            <span className="text-xs text-gray-400 truncate">
+                              {post.author.job}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-300 flex-shrink-0">
                           {formatPostedAt(post.createdAt)}
                         </span>
                       </div>
@@ -817,7 +825,7 @@ export default function BoardPage() {
                                         />
                                         <div className="flex-1 min-w-0">
                                           <div className="bg-gray-50 rounded-xl px-3 py-2">
-                                            <div className="flex items-center gap-1.5 mb-0.5">
+                                            <div className="flex items-center gap-1.5 mb-0.5 min-w-0 overflow-hidden">
                                               <AuthorName
                                                 author={comment.author}
                                                 className="text-xs font-bold text-gray-800 hover:text-amber-700 transition-colors"

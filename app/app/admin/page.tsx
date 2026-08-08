@@ -327,8 +327,10 @@ function ApplicationsTab() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-base font-bold text-gray-900">{app.name}</span>
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-bold ${config.bg} ${config.color}`}>
+                    <span className="text-base font-bold text-gray-900 whitespace-nowrap">
+                      {app.name}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-bold whitespace-nowrap flex-shrink-0 ${config.bg} ${config.color}`}>
                       <StatusIcon className="w-3 h-3" />
                       {config.label}
                     </span>
@@ -699,7 +701,7 @@ function ActivityTab() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-bold text-gray-900 truncate">{row.name}</p>
                     <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${config.bg} ${config.color}`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold whitespace-nowrap flex-shrink-0 ${config.bg} ${config.color}`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
                       {config.label}
