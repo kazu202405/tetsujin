@@ -11,7 +11,7 @@
 // 新しい行が作られず、既存の会員行に自動で繋がる。
 // ============================================================
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pencil } from "lucide-react";
 import type { MemberDbRow } from "./members-data";
 
@@ -33,6 +33,24 @@ export function LedgerEditor({
   ) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
+  const [plans, setPlans] = useState<{ code: string; label: string; stripe_price_id: string | null }[]>([]);
+
+  // プランの選択肢は開いたときに取る（一覧では使わない）
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch("/api/admin/billing-plans", { cache: "no-store" })
+      .then(async (res) => (res.ok ? await res.json() : null))
+      .then((body) => {
+        if (!cancelled && body) setPlans(body.plans);
+      })
+      .catch(() => {
+        /* 取れなければ選択肢が空になるだけ */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
   const [form, setForm] = useState({
     name: row.name ?? "",
     member_no: row.member_no != null ? String(row.member_no) : "",
@@ -46,6 +64,8 @@ export function LedgerEditor({
     renewal_status: row.renewal_status ?? "",
     price: row.price != null ? String(row.price) : "",
     referrer: row.referrer ?? "",
+    billing_plan_code: row.billing_plan_code ?? "",
+    billing_starts_on: row.billing_starts_on ?? "",
   });
 
   const set = (key: keyof typeof form, value: string) =>
@@ -67,6 +87,8 @@ export function LedgerEditor({
       renewal_status: form.renewal_status || null,
       price: numOrNull(form.price),
       referrer: form.referrer.trim() || null,
+      billing_plan_code: form.billing_plan_code || null,
+      billing_starts_on: form.billing_starts_on || null,
     };
     const ok = await onPatch(
       row,
@@ -222,6 +244,36 @@ export function LedgerEditor({
           <input
             value={form.referrer}
             onChange={(e) => set("referrer", e.target.value)}
+            className={INPUT}
+          />
+        </label>
+
+        {/* 会費。プランを入れないとこの方は決済に進めない（＝誤った金額を請求しない） */}
+        <label className="block">
+          <span className="block text-[11px] text-gray-500 mb-1">会費プラン</span>
+          <select
+            value={form.billing_plan_code}
+            onChange={(e) => set("billing_plan_code", e.target.value)}
+            className={INPUT}
+          >
+            <option value="">未設定（決済に進めません）</option>
+            {plans.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.label}
+                {p.stripe_price_id ? "" : "（価格ID未設定）"}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="block text-[11px] text-gray-500 mb-1">
+            課金開始日<span className="text-gray-400">（この日まで請求しません）</span>
+          </span>
+          <input
+            type="date"
+            value={form.billing_starts_on}
+            onChange={(e) => set("billing_starts_on", e.target.value)}
             className={INPUT}
           />
         </label>

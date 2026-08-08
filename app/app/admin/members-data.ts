@@ -39,6 +39,10 @@ export interface MemberDbRow {
   withdrawn_at?: string | null;
   withdrawal_reason?: string | null;
   admin_note?: string | null;
+  // 会費（Stripe）
+  billing_plan_code?: string | null;
+  billing_starts_on?: string | null;
+  stripe_customer_id?: string | null;
   avatar_path?: string | null;
   /** サーバー側で発行した署名URL（写真なしは null） */
   avatar_url?: string | null;

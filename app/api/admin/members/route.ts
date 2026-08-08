@@ -11,7 +11,7 @@ const SELECT_COLUMNS = [
   "grip", "frequency", "email", "phone", "gender", "age_range", "membership_type",
   "payment_method", "contact_submitted_at", "source", "is_withdrawn", "import_sheet",
   "auth_user_id", "role", "withdrawn_at", "withdrawal_reason", "admin_note", "avatar_path",
-  "referrer_member_id",
+  "referrer_member_id", "billing_plan_code", "billing_starts_on", "stripe_customer_id",
 ].join(",");
 
 export async function GET() {

@@ -35,6 +35,9 @@ interface PatchBody {
   renewal_status?: string | null;
   price?: number | null;
   referrer?: string | null;
+  // 会費
+  billing_plan_code?: string | null;
+  billing_starts_on?: string | null;
 }
 
 const RENEWAL_STATUSES = new Set(["未更新", "退会", "更新済", "返事待ち", "入金待ち"]);
@@ -202,6 +205,31 @@ export async function PATCH(
     patch.price = body.price;
   }
 
+  // ---- 会費 ----
+  if (body.billing_plan_code !== undefined) {
+    const code = text(body.billing_plan_code, 40);
+    if (code) {
+      // 存在しないプランを入れると請求が飛ばない行ができるので先に確かめる
+      const { data: plan } = await supabase
+        .from("billing_plans")
+        .select("code")
+        .eq("code", code)
+        .maybeSingle();
+      if (!plan) {
+        return NextResponse.json({ error: "その料金プランはありません" }, { status: 400, headers });
+      }
+    }
+    patch.billing_plan_code = code;
+  }
+
+  if (body.billing_starts_on !== undefined) {
+    const day = text(body.billing_starts_on, 10);
+    if (day && !/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      return NextResponse.json({ error: "課金開始日の形式が正しくありません" }, { status: 400, headers });
+    }
+    patch.billing_starts_on = day;
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "更新する項目がありません" }, { status: 400, headers });
   }
@@ -211,7 +239,7 @@ export async function PATCH(
     .update(patch)
     .eq("id", id)
     .select(
-      "id, name, member_no, email, phone, nickname, job, membership_type, start_year, start_month, renewal_status, price, referrer, is_withdrawn, withdrawn_at, withdrawal_reason, admin_note",
+      "id, name, member_no, email, phone, nickname, job, membership_type, start_year, start_month, renewal_status, price, referrer, is_withdrawn, withdrawn_at, withdrawal_reason, admin_note, billing_plan_code, billing_starts_on",
     )
     .maybeSingle();
 

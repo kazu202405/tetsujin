@@ -7,10 +7,12 @@
 --   ・既存会員は「次の更新日」から課金を開始する
 --     （いま年払い済みなので、その期間が終わるまでは請求しない）
 --
--- 料金は月額1,650 / 2,500 / 2,750 と 年額30,000 の4本立て。
+-- 現行の料金は4つだけ：月額 1,650 / 2,500 / 2,750 と 年額 30,000。
+-- 台帳に残っている 15,000 や 6,000 などは過去プランの記録で、今は使わない。
+--
 -- ∴ 価格を環境変数に2つ持つ形では足りないので、プランを表で持つ。
---   運営が会員ごとにプランを選べるようにするため（台帳は会員種別が
---   85%未登録で、種別から機械的に決められない）。
+--   個人／法人の区分は廃止したため種別からも決められず、
+--   会員ごとに運営が選ぶ形にする。
 --
 -- 🔴 決済の状態は Stripe が正本。ここに持つのは写しであり、
 --    Webhook で受け取った内容をそのまま書くだけにする。
@@ -42,15 +44,20 @@ CREATE TRIGGER trg_billing_plans_set_updated_at
   BEFORE UPDATE ON public.billing_plans
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- 金額だけ先に入れておく。label は依頼主に確認して直す。
--- stripe_price_id は Stripe で価格を作ってから入れる。
+-- 料金（依頼主決定 2026-08-08）
+--   ・個人／法人の区分は廃止。これからは一律 月額2,750円
+--   ・年でまとめて払うと 30,000円（月払い33,000円より3,000円安い）
+--   ・いまの会員は今の金額のまま（永年据え置き）
+--   ・個人から法人に切り替える方は 2,500円
+-- stripe_price_id は Stripe で価格を作ってから入れる（入るまで選べない）。
 INSERT INTO public.billing_plans (code, label, amount, interval, sort_order, note)
 VALUES
-  ('monthly_1650', '月額 1,650円', 1650, 'month', 10, '対象は要確認'),
-  ('monthly_2500', '月額 2,500円', 2500, 'month', 20, '対象は要確認'),
-  ('monthly_2750', '月額 2,750円', 2750, 'month', 30, '対象は要確認'),
-  ('yearly_30000', '年額 30,000円', 30000, 'year', 40, '対象は要確認')
-ON CONFLICT (code) DO NOTHING;
+  ('monthly_2750', '月額 2,750円', 2750, 'month', 10, 'これからの標準。個人・法人の区別なし'),
+  ('yearly_30000', '年額 30,000円', 30000, 'year', 20, 'まとめ払い。月払いより3,000円お得'),
+  ('monthly_1650', '月額 1,650円', 1650, 'month', 30, '据え置き（年19,800円だった方）'),
+  ('monthly_2500', '月額 2,500円', 2500, 'month', 40, '据え置き（年30,000円だった方）／個人→法人の切替')
+ON CONFLICT (code) DO UPDATE
+   SET label = EXCLUDED.label, note = EXCLUDED.note, sort_order = EXCLUDED.sort_order;
 
 ALTER TABLE public.billing_plans ENABLE ROW LEVEL SECURITY;
 
@@ -151,6 +158,28 @@ UPDATE public.members
  WHERE billing_starts_on IS NULL
    AND is_withdrawn = FALSE
    AND start_month IS NOT NULL;
+
+-- ------------------------------------------------------------
+-- プランの割り当て
+-- ------------------------------------------------------------
+-- これから入る会員は標準（月額2,750円）。
+ALTER TABLE public.members
+  ALTER COLUMN billing_plan_code SET DEFAULT 'monthly_2750';
+
+-- 既存会員は今の金額のまま（永年据え置き）。
+-- 台帳の入会時金額は過去プランの記録なので、そこから機械的には決められない。
+--   例: 15,000(146名) / 6,000(40) / 12,000(17) は今は無いプラン
+-- ∴ 現行プランの月額換算と一致する2つ（年19,800=月1,650／年30,000=月2,500）
+--   だけ自動で入れ、残りは空にしておく。
+--   空のままだと決済に進めず「運営にお問い合わせください」と出るので、
+--   間違った金額を請求するより安全。運営が1人ずつ選ぶ。
+UPDATE public.members
+   SET billing_plan_code = 'monthly_1650'
+ WHERE billing_plan_code IS NULL AND is_withdrawn = FALSE AND price = 19800;
+
+UPDATE public.members
+   SET billing_plan_code = 'monthly_2500'
+ WHERE billing_plan_code IS NULL AND is_withdrawn = FALSE AND price = 30000;
 
 -- ------------------------------------------------------------
 -- 自分の支払い状況（設定画面）
