@@ -18,11 +18,12 @@ import { useCurrentMember } from "@/lib/current-member";
 import { AvatarUpload } from "@/components/app/avatar-upload";
 import { AutoTextarea } from "@/components/app/auto-textarea";
 import {
-  SheetSnsLink,
-  snsLabel,
   splitNameForRuby,
 } from "@/components/app/profile-sheet-card";
-import { SocialPlatform, SOCIAL_PLATFORM_META } from "@/lib/social-links";
+import { SOCIAL_PLATFORM_META } from "@/lib/social-links";
+import { PlatformIcon } from "@/components/app/platform-icon";
+import { SocialLinksSection } from "@/components/app/social-links-section";
+import { fetchMySocialLinks, type OwnSocialLink } from "@/lib/social-api";
 
 // テーマカラープリセット（シック〜カラフルまで幅広く）
 const themeColors = [
@@ -103,7 +104,6 @@ interface ProfileData {
   myHistory: string;
   tetsujinBenefit: string;
   hitokoto: string;
-  snsLinks: SheetSnsLink[];
   photoUrl: string;
 }
 
@@ -124,7 +124,6 @@ const initialData: ProfileData = {
     "組織診断・経営相談の初回無料\n（TETSUJIN会メンバー限定）",
   hitokoto:
     "●人の可能性を信じ抜く。\n●約束を守ること。小さな信頼の積み重ね。\n●現場に足を運ぶこと。",
-  snsLinks: [],
   photoUrl:
     "https://images.unsplash.com/photo-1630572780329-e051273e980f?w=400&h=400&fit=crop&crop=face",
 };
@@ -142,7 +141,6 @@ function toPayload(data: ProfileData, themeColor: string) {
     myHistory: data.myHistory,
     tetsujinBenefit: data.tetsujinBenefit,
     hitokoto: data.hitokoto,
-    snsLinks: data.snsLinks,
     themeColor,
   };
 }
@@ -173,6 +171,21 @@ export default function ProfileSheetPage() {
   // 直近で保存に成功した内容。変化が無いときに無駄な保存を投げないための比較用。
   const lastSavedRef = useRef<string | null>(null);
   const [themeIndex, setThemeIndex] = useState(0);
+
+  // 名刺カードに載せるSNS＝「全員に公開」にしたものだけ。
+  // 実体は member_social_links（公開範囲と開示申請を持つ側）で、
+  // このページはプレビューのために読むだけ。編集は SocialLinksSection が行う。
+  const [publicLinks, setPublicLinks] = useState<OwnSocialLink[]>([]);
+  const reloadPublicLinks = useCallback(() => {
+    fetchMySocialLinks()
+      .then((links) => setPublicLinks(links.filter((l) => l.visibility === "public" && l.url.trim())))
+      .catch(() => {
+        /* 取れなければ名刺のSNS欄が出ないだけ。作った値は出さない */
+      });
+  }, []);
+  useEffect(() => {
+    reloadPublicLinks();
+  }, [reloadPublicLinks]);
   const [customColor, setCustomColor] = useState("#2a2a3e");
   const [huePosition, setHuePosition] = useState(0);
   const [useCustom, setUseCustom] = useState(false);
@@ -237,7 +250,6 @@ export default function ProfileSheetPage() {
             my_history: string | null;
             tetsujin_benefit: string | null;
             hitokoto: string | null;
-            sns_links: SheetSnsLink[] | null;
             theme_color: string;
           } | null;
         };
@@ -258,7 +270,6 @@ export default function ProfileSheetPage() {
           myHistory: s?.my_history ?? "",
           tetsujinBenefit: s?.tetsujin_benefit ?? "",
           hitokoto: s?.hitokoto ?? body.gripFallback,
-          snsLinks: s?.sns_links ?? [],
           photoUrl: body.avatarUrl ?? "",
         };
         setData(next);
@@ -327,30 +338,6 @@ export default function ProfileSheetPage() {
   const update = (key: keyof ProfileData, value: string) => {
     setData((prev) => ({ ...prev, [key]: value }));
   };
-
-  // SNSリンク（名刺カード用）の追加・編集・削除
-  const addSns = () =>
-    setData((prev) => ({
-      ...prev,
-      snsLinks: [
-        ...prev.snsLinks,
-        {
-          id: `sns-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          platform: "line",
-          url: "",
-        },
-      ],
-    }));
-  const updateSns = (id: string, patch: Partial<SheetSnsLink>) =>
-    setData((prev) => ({
-      ...prev,
-      snsLinks: prev.snsLinks.map((l) => (l.id === id ? { ...l, ...patch } : l)),
-    }));
-  const removeSns = (id: string) =>
-    setData((prev) => ({
-      ...prev,
-      snsLinks: prev.snsLinks.filter((l) => l.id !== id),
-    }));
 
   // 保存本体。自動保存と保存ボタンの両方から呼ぶ。
   const saveSheet = useCallback(
@@ -809,76 +796,12 @@ export default function ProfileSheetPage() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-gray-900">SNSリンク</h3>
-                  <p className="text-[11px] text-gray-400">
-                    名刺カードに載せる（自由に追加・削除）
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  {data.snsLinks.map((link) => (
-                    <div
-                      key={link.id}
-                      className="bg-gray-50/60 rounded-xl border border-gray-100 p-3 space-y-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={link.platform}
-                          onChange={(e) =>
-                            updateSns(link.id, {
-                              platform: e.target.value as SocialPlatform,
-                            })
-                          }
-                          className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                        >
-                          {(
-                            Object.keys(SOCIAL_PLATFORM_META) as SocialPlatform[]
-                          ).map((p) => (
-                            <option key={p} value={p}>
-                              {SOCIAL_PLATFORM_META[p].label}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          onClick={() => removeSns(link.id)}
-                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          title="削除"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {link.platform === "other" && (
-                        <input
-                          type="text"
-                          value={link.label || ""}
-                          onChange={(e) =>
-                            updateSns(link.id, { label: e.target.value })
-                          }
-                          placeholder="ラベル（例: note、YouTube）"
-                          className={inputClass}
-                        />
-                      )}
-                      <input
-                        type="url"
-                        value={link.url}
-                        onChange={(e) =>
-                          updateSns(link.id, { url: e.target.value })
-                        }
-                        placeholder={SOCIAL_PLATFORM_META[link.platform].placeholder}
-                        className={inputClass}
-                      />
-                    </div>
-                  ))}
-                  <button
-                    onClick={addSns}
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border-2 border-dashed border-gray-200 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-900 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    SNSを追加
-                  </button>
-                </div>
-              </div>
+              {/* SNS・リンク。
+                  以前はここに名刺カード専用のSNS欄があり、公開範囲も開示申請も
+                  無いまま全会員に見えていた。入力口が2つあると必ず片方に入って事故るので、
+                  member_social_links の1本に統一している。
+                  名刺カードに載るのは「全員に公開」にしたものだけ。 */}
+              <SocialLinksSection ownerMode onSaved={reloadPublicLinks} />
             </div>
           )}
 
@@ -1040,16 +963,24 @@ export default function ProfileSheetPage() {
                 </div>
               </div>
 
-              {/* SNSリンク（あれば表示） */}
-              {data.snsLinks.filter((l) => l.url.trim()).length > 0 && (
-                <div className="px-5 pb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 border-t border-gray-100 pt-2 mx-5">
-                  {data.snsLinks
-                    .filter((l) => l.url.trim())
-                    .map((l) => (
-                      <span key={l.id}>
-                        {snsLabel(l)}: {l.url}
+              {/* SNSリンク＝「全員に公開」にしたものだけ。
+                  名刺は誰の手にも渡る紙なので、つながり済み限定のものは載せない。 */}
+              {publicLinks.length > 0 && (
+                <div className="px-5 pb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-gray-100 pt-2.5 mx-5">
+                  {publicLinks.map((l) => (
+                    <span key={l.id} className="inline-flex items-center gap-1.5">
+                      <span
+                        className={`w-5 h-5 rounded ${SOCIAL_PLATFORM_META[l.platform].color} text-white flex items-center justify-center flex-shrink-0`}
+                      >
+                        <PlatformIcon platform={l.platform} className="w-3 h-3" />
                       </span>
-                    ))}
+                      <span className="text-xs text-gray-500">
+                        {l.platform === "other"
+                          ? l.label?.trim() || "リンク"
+                          : SOCIAL_PLATFORM_META[l.platform].label}
+                      </span>
+                    </span>
+                  ))}
                 </div>
               )}
               </div>

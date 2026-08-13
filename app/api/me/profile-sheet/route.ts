@@ -116,6 +116,9 @@ export async function PUT(request: Request) {
     return s ? s.slice(0, TEXT_LIMIT) : null;
   };
 
+  // sns_links は廃止した列。SNSは member_social_links（公開範囲＋開示申請を持つ側）に
+  // 一本化したため、ここでは常に空を書いて残骸を残さない。
+  // 🔴 この列にまた書き始めると、公開範囲を無視して全会員に見える入力口が復活する。
   const snsLinks = sanitizeSnsLinks(body.snsLinks ?? []);
   if (snsLinks === null) {
     return NextResponse.json(
