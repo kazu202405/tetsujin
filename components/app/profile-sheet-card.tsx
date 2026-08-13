@@ -8,6 +8,7 @@
 
 import { Upload } from "lucide-react";
 import { SocialPlatform, SOCIAL_PLATFORM_META } from "@/lib/social-links";
+import { PlatformIcon } from "./platform-icon";
 
 // 名刺カードに載せるSNS（自由に追加/削除）
 export interface SheetSnsLink {
@@ -233,14 +234,22 @@ export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Pro
           </div>
         </div>
 
-        {/* SNSリンク（owner の名刺出力用。閲覧側は空にして下に開示申請UIを置く） */}
+        {/* SNSリンク（owner の名刺出力用。閲覧側は空にして下に開示申請UIを置く）
+            載せるのは「全員に公開」にしたものだけ。名刺は誰の手にも渡る紙なので、
+            「つながり済みのみ」のリンクをここに出すと公開範囲の意味が無くなる。
+            URLそのものは長くて読めないため、アイコンとサービス名で出す。 */}
         {data.snsLinks.filter((l) => has(l.url)).length > 0 && (
-          <div className="px-5 pb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 border-t border-gray-100 pt-2 mx-5">
+          <div className="px-5 pb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-gray-100 pt-2.5 mx-5">
             {data.snsLinks
               .filter((l) => has(l.url))
               .map((l) => (
-                <span key={l.id}>
-                  {snsLabel(l)}: {l.url}
+                <span key={l.id} className="inline-flex items-center gap-1.5">
+                  <span
+                    className={`w-5 h-5 rounded ${SOCIAL_PLATFORM_META[l.platform].color} text-white flex items-center justify-center flex-shrink-0`}
+                  >
+                    <PlatformIcon platform={l.platform} className="w-3 h-3" />
+                  </span>
+                  <span className="text-xs text-gray-500">{snsLabel(l)}</span>
                 </span>
               ))}
           </div>

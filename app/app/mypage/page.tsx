@@ -12,7 +12,6 @@ import {
   MessageCircle,
   ChevronRight,
 } from "lucide-react";
-import { SocialLinksSection } from "@/components/app/social-links-section";
 import { EventCalendar } from "@/components/app/event-calendar";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { useJoinedEvents } from "@/lib/events-api";
@@ -244,11 +243,6 @@ export default function MyPage() {
               </Link>
             )}
           </div>
-        </div>
-
-        {/* SNSリンク */}
-        <div className="mb-8">
-          <SocialLinksSection ownerMode />
         </div>
 
         {/* カレンダー（参加イベント） + 参加リスト */}
