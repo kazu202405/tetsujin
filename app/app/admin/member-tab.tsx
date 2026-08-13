@@ -13,7 +13,9 @@ import { useMemo, useState } from "react";
 import { Search, UserCog, UserX, RotateCcw, Handshake, X } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { RoleBadge } from "@/components/app/role-badge";
-import type { MemberRole } from "@/lib/member-roles";
+import { ToastStack, type ToastMessage } from "@/components/app/toast";
+import { isOwnerRole, roleLabelOf } from "@/lib/member-roles";
+import { useCurrentMember } from "@/lib/current-member";
 import { type MemberDbRow, formatStartMonth, useMembersDb } from "./members-data";
 import { MemberList, type MemberSort } from "./member-list";
 import { LedgerEditor } from "./ledger-editor";
@@ -28,13 +30,6 @@ function fmtDate(iso: string | null | undefined): string {
   ).padStart(2, "0")}`;
 }
 
-/** DBのロール値を画面表示のラベルへ */
-function roleLabelOf(role: MemberDbRow["role"]): MemberRole {
-  if (role === "admin") return "運営";
-  if (role === "manager") return "部長";
-  return "ユーザー";
-}
-
 /** 626名を一度に描画すると重いので、既定はこの件数まで（検索で絞り込む運用） */
 const PAGE_SIZE = 100;
 
@@ -42,6 +37,8 @@ type MemberFilter = "all" | "active" | "withdrawn" | "login" | "no_contact" | "n
 
 export function MemberTab() {
   const { rows, loadStatus } = useMembersDb();
+  // 権限の変更は管理者だけ。運営には操作UIを出さない（APIとDBでも弾いている）
+  const canChangeRole = isOwnerRole(useCurrentMember()?.role);
 
   // 更新結果をその場で反映するための上書き（再取得なしで一覧に効かせる）
   const [overrides, setOverrides] = useState<Record<string, Partial<MemberDbRow>>>({});
@@ -50,7 +47,7 @@ export function MemberTab() {
   const [sort, setSort] = useState<MemberSort>("member_no");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<ToastMessage | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const merged: MemberDbRow[] = useMemo(
@@ -274,15 +271,8 @@ export function MemberTab() {
         </select>
       </div>
 
-      {message && (
-        <p
-          className={`mb-3 text-sm rounded-lg px-3 py-2 ${
-            message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-          }`}
-        >
-          {message.text}
-        </p>
-      )}
+      {/* 操作の多くは詳細モーダルの中で行うため、結果は画面最前面のトーストで出す */}
+      <ToastStack toast={message} onClose={() => setMessage(null)} />
 
       <p className="text-xs text-gray-400 mb-3">
         {filtered.length}件中 {visible.length}件を表示
@@ -318,6 +308,7 @@ export function MemberTab() {
           onPatch={applyPatch}
           onChangeRole={changeRole}
           onLinkReferrer={linkReferrer}
+          canChangeRole={canChangeRole}
         />
       )}
     </>
@@ -335,6 +326,7 @@ function MemberDetailModal({
   onPatch,
   onChangeRole,
   onLinkReferrer,
+  canChangeRole,
 }: {
   row: MemberDbRow;
   all: MemberDbRow[];
@@ -348,6 +340,7 @@ function MemberDetailModal({
   ) => Promise<boolean>;
   onChangeRole: (row: MemberDbRow, role: MemberDbRow["role"]) => void;
   onLinkReferrer: (row: MemberDbRow, referrerMemberId: string | null) => void;
+  canChangeRole: boolean;
 }) {
   const [noteDraft, setNoteDraft] = useState(row.admin_note ?? "");
   const [withdrawing, setWithdrawing] = useState(false);
@@ -439,21 +432,36 @@ function MemberDetailModal({
 
             {/* 権限。
                 まだログインしていない会員にも設定できる。
-                運営を先に決めておけば、その人がログインした時点で運営として入れる。 */}
+                運営を先に決めておけば、その人がログインした時点で運営として入れる。
+
+                変更できるのは管理者だけ。運営には読み取り専用で見せる
+                （選べないものを押せる形で出すと、押してから断られて分かりにくい）。 */}
             <div className="flex items-start gap-3">
               <span className="text-xs text-gray-500 w-20 flex-shrink-0 pt-2">権限</span>
               <div className="min-w-0">
-                <select
-                  value={row.role}
-                  onChange={(e) => onChangeRole(row, e.target.value as MemberDbRow["role"])}
-                  disabled={saving}
-                  className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50"
-                >
-                  <option value="user">一般</option>
-                  <option value="manager">部長</option>
-                  <option value="admin">運営</option>
-                </select>
-                {!row.auth_user_id && (
+                {canChangeRole ? (
+                  <select
+                    value={row.role}
+                    onChange={(e) => onChangeRole(row, e.target.value as MemberDbRow["role"])}
+                    disabled={saving}
+                    className="px-3 py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50"
+                  >
+                    <option value="user">一般</option>
+                    <option value="manager">部長</option>
+                    <option value="admin">運営</option>
+                    <option value="owner">管理者（全権限）</option>
+                  </select>
+                ) : (
+                  <p className="px-3 py-2 rounded-xl border border-gray-100 bg-gray-50 text-sm font-bold text-gray-600 inline-block">
+                    {roleLabelOf(row.role)}
+                  </p>
+                )}
+                {!canChangeRole && (
+                  <p className="mt-1.5 text-[11px] text-gray-400">
+                    権限の変更は管理者のみが行えます。
+                  </p>
+                )}
+                {canChangeRole && !row.auth_user_id && (
                   <p className="mt-1.5 text-[11px] text-gray-400">
                     {row.email
                       ? `まだログインしていません。${row.email} でアカウントを作ると、この権限のまま入れます。`

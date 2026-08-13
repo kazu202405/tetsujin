@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS members (
 
   -- 運営用
   role                  TEXT            NOT NULL DEFAULT 'user'
-                        CHECK (role IN ('admin', 'manager', 'user')),  -- 運営/部長/ユーザー
+                        CHECK (role IN ('owner', 'admin', 'manager', 'user')),  -- 管理者/運営/部長/ユーザー
   admin_note            TEXT,                       -- 会員ごとの運営メモ（会員には非表示）
 
   -- メタ情報

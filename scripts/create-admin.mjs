@@ -113,11 +113,14 @@ async function main() {
   const member = members[0];
   console.log(`   紐づく会員: ${member.name}（会員番号 ${member.member_no ?? "なし"}）`);
 
-  // --- 4. role を admin にする ---
+  // --- 4. role を owner（管理者）にする ---
+  // このスクリプトは最初の1人を立ち上げるためのもの。
+  // 管理者は管理者しか任命できないので、ここで運営(admin)にしてしまうと
+  // 誰も権限を配れない状態から抜け出せなくなる。
   const patchRes = await fetch(`${url}/rest/v1/members?id=eq.${member.id}`, {
     method: "PATCH",
     headers: { ...headers, Prefer: "return=representation" },
-    body: JSON.stringify({ role: "admin" }),
+    body: JSON.stringify({ role: "owner" }),
   });
   if (!patchRes.ok) {
     console.error(`❌ ロールの付与に失敗 (${patchRes.status}): ${await patchRes.text()}`);
@@ -125,7 +128,7 @@ async function main() {
   }
   const [updated] = await patchRes.json();
 
-  console.log(`\n✅ 完了。運営アカウントとして使えます。`);
+  console.log(`\n✅ 完了。管理者（全権限）アカウントとして使えます。`);
   console.log(`   メール : ${normalizedEmail}`);
   console.log(`   会員名 : ${updated.name}`);
   console.log(`   ロール : ${updated.role}`);

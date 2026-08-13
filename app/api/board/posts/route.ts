@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
 import { signAvatarPaths, signPostImagePaths } from "@/lib/supabase/storage";
+import type { MemberRoleCode } from "@/lib/member-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ interface FeedRow {
   author_nickname: string | null;
   author_job: string | null;
   author_avatar_path: string | null;
-  author_role: "admin" | "manager" | "user";
+  author_role: MemberRoleCode;
   author_is_withdrawn: boolean;
   like_count: number;
   comment_count: number;

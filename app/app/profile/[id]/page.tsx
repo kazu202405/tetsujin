@@ -13,26 +13,20 @@ import { ArrowLeft, UserX } from "lucide-react";
 import { ProfileSheetCard, type ProfileSheetData } from "@/components/app/profile-sheet-card";
 import { SocialLinksSection } from "@/components/app/social-links-section";
 import { RoleBadge } from "@/components/app/role-badge";
-import type { MemberRole } from "@/lib/member-roles";
+import { roleLabelOf, type MemberRoleCode } from "@/lib/member-roles";
 
 interface ProfileResponse extends ProfileSheetData {
   id: string;
   memberNo: number | null;
   name: string;
   membershipType: string | null;
-  role: "admin" | "manager" | "user";
+  role: MemberRoleCode;
   isWithdrawn: boolean;
   isMe: boolean;
   avatarUrl: string | null;
   genre: string;
   industry: string;
   themeColor: string;
-}
-
-function roleLabel(role: "admin" | "manager" | "user"): MemberRole {
-  if (role === "admin") return "運営";
-  if (role === "manager") return "部長";
-  return "ユーザー";
 }
 
 export default function ProfilePage({
@@ -174,7 +168,7 @@ export default function ProfilePage({
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24 space-y-6">
         {profile.role !== "user" && (
           <div className="flex justify-center">
-            <RoleBadge role={roleLabel(profile.role)} />
+            <RoleBadge role={roleLabelOf(profile.role)} />
           </div>
         )}
 

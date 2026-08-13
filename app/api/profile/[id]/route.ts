@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
 import { signAvatarPaths } from "@/lib/supabase/storage";
+import type { MemberRoleCode } from "@/lib/member-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ interface SheetRow {
   nickname: string | null;
   job: string | null;
   membership_type: string | null;
-  role: "admin" | "manager" | "user";
+  role: MemberRoleCode;
   is_withdrawn: boolean;
   avatar_path: string | null;
   name_furigana: string | null;

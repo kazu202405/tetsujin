@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { POST_IMAGE_BUCKET } from "@/lib/supabase/storage";
 import { useCachedResource } from "./client-cache";
+import type { MemberRoleCode } from "@/lib/member-roles";
 
 export interface BoardChannel {
   id: string;
@@ -27,7 +28,7 @@ export interface BoardAuthor {
   nickname: string | null;
   job: string | null;
   avatarUrl: string | null;
-  role?: "admin" | "manager" | "user";
+  role?: MemberRoleCode;
   isWithdrawn: boolean;
 }
 

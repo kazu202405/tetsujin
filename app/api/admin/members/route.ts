@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient, getCurrentMember } from "@/lib/supabase/server";
 import { signAvatarPaths } from "@/lib/supabase/storage";
+import { isAdminRole } from "@/lib/member-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET() {
   if (!currentMember) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401, headers });
   }
-  if (currentMember.role !== "admin" || currentMember.is_withdrawn) {
+  if (!isAdminRole(currentMember.role) || currentMember.is_withdrawn) {
     return NextResponse.json({ error: "運営権限が必要です" }, { status: 403, headers });
   }
 

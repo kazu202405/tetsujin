@@ -27,6 +27,7 @@ import { usePendingIncomingCount } from "@/lib/social-api";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { useCurrentMember } from "@/lib/current-member";
+import { isAdminRole } from "@/lib/member-roles";
 import { clearClientCache } from "@/lib/client-cache";
 
 /** サイドバーに出すコミュニティの実数（旧: 固定値） */
@@ -87,7 +88,7 @@ export function AppSidebar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const visibleNavItems = navItems.filter(
-    (item) => !item.adminOnly || currentMember?.role === "admin",
+    (item) => !item.adminOnly || isAdminRole(currentMember?.role),
   );
   const displayName = currentMember?.name ?? "会員";
   const displayJob = currentMember?.job ?? "職業未登録";

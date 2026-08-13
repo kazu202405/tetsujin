@@ -9,6 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isSupabaseConfigured } from "./config";
 import { createClient, getCurrentMember } from "./server";
 import type { CurrentMember } from "@/lib/current-member";
+import { isAdminRole } from "@/lib/member-roles";
 
 export const NO_STORE_HEADERS = { "Cache-Control": "private, no-store, max-age=0" };
 
@@ -51,12 +52,12 @@ export async function requireMember(): Promise<Guarded> {
   return { ok: true, supabase: await createClient(), member };
 }
 
-/** さらに運営であることまで確認する。 */
+/** さらに運営以上（管理者を含む）であることまで確認する。 */
 export async function requireAdminMember(): Promise<Guarded> {
   const guard = await requireMember();
   if (!guard.ok) return guard;
 
-  if (guard.member.role !== "admin") {
+  if (!isAdminRole(guard.member.role)) {
     return {
       ok: false,
       response: NextResponse.json(

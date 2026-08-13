@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { markBoardVisited } from "@/lib/board-data";
 import { useCurrentMember } from "@/lib/current-member";
+import { isAdminRole } from "@/lib/member-roles";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { AutoTextarea } from "@/components/app/auto-textarea";
 import {
@@ -133,7 +134,7 @@ function AuthorName({
 
 export default function BoardPage() {
   const me = useCurrentMember();
-  const isAdmin = me?.role === "admin";
+  const isAdmin = isAdminRole(me?.role);
 
   const { channels, status: channelStatus, reload: reloadChannels } = useBoardChannels();
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { MemberRoleCode } from "@/lib/member-roles";
 
 export type CurrentMember = {
   id: string;
@@ -12,7 +13,7 @@ export type CurrentMember = {
   job: string | null;
   grip: string | null;
   membership_type: string | null;
-  role: "admin" | "manager" | "user";
+  role: MemberRoleCode;
   is_withdrawn: boolean;
   avatar_path?: string | null;
   /** 表示用の署名URL。非公開バケットのためサーバー側（AppLayout）で発行する。 */
