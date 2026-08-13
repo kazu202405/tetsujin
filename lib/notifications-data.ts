@@ -17,7 +17,8 @@ export type NotificationType =
   | "comment_reply"
   | "disclosure_request"
   | "disclosure_approved"
-  | "announcement";
+  | "announcement"
+  | "weekly_digest";
 
 export interface NotificationItem {
   id: string;

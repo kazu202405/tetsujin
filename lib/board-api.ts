@@ -20,6 +20,8 @@ export interface BoardChannel {
   color: string;
   sort_order: number;
   post_count: number;
+  /** 自分がまだ読んでいない他の人の投稿数 */
+  unread_count: number;
 }
 
 export interface BoardAuthor {
@@ -251,10 +253,14 @@ export function useBoardUnread(): number {
   return unread;
 }
 
-/** 掲示板を開いたときに既読化する。 */
-export async function markBoardRead(): Promise<void> {
+/** 掲示板を開いたときに既読化する。チャンネルを渡すとそのチャンネルだけ。 */
+export async function markBoardRead(channelId?: string): Promise<void> {
   try {
-    await fetch("/api/board/read", { method: "POST" });
+    await fetch("/api/board/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(channelId ? { channelId } : {}),
+    });
     window.dispatchEvent(new Event("tetsujin-board-read"));
   } catch {
     /* 既読化に失敗してもバッジが残るだけなので握りつぶす */

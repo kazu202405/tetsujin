@@ -32,14 +32,22 @@ export async function GET() {
     );
   }
 
-  const counts = new Map<string, number>();
-  for (const row of (countsResult.data ?? []) as { channel_id: string; post_count: number }[]) {
-    counts.set(row.channel_id, Number(row.post_count));
+  const counts = new Map<string, { post: number; unread: number }>();
+  for (const row of (countsResult.data ?? []) as {
+    channel_id: string;
+    post_count: number;
+    unread_count: number;
+  }[]) {
+    counts.set(row.channel_id, {
+      post: Number(row.post_count),
+      unread: Number(row.unread_count ?? 0),
+    });
   }
 
   const channels = (channelsResult.data ?? []).map((c) => ({
     ...c,
-    post_count: counts.get(c.id) ?? 0,
+    post_count: counts.get(c.id)?.post ?? 0,
+    unread_count: counts.get(c.id)?.unread ?? 0,
   }));
 
   return NextResponse.json(channels, { headers: NO_STORE_HEADERS });
@@ -101,5 +109,5 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ...data, post_count: 0 }, { headers: NO_STORE_HEADERS });
+  return NextResponse.json({ ...data, post_count: 0, unread_count: 0 }, { headers: NO_STORE_HEADERS });
 }

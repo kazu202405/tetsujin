@@ -10,6 +10,7 @@ import {
   Bell,
   UserPlus,
   CheckCircle2,
+  Newspaper,
 } from "lucide-react";
 import {
   NotificationItem,
@@ -61,7 +62,23 @@ const TYPE_META: Record<
     bg: "bg-gray-100",
     iconColor: "text-gray-600",
   },
+  weekly_digest: {
+    Icon: Newspaper,
+    bg: "bg-indigo-50",
+    iconColor: "text-indigo-500",
+  },
 };
+
+// 🔴 知らない種類が来ても落とさない。
+// 通知の種類はDB側（migration）で増えることがあり、画面の更新を忘れると
+// TYPE_META[type] が undefined になって meta.Icon で例外が飛び、
+// お知らせ一覧ごと真っ白になる（＝既読にできず、バッジが永遠に減らない）。
+// 実際に weekly_digest を足したときにこれが起きた。
+const FALLBACK_META = {
+  Icon: Bell,
+  bg: "bg-gray-100",
+  iconColor: "text-gray-600",
+} as const;
 
 interface Props {
   notifications: (NotificationItem & { read: boolean })[];
@@ -89,7 +106,7 @@ export function NotificationList({
   return (
     <ul className="divide-y divide-gray-100">
       {notifications.map((n) => {
-        const meta = TYPE_META[n.type];
+        const meta = TYPE_META[n.type] ?? FALLBACK_META;
         return (
           <li key={n.id}>
             <Link
