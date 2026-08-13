@@ -26,14 +26,20 @@ export async function GET() {
   return NextResponse.json({ unread: Number(data ?? 0) }, { headers: NO_STORE_HEADERS });
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const guard = await requireMember();
   if (!guard.ok) return guard.response;
   const { supabase } = guard;
 
-  const { error } = await supabase.rpc("mark_board_read");
+  // チャンネルが指定されていればそのチャンネルだけ既読にする。
+  // 指定が無ければ従来通り掲示板全体（初回訪問や旧クライアント向け）。
+  const body = (await request.json().catch(() => null)) as { channelId?: string } | null;
+
+  const { error } = body?.channelId
+    ? await supabase.rpc("mark_board_channel_read", { p_channel_id: body.channelId })
+    : await supabase.rpc("mark_board_read");
   if (error) {
-    console.error("mark_board_read failed", { code: error.code });
+    console.error("mark board read failed", { code: error.code });
     return NextResponse.json(
       { error: "既読にできませんでした" },
       { status: 500, headers: NO_STORE_HEADERS },

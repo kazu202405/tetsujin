@@ -172,10 +172,9 @@ export default function BoardPage() {
   const [editColor, setEditColor] = useState("");
   const [channelError, setChannelError] = useState<string | null>(null);
 
-  // 掲示板を開いたら既読化（未読バッジ用）＋オンボーディングの「掲示板を見た」
+  // オンボーディングの「掲示板を見た」
   useEffect(() => {
     markBoardVisited();
-    void markBoardRead();
   }, []);
 
   // 最初のチャンネルを選ぶ／選択中が消えたら先頭へ戻す
@@ -200,7 +199,10 @@ export default function BoardPage() {
   useEffect(() => {
     if (!activeChannelId) return;
     void loadPosts(activeChannelId);
-  }, [activeChannelId, loadPosts]);
+    // 開いたチャンネルだけを既読にする。掲示板全体を既読にすると
+    // 見ていないチャンネルの未読まで消えて、バッジが当てにならなくなる。
+    void markBoardRead(activeChannelId).then(reloadChannels);
+  }, [activeChannelId, loadPosts, reloadChannels]);
 
   const activeChannel: BoardChannel | undefined = useMemo(
     () => channels.find((c) => c.id === activeChannelId),
@@ -412,11 +414,15 @@ export default function BoardPage() {
                 >
                   <Icon className={`w-3.5 h-3.5 ${isActive ? "text-white" : colorCls}`} />
                   {ch.name}
-                  {ch.post_count > 0 && (
+                  {/* 数字は未読数。読んだら消えるので「まだ見ていない分」が一目で分かる。
+                      以前は総投稿数で、見ても減らないため何の数字か伝わらなかった。 */}
+                  {ch.unread_count > 0 && (
                     <span
-                      className={`text-[10px] ${isActive ? "text-gray-300" : "text-gray-400"}`}
+                      className={`text-[10px] font-bold min-w-[16px] px-1 py-px rounded-full text-center ${
+                        isActive ? "bg-white/25 text-white" : "bg-red-500 text-white"
+                      }`}
                     >
-                      {ch.post_count}
+                      {ch.unread_count}
                     </span>
                   )}
                 </button>
@@ -650,7 +656,7 @@ export default function BoardPage() {
         <div className="py-6">
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-start gap-3">
-              <MemberAvatar name={me?.name ?? "会員"} size="md" className="mt-0.5" />
+              <MemberAvatar name={me?.name ?? "会員"} url={me?.avatar_url} size="md" className="mt-0.5" />
               <div className="flex-1">
                 <AutoTextarea
                   value={newPost}
@@ -948,7 +954,7 @@ export default function BoardPage() {
                                             <div className="mt-2 ml-2 flex gap-2 items-start">
                                               <CornerDownRight className="w-3 h-3 text-gray-300 flex-shrink-0 mt-2.5" />
                                               <MemberAvatar
-                                                name={me?.name ?? "会員"}
+                                                name={me?.name ?? "会員"} url={me?.avatar_url}
                                                 size="xs"
                                                 className="mt-0.5"
                                               />
@@ -995,7 +1001,7 @@ export default function BoardPage() {
                           post.commentCount > 0 ? "mt-3 pt-3 border-t border-gray-100" : "mt-3"
                         }`}
                       >
-                        <MemberAvatar name={me?.name ?? "会員"} size="sm" className="mt-0.5" />
+                        <MemberAvatar name={me?.name ?? "会員"} url={me?.avatar_url} size="sm" className="mt-0.5" />
                         <div className="flex-1 flex gap-1.5">
                           <input
                             value={commentInputs[post.id] ?? ""}
