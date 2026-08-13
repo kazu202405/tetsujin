@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentMember } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isAdminRole } from "@/lib/member-roles";
 
 export default async function TreeLayout({
   children,
@@ -11,7 +12,7 @@ export default async function TreeLayout({
 }) {
   if (isSupabaseConfigured) {
     const member = await getCurrentMember();
-    if (!member || member.role !== "admin" || member.is_withdrawn) {
+    if (!member || !isAdminRole(member.role) || member.is_withdrawn) {
       redirect("/app/mypage");
     }
   }

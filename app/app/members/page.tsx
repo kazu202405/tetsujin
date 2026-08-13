@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Building2, Search, User } from "lucide-react";
 import { RoleBadge } from "@/components/app/role-badge";
+import { roleLabelOf, type MemberRoleCode } from "@/lib/member-roles";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { useCachedResource } from "@/lib/client-cache";
 import { LoadingRows } from "@/components/app/skeleton";
@@ -17,17 +19,19 @@ type DirectoryMember = {
   job: string | null;
   grip: string | null;
   membership_type: string | null;
-  role: "admin" | "manager" | "user";
+  role: MemberRoleCode;
   avatar_url?: string | null;
 };
 
-function roleLabel(role: DirectoryMember["role"]) {
-  return role === "admin" ? "運営" : role === "manager" ? "部長" : "ユーザー";
-}
-
+// カードを押すとその人のプロフィールシートへ。
+// 一覧から人を見に行く導線はここだけなので、リンクが無いと
+// 会員は他のメンバーの中身に辿り着けない。
 function MemberCard({ member }: { member: DirectoryMember }) {
   return (
-    <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+    <Link
+      href={`/app/profile/${member.id}`}
+      className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:border-gray-300 hover:shadow-md transition-all"
+    >
       <MemberAvatar
         name={member.name}
         url={member.avatar_url}
@@ -36,7 +40,7 @@ function MemberCard({ member }: { member: DirectoryMember }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="text-sm font-bold text-gray-900 truncate">{member.name}</h3>
-          {member.role !== "user" && <RoleBadge role={roleLabel(member.role)} />}
+          {member.role !== "user" && <RoleBadge role={roleLabelOf(member.role)} />}
           {member.membership_type && (
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
               member.membership_type === "法人"
@@ -54,7 +58,7 @@ function MemberCard({ member }: { member: DirectoryMember }) {
       {member.member_no != null && (
         <span className="text-[10px] font-mono text-gray-300 flex-shrink-0">#{member.member_no}</span>
       )}
-    </div>
+    </Link>
   );
 }
 

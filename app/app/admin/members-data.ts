@@ -7,6 +7,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { MemberRoleCode } from "@/lib/member-roles";
 
 export interface MemberDbRow {
   id: string;
@@ -35,7 +36,7 @@ export interface MemberDbRow {
   is_withdrawn: boolean;
   import_sheet: string | null;
   auth_user_id: string | null;
-  role: "admin" | "manager" | "user";
+  role: MemberRoleCode;
   withdrawn_at?: string | null;
   withdrawal_reason?: string | null;
   admin_note?: string | null;

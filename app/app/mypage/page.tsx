@@ -17,6 +17,7 @@ import { EventCalendar } from "@/components/app/event-calendar";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { useJoinedEvents } from "@/lib/events-api";
 import { useCurrentMember } from "@/lib/current-member";
+import { roleLabelOf } from "@/lib/member-roles";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { type BoardPost, fetchPosts, formatPostedAt } from "@/lib/board-api";
 
@@ -35,11 +36,9 @@ export default function MyPage() {
   const myProfile = {
     name: currentMember?.name ?? "会員",
     roleTitle:
-      currentMember?.role === "admin"
-        ? "運営"
-        : currentMember?.role === "manager"
-          ? "部長"
-          : currentMember?.membership_type || "会員",
+      currentMember && currentMember.role !== "user"
+        ? roleLabelOf(currentMember.role)
+        : currentMember?.membership_type || "会員",
     jobTitle: currentMember?.job || "職業未登録",
     headline:
       currentMember?.grip ||

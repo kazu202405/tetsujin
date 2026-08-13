@@ -31,7 +31,7 @@ AS $$
     SELECT 1
       FROM members
      WHERE auth_user_id = auth.uid()
-       AND role = 'admin'
+       AND role IN ('owner', 'admin')
        AND is_withdrawn = FALSE
   );
 $$;
@@ -39,7 +39,7 @@ $$;
 REVOKE ALL   ON FUNCTION public.is_admin() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
-COMMENT ON FUNCTION public.is_admin() IS 'ログイン中ユーザーが運営ロールか判定。RLS再帰回避のため SECURITY DEFINER';
+COMMENT ON FUNCTION public.is_admin() IS 'ログイン中ユーザーが運営以上か判定（管理者owner を含む）。RLS再帰回避のため SECURITY DEFINER';
 
 -- ============================================================
 -- 2. members の RLSポリシー
