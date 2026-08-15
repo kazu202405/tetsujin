@@ -35,6 +35,7 @@ export interface EventRecord {
   requiresApproval: boolean;
   hostId: string | null;
   hostName: string;
+  hostAvatarUrl: string | null;
   /** 承認済みの参加者数 */
   participantCount: number;
   /** 承認待ちの件数（管理できる人にだけ入る） */

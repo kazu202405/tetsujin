@@ -42,7 +42,7 @@ function toEvent(record: EventRecord, todayIso: string): Event {
     organizer: {
       id: record.hostId ?? "",
       name: record.hostName,
-      photoUrl: "",
+      photoUrl: record.hostAvatarUrl ?? "",
     },
     participantCount: record.participantCount,
     participants: record.participants.map((p) => ({
@@ -89,7 +89,10 @@ export default function PostPage() {
   const [managingEventId, setManagingEventId] = useState<string | null>(null);
   // シリーズは events.series_name の自由入力なので、実データから組み立てる
   const seriesList = useMemo(() => {
-    const map = new Map<string, { count: number; hostId: string; hostName: string }>();
+    const map = new Map<
+      string,
+      { count: number; hostId: string; hostName: string; hostAvatarUrl: string | null }
+    >();
     for (const r of eventRecords) {
       const name = r.seriesName?.trim();
       if (!name) continue;
@@ -100,13 +103,14 @@ export default function PostPage() {
           count: 1,
           hostId: r.hostId ?? "",
           hostName: r.hostName,
+          hostAvatarUrl: r.hostAvatarUrl,
         });
     }
     return Array.from(map.entries()).map(([name, v]) => ({
       id: name,
       name,
       description: "",
-      organizer: { id: v.hostId, name: v.hostName, photoUrl: "" },
+      organizer: { id: v.hostId, name: v.hostName, photoUrl: v.hostAvatarUrl ?? "" },
       totalEvents: v.count,
     }));
   }, [eventRecords]);

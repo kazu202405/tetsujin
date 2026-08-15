@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Camera, Building2, Briefcase, User, MessageSquare, X } from "lucide-react";
 import type { MyProfile, Event } from "../types";
+import { MemberAvatar } from "@/components/app/member-avatar";
 
 interface JoinModalProps {
   event: Event;
@@ -81,11 +82,7 @@ export default function JoinModal({
             {/* アイコン表示 */}
             <div className="flex items-center gap-3 mb-4">
               <div className="relative">
-                <img
-                  src={profile.photoUrl}
-                  alt={name}
-                  className="w-14 h-14 rounded-full object-cover border-2 border-white shadow"
-                />
+                <MemberAvatar name={name} url={profile.photoUrl || null} size="lg" />
                 <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-gray-100 border border-white flex items-center justify-center">
                   <Camera className="w-3 h-3 text-gray-400" />
                 </div>

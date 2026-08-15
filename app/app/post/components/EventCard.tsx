@@ -16,6 +16,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { Event, Series } from "../types";
+import { MemberAvatar } from "@/components/app/member-avatar";
+import { PersonLink } from "@/components/app/person-link";
 
 interface EventCardProps {
   event: Event;
@@ -142,10 +144,10 @@ export default function EventCard({
               </div>
 
               <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
-                <img
-                  src={series.organizer.photoUrl}
-                  alt={series.organizer.name}
-                  className="w-5 h-5 rounded-full object-cover border border-white shadow"
+                <MemberAvatar
+                  name={series.organizer.name}
+                  url={series.organizer.photoUrl || null}
+                  size="xs"
                 />
                 主催:{" "}
                 <span className="font-medium text-gray-700">
@@ -211,17 +213,20 @@ export default function EventCard({
 
       {/* 主催者 */}
       <div className="flex items-center gap-2 mb-3 text-sm text-gray-600">
-        <img
-          src={event.organizer.photoUrl}
-          alt={event.organizer.name}
-          className="w-6 h-6 rounded-full object-cover border border-white shadow"
-        />
-        <span className="text-xs text-gray-500">
-          主催:{" "}
-          <span className="font-medium text-gray-700">
-            {event.organizer.name}
+        {/* 主催者はプロフィールへ。誰が開く会か確かめてから参加を決められるように */}
+        <PersonLink id={event.organizer.id} className="flex items-center gap-2">
+          <MemberAvatar
+            name={event.organizer.name}
+            url={event.organizer.photoUrl || null}
+            size="sm"
+          />
+          <span className="text-xs text-gray-500">
+            主催:{" "}
+            <span className="font-medium text-gray-700 hover:underline">
+              {event.organizer.name}
+            </span>
           </span>
-        </span>
+        </PersonLink>
       </div>
 
       {/* 参加者 + ボタン */}
@@ -229,12 +234,9 @@ export default function EventCard({
         <div className="flex items-center gap-2">
           <div className="flex -space-x-2">
             {event.participants.slice(0, 4).map((p) => (
-              <img
-                key={p.id}
-                src={p.photoUrl}
-                alt={p.name}
-                className="w-7 h-7 rounded-full object-cover border-2 border-white shadow"
-              />
+              <PersonLink key={p.id} id={p.id} title={p.name}>
+                <MemberAvatar name={p.name} url={p.photoUrl || null} size="sm" />
+              </PersonLink>
             ))}
             {event.participants.length > 4 && (
               <span className="w-7 h-7 rounded-full bg-gray-100 border-2 border-white shadow flex items-center justify-center text-[10px] font-bold text-gray-500">

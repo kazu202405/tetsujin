@@ -123,6 +123,13 @@ const activityStatusConfig: Record<ActivityStatus, { label: string; color: strin
 // ============================================================
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("applications");
+  // 「メンバーの状況」「参加状況」で気になる人を見つけたら、そのまま会員詳細を開く。
+  // 名前を覚えて会員タブで検索し直す手間を無くすため。
+  const [focusMemberId, setFocusMemberId] = useState<string | null>(null);
+  const openMember = (id: string) => {
+    setFocusMemberId(id);
+    setActiveTab("members");
+  };
   // 会員DBタブは情報量が多いのでコンテナを広めに
   const containerMaxWidth =
     "max-w-5xl";
@@ -162,9 +169,9 @@ export default function AdminPage() {
 
       <div className={`${containerMaxWidth} mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24`}>
         {activeTab === "applications" && <ApplicationsTab />}
-        {activeTab === "activity" && <ActivityTab />}
-        {activeTab === "participation" && <ParticipationTab />}
-        {activeTab === "members" && <MemberTab />}
+        {activeTab === "activity" && <ActivityTab onSelectMember={openMember} />}
+        {activeTab === "participation" && <ParticipationTab onSelectMember={openMember} />}
+        {activeTab === "members" && <MemberTab focusMemberId={focusMemberId} />}
         {activeTab === "announce" && <AnnounceTab />}
 
       </div>
@@ -521,7 +528,7 @@ function agoLabel(value: string | null): string {
   return `${Math.floor(days / 365)}年以上前`;
 }
 
-function ActivityTab() {
+function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void }) {
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [search, setSearch] = useState("");
@@ -693,7 +700,16 @@ function ActivityTab() {
           return (
             <div
               key={row.memberId}
-              className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm"
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectMember(row.memberId)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelectMember(row.memberId);
+                }
+              }}
+              className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:border-gray-300 hover:shadow-md transition-all"
             >
               <div className="flex items-center gap-3 min-w-0 sm:flex-1">
                 <MemberAvatar name={row.name} url={row.avatarUrl} />
@@ -899,7 +915,7 @@ function AnnounceTab() {
 // タブ3: 参加状況（実データ）
 // ============================================================
 // events / event_participants を集計する。会員向けの「会を探す」と同じ元データ。
-function ParticipationTab() {
+function ParticipationTab({ onSelectMember }: { onSelectMember: (id: string) => void }) {
   const { events, status } = useEvents();
   const [viewMode, setViewMode] = useState<"member" | "event">("member");
   const [search, setSearch] = useState("");
@@ -1040,10 +1056,14 @@ function ParticipationTab() {
               {filteredMembers.map((m) => (
                 <tr key={m.id} className="group border-b border-gray-50">
                   <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-200 px-4 py-2.5">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => onSelectMember(m.id)}
+                      className="flex items-center gap-2 min-w-0 w-full text-left hover:opacity-70 transition-opacity"
+                    >
                       <MemberAvatar name={m.name} url={m.avatarUrl} size="sm" />
-                      <span className="text-sm text-gray-800 truncate">{m.name}</span>
-                    </div>
+                      <span className="text-sm text-gray-800 truncate hover:underline">{m.name}</span>
+                    </button>
                   </td>
                   <td className="px-3 py-2.5 text-right font-bold text-gray-900">{m.total}</td>
                   {months.map((month) => {

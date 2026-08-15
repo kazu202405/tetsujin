@@ -19,6 +19,7 @@ import { useCurrentMember } from "@/lib/current-member";
 import { roleLabelOf } from "@/lib/member-roles";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { type BoardPost, fetchPosts, formatPostedAt } from "@/lib/board-api";
+import { PersonLink } from "@/components/app/person-link";
 
 function formatMonth(year: number, month: number) {
   return `${year}年${month + 1}月`;
@@ -337,12 +338,9 @@ export default function MyPage() {
                     <div className="flex items-center gap-2">
                       <div className="flex -space-x-2">
                         {event.participants.slice(0, 5).map((p) => (
-                          <MemberAvatar
-                            key={p.id}
-                            name={p.name}
-                            url={p.avatarUrl}
-                            size="sm"
-                          />
+                          <PersonLink key={p.id} id={p.id} title={p.name}>
+                            <MemberAvatar name={p.name} url={p.avatarUrl} size="sm" />
+                          </PersonLink>
                         ))}
                       </div>
                       <span className="text-xs text-gray-500">
