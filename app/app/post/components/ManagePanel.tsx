@@ -18,6 +18,8 @@ import {
   Bell,
 } from "lucide-react";
 import type { Event, ParticipantRole } from "../types";
+import { MemberAvatar } from "@/components/app/member-avatar";
+import { PersonLink } from "@/components/app/person-link";
 
 interface ManagePanelProps {
   event: Event;
@@ -90,10 +92,10 @@ export default function ManagePanel({
       <div className="relative w-full sm:max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-5 sm:p-6">
         {/* ヘッダー */}
         <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
-          <img
-            src={event.organizer.photoUrl}
-            alt={event.organizer.name}
-            className="w-8 h-8 rounded-full object-cover border-2 border-white shadow"
+          <MemberAvatar
+            name={event.organizer.name}
+            url={event.organizer.photoUrl || null}
+            size="sm"
           />
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-bold text-gray-900 truncate">{event.title}</h3>
@@ -234,11 +236,9 @@ export default function ManagePanel({
                     key={p.id}
                     className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl"
                   >
-                    <img
-                      src={p.photoUrl}
-                      alt={p.name}
-                      className="w-9 h-9 rounded-full object-cover border-2 border-white shadow flex-shrink-0"
-                    />
+                    <PersonLink id={p.id} title={`${p.name}さんのプロフィール`}>
+                      <MemberAvatar name={p.name} url={p.photoUrl || null} />
+                    </PersonLink>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-gray-900">
@@ -302,14 +302,12 @@ export default function ManagePanel({
                   key={p.id}
                   className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors group"
                 >
-                  <img
-                    src={p.photoUrl}
-                    alt={p.name}
-                    className="w-8 h-8 rounded-full object-cover border-2 border-white shadow"
-                  />
-                  <span className="text-sm text-gray-900 flex-1">
-                    {p.name}
-                  </span>
+                  <PersonLink id={p.id} className="flex items-center gap-3 flex-1 min-w-0">
+                    <MemberAvatar name={p.name} url={p.photoUrl || null} size="sm" />
+                    <span className="text-sm text-gray-900 truncate hover:underline">
+                      {p.name}
+                    </span>
+                  </PersonLink>
                   {p.role === "owner" ? (
                     <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 font-bold">
                       <Crown className="w-3 h-3" />
@@ -384,11 +382,9 @@ export default function ManagePanel({
                       : "border-gray-100 bg-white"
                   }`}
                 >
-                  <img
-                    src={p.photoUrl}
-                    alt={p.name}
-                    className="w-9 h-9 rounded-full object-cover border-2 border-white shadow flex-shrink-0"
-                  />
+                  <PersonLink id={p.id} title={`${p.name}さんのプロフィール`}>
+                    <MemberAvatar name={p.name} url={p.photoUrl || null} />
+                  </PersonLink>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-bold text-gray-900">

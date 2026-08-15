@@ -9,7 +9,7 @@
 // いまは同じ members テーブル1つなので統合した。
 // ============================================================
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, UserCog, UserX, RotateCcw, Handshake, X } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { RoleBadge } from "@/components/app/role-badge";
@@ -35,7 +35,7 @@ const PAGE_SIZE = 100;
 
 type MemberFilter = "all" | "active" | "withdrawn" | "login" | "no_contact" | "no_referrer_link";
 
-export function MemberTab() {
+export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) {
   const { rows, loadStatus } = useMembersDb();
   // 権限の変更は管理者だけ。運営には操作UIを出さない（APIとDBでも弾いている）
   const canChangeRole = isOwnerRole(useCurrentMember()?.role);
@@ -49,6 +49,12 @@ export function MemberTab() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<ToastMessage | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  // 他のタブ（メンバーの状況・参加状況）から会員を指定して開かれたとき。
+  // 気になる人を見つけた場所から、名前を覚えて検索し直さずに詳細へ入れるようにする。
+  useEffect(() => {
+    if (focusMemberId) setDetailId(focusMemberId);
+  }, [focusMemberId]);
 
   const merged: MemberDbRow[] = useMemo(
     () => (rows ?? []).map((r) => (overrides[r.id] ? { ...r, ...overrides[r.id] } : r)),

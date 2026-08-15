@@ -24,6 +24,7 @@ interface EventRow {
   requires_approval: boolean;
   host_id: string | null;
   host_name: string | null;
+  host_avatar_path: string | null;
   participant_count: number;
   pending_count: number;
   my_status: "pending" | "approved" | "declined" | null;
@@ -68,7 +69,9 @@ export async function GET() {
 
   const avatarUrls = await signAvatarPaths(
     supabase,
-    participants.map((p) => p.avatar_path),
+    // 主催者は event_participants に行を持たないので、参加者とは別に集めて
+    // 同じ一括署名に載せる（1件ずつ署名すると往復が増える）
+    [...participants.map((p) => p.avatar_path), ...events.map((e) => e.host_avatar_path)],
   );
 
   type Person = {
@@ -112,6 +115,7 @@ export async function GET() {
       requiresApproval: e.requires_approval,
       hostId: e.host_id,
       hostName: e.host_name ?? "運営",
+      hostAvatarUrl: e.host_avatar_path ? avatarUrls[e.host_avatar_path] ?? null : null,
       participantCount: Number(e.participant_count),
       pendingCount: Number(e.pending_count),
       myStatus: e.my_status,
