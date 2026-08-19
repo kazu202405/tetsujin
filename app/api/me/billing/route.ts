@@ -12,6 +12,7 @@ interface Row {
   plan_interval: string | null;
   plan_ready: boolean | null;
   billing_starts_on: string | null;
+  billing_exempt: boolean | null;
   status: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
@@ -48,6 +49,7 @@ export async function GET() {
           }
         : null,
       billingStartsOn: row?.billing_starts_on ?? null,
+      billingExempt: Boolean(row?.billing_exempt),
       status: row?.status ?? null,
       currentPeriodEnd: row?.current_period_end ?? null,
       cancelAtPeriodEnd: Boolean(row?.cancel_at_period_end),

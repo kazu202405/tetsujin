@@ -66,9 +66,10 @@ export function LedgerEditor({
     referrer: row.referrer ?? "",
     billing_plan_code: row.billing_plan_code ?? "",
     billing_starts_on: row.billing_starts_on ?? "",
+    billing_exempt: row.billing_exempt ?? false,
   });
 
-  const set = (key: keyof typeof form, value: string) =>
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const numOrNull = (v: string) => (v.trim() === "" ? null : Number(v));
@@ -89,6 +90,7 @@ export function LedgerEditor({
       referrer: form.referrer.trim() || null,
       billing_plan_code: form.billing_plan_code || null,
       billing_starts_on: form.billing_starts_on || null,
+      billing_exempt: form.billing_exempt,
     };
     const ok = await onPatch(
       row,
@@ -248,13 +250,32 @@ export function LedgerEditor({
           />
         </label>
 
+        {/* 会費免除。プラン未設定(空)＝「まだ決めていない」とは別物なので、
+            無料の方は必ずこちらで表す。混ぜると未払い一覧が使えなくなる。 */}
+        <label className="block sm:col-span-2 flex items-start gap-2.5 p-3 rounded-xl border border-gray-200 bg-gray-50 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.billing_exempt}
+            onChange={(e) => set("billing_exempt", e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-emerald-600 flex-shrink-0"
+          />
+          <span className="min-w-0">
+            <span className="block text-xs font-bold text-gray-900">会費を免除する（無料会員）</span>
+            <span className="block text-[11px] text-gray-500 leading-relaxed mt-0.5">
+              この方には請求しません。決済画面に進めなくなり、Stripeにも登録されません。
+              下の「会費プラン」を空にするのとは意味が違います（空＝まだ金額を決めていない）。
+            </span>
+          </span>
+        </label>
+
         {/* 会費。プランを入れないとこの方は決済に進めない（＝誤った金額を請求しない） */}
         <label className="block">
           <span className="block text-[11px] text-gray-500 mb-1">会費プラン</span>
           <select
             value={form.billing_plan_code}
             onChange={(e) => set("billing_plan_code", e.target.value)}
-            className={INPUT}
+            disabled={form.billing_exempt}
+            className={INPUT + (form.billing_exempt ? " opacity-50" : "")}
           >
             <option value="">未設定（決済に進めません）</option>
             {plans.map((p) => (
@@ -274,7 +295,8 @@ export function LedgerEditor({
             type="date"
             value={form.billing_starts_on}
             onChange={(e) => set("billing_starts_on", e.target.value)}
-            className={INPUT}
+            disabled={form.billing_exempt}
+            className={INPUT + (form.billing_exempt ? " opacity-50" : "")}
           />
         </label>
       </div>

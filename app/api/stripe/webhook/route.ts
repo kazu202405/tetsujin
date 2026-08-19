@@ -48,16 +48,97 @@ async function memberIdFor(
   return data?.id ?? null;
 }
 
-async function saveSubscription(sub: Stripe.Subscription) {
+/**
+ * 会員とStripeの紐づけを残す。
+ *
+ * 🔴 支払いリンク経由の初回はここでしか紐づけを作れない。
+ *    残さないと、翌年の更新・解約・決済失敗の通知が全部
+ *    「誰か分からない」に戻る（決済失敗に運営が気づけないのが特に痛い）。
+ *
+ * 顧客とサブスクの両方に印を付けるのは、片方だけだと
+ * 顧客を作り直されたときに追えなくなるため。
+ */
+async function rememberLink(
+  admin: ReturnType<typeof createAdminClient>,
+  memberId: string,
+  sub: Stripe.Subscription,
+) {
+  const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+
+  if (customerId) {
+    const { error } = await admin
+      .from("members")
+      .update({ stripe_customer_id: customerId })
+      .eq("id", memberId)
+      .is("stripe_customer_id", null); // 既にある顧客IDは上書きしない
+    if (error) console.error("stripe webhook: 顧客IDの保存に失敗", { code: error.code });
+  }
+
+  // Stripe側にも印を書き戻す（以後の通知はこれだけで特定できる）
+  if (!sub.metadata?.member_id) {
+    try {
+      await stripe().subscriptions.update(sub.id, { metadata: { ...sub.metadata, member_id: memberId } });
+      if (customerId) {
+        await stripe().customers.update(customerId, { metadata: { member_id: memberId } });
+      }
+    } catch (e) {
+      // 印が付かなくても顧客IDから引けるので、失敗しても止めない
+      console.error("stripe webhook: 印の書き戻しに失敗", e instanceof Error ? e.message : e);
+    }
+  }
+}
+
+/**
+ * 二重契約を運営に知らせる。
+ * 支払いリンクにはアプリ内決済のような「契約済みの人を弾く」門番が無く、
+ * 2回押されるとStripeに契約が2本できて二重に引き落とされる。
+ * 契約テーブルは member_id が主キーなので2本目が1本目を上書きし、
+ * 放っておくと1本目の存在ごと見えなくなる。
+ */
+async function warnDuplicate(
+  admin: ReturnType<typeof createAdminClient>,
+  memberId: string,
+  newSubId: string,
+  oldSubId: string,
+) {
+  const { data: member } = await admin.from("members").select("name").eq("id", memberId).maybeSingle();
+  const name = member?.name ?? "会員";
+
+  const { error } = await admin.rpc("notify_admins_billing", {
+    p_title: `${name}さんの会費が二重契約になっています`,
+    p_message:
+      `お支払いの登録が2件あります（既存 ${oldSubId} / 新規 ${newSubId}）。` +
+      `そのままだと二重に引き落とされます。Stripeでどちらかを解約してください。`,
+    p_href: "/app/admin",
+  });
+  if (error) console.error("stripe webhook: 二重契約の通知に失敗", { code: error.code });
+}
+
+async function saveSubscription(sub: Stripe.Subscription, hintedMemberId?: string | null) {
   const admin = createAdminClient();
-  const memberId = await memberIdFor(admin, sub);
+  const memberId = hintedMemberId ?? (await memberIdFor(admin, sub));
   if (!memberId) {
     // 誰の契約か分からないまま書くと別人に紐づく。書かずに気づけるようにする。
+    // 支払いリンク経由では customer.subscription.created が先に届くことがあり、
+    // その場合は直後の checkout.session.completed で正しく保存される（一時的なもの）。
     console.error("stripe webhook: 会員を特定できません", { subscription: sub.id });
     return;
   }
 
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+
+  // 既にこの会員の契約があり、それが別の契約で、まだ生きているなら二重契約。
+  const { data: existing } = await admin
+    .from("member_subscriptions")
+    .select("stripe_subscription_id, status")
+    .eq("member_id", memberId)
+    .maybeSingle();
+
+  const isDuplicate =
+    existing != null &&
+    existing.stripe_subscription_id !== sub.id &&
+    ["trialing", "active", "past_due"].includes(existing.status) &&
+    ["trialing", "active", "past_due"].includes(sub.status);
 
   const { error } = await admin.from("member_subscriptions").upsert(
     {
@@ -72,7 +153,16 @@ async function saveSubscription(sub: Stripe.Subscription) {
     { onConflict: "member_id" },
   );
 
-  if (error) console.error("stripe webhook: 保存に失敗", { code: error.code });
+  if (error) {
+    console.error("stripe webhook: 保存に失敗", { code: error.code });
+    return;
+  }
+
+  await rememberLink(admin, memberId, sub);
+
+  if (isDuplicate) {
+    await warnDuplicate(admin, memberId, sub.id, existing.stripe_subscription_id);
+  }
 }
 
 export async function POST(request: Request) {
@@ -106,11 +196,20 @@ export async function POST(request: Request) {
             : session.subscription?.id;
         if (subId) {
           const sub = await stripe().subscriptions.retrieve(subId);
-          // Checkoutのmetadataにしか印が無い場合に備えて補う
-          if (!sub.metadata?.member_id && session.metadata?.member_id) {
-            sub.metadata = { ...sub.metadata, member_id: session.metadata.member_id };
-          }
-          await saveSubscription(sub);
+
+          // 誰の支払いかを示す印は3か所のどれかに入る。
+          //   ① サブスクのmetadata … アプリ内決済（subscription_dataで付けている）
+          //   ② セッションのmetadata … 同上の保険
+          //   ③ client_reference_id … 🔴 支払いリンク経由はここにしか入らない。
+          //      運営が送るURLの末尾 ?client_reference_id=<会員のID> がこれ。
+          //      見落とすと、決済は成立するのにアプリには何も残らない。
+          const hinted =
+            sub.metadata?.member_id ||
+            session.metadata?.member_id ||
+            session.client_reference_id ||
+            null;
+
+          await saveSubscription(sub, hinted);
         }
         break;
       }

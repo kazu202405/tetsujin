@@ -13,6 +13,7 @@ const SELECT_COLUMNS = [
   "payment_method", "contact_submitted_at", "source", "is_withdrawn", "import_sheet",
   "auth_user_id", "role", "withdrawn_at", "withdrawal_reason", "admin_note", "avatar_path",
   "referrer_member_id", "billing_plan_code", "billing_starts_on", "stripe_customer_id",
+  "billing_exempt",
 ].join(",");
 
 export async function GET() {

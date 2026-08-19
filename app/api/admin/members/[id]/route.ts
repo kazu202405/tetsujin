@@ -39,6 +39,7 @@ interface PatchBody {
   // 会費
   billing_plan_code?: string | null;
   billing_starts_on?: string | null;
+  billing_exempt?: boolean;
 }
 
 const RENEWAL_STATUSES = new Set(["未更新", "退会", "更新済", "返事待ち", "入金待ち"]);
@@ -231,6 +232,14 @@ export async function PATCH(
     patch.billing_starts_on = day;
   }
 
+  // 会費免除。プラン未設定(NULL)＝「まだ決めていない」とは別物なので独立して持つ。
+  if (body.billing_exempt !== undefined) {
+    if (typeof body.billing_exempt !== "boolean") {
+      return NextResponse.json({ error: "会費免除の値が不正です" }, { status: 400, headers });
+    }
+    patch.billing_exempt = body.billing_exempt;
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "更新する項目がありません" }, { status: 400, headers });
   }
@@ -240,7 +249,7 @@ export async function PATCH(
     .update(patch)
     .eq("id", id)
     .select(
-      "id, name, member_no, email, phone, nickname, job, membership_type, start_year, start_month, renewal_status, price, referrer, is_withdrawn, withdrawn_at, withdrawal_reason, admin_note, billing_plan_code, billing_starts_on",
+      "id, name, member_no, email, phone, nickname, job, membership_type, start_year, start_month, renewal_status, price, referrer, is_withdrawn, withdrawn_at, withdrawal_reason, admin_note, billing_plan_code, billing_starts_on, billing_exempt",
     )
     .maybeSingle();
 

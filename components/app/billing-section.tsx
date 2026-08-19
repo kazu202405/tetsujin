@@ -18,6 +18,7 @@ interface Billing {
   testMode: boolean;
   plan: { code: string; label: string; amount: number; interval: string; ready: boolean } | null;
   billingStartsOn: string | null;
+  billingExempt: boolean;
   status: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
@@ -28,6 +29,7 @@ const EMPTY: Billing = {
   testMode: false,
   plan: null,
   billingStartsOn: null,
+  billingExempt: false,
   status: null,
   currentPeriodEnd: null,
   cancelAtPeriodEnd: false,
@@ -102,22 +104,31 @@ export function BillingSection({ withdrawn }: { withdrawn: boolean }) {
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl mb-4 gap-3">
             <div className="min-w-0">
               <p className="text-sm font-bold text-gray-900 whitespace-nowrap">
-                {data.plan ? data.plan.label : "料金プラン未設定"}
+                {data.billingExempt
+                  ? "会費免除"
+                  : data.plan
+                    ? data.plan.label
+                    : "料金プラン未設定"}
               </p>
               <p className="text-xs text-gray-500">
-                {data.plan
-                  ? `¥${data.plan.amount.toLocaleString()}（${
-                      data.plan.interval === "year" ? "年額" : "月額"
-                    }）`
-                  : "運営が設定するとここに表示されます"}
+                {data.billingExempt
+                  ? "会費のお支払いは不要です"
+                  : data.plan
+                    ? `¥${data.plan.amount.toLocaleString()}（${
+                        data.plan.interval === "year" ? "年額" : "月額"
+                      }）`
+                    : "運営が設定するとここに表示されます"}
               </p>
             </div>
             <span
               className={`px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0 whitespace-nowrap ${
-                statusInfo?.tone ?? (withdrawn ? "bg-gray-100 text-gray-500" : "bg-gray-100 text-gray-600")
+                data.billingExempt
+                  ? "bg-emerald-50 text-emerald-700"
+                  : (statusInfo?.tone ??
+                    (withdrawn ? "bg-gray-100 text-gray-500" : "bg-gray-100 text-gray-600"))
               }`}
             >
-              {withdrawn ? "退会済み" : (statusInfo?.label ?? "未登録")}
+              {withdrawn ? "退会済み" : data.billingExempt ? "免除" : (statusInfo?.label ?? "未登録")}
             </span>
           </div>
 
@@ -134,7 +145,7 @@ export function BillingSection({ withdrawn }: { withdrawn: boolean }) {
                 <dd className="text-gray-700">{fmtDate(data.currentPeriodEnd)}</dd>
               </div>
             )}
-            {!data.status && data.billingStartsOn && (
+            {!data.status && !data.billingExempt && data.billingStartsOn && (
               <div className="flex justify-between gap-3">
                 <dt>お支払い開始予定</dt>
                 <dd className="text-gray-700">{fmtDate(data.billingStartsOn)}</dd>
@@ -155,6 +166,35 @@ export function BillingSection({ withdrawn }: { withdrawn: boolean }) {
             </p>
           ) : withdrawn ? (
             <p className="text-[11px] text-gray-400">退会済みのため操作できません。</p>
+          ) : data.billingExempt ? (
+            /* 免除の方。決済に進む口を出さない。
+               ただし免除より前に登録した契約が残っている場合だけは、
+               自分で解約できるよう導線を残す（放置すると請求され続けるため）。 */
+            <>
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                運営の判断により、会費のお支払いは免除されています。カードの登録は不要です。
+              </p>
+              {paying && (
+                <>
+                  <p className="flex items-start gap-2 mt-3 mb-3 text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    免除になる前のお支払い登録が残っています。解約しないと引き落としが続きます。
+                  </p>
+                  <button
+                    onClick={() => go("portal")}
+                    disabled={busy !== null}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60"
+                  >
+                    {busy === "portal" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ExternalLink className="w-4 h-4" />
+                    )}
+                    お支払いの解約
+                  </button>
+                </>
+              )}
+            </>
           ) : paying ? (
             <>
               <button

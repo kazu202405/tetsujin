@@ -44,6 +44,8 @@ export interface MemberDbRow {
   billing_plan_code?: string | null;
   billing_starts_on?: string | null;
   stripe_customer_id?: string | null;
+  /** 会費免除（無料会員）。プラン未設定(null)＝「まだ決めていない」とは別物 */
+  billing_exempt?: boolean | null;
   avatar_path?: string | null;
   /** サーバー側で発行した署名URL（写真なしは null） */
   avatar_url?: string | null;

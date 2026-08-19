@@ -14,6 +14,9 @@ import { isStripeConfigured, isStripeLive } from "@/lib/stripe";
 export const dynamic = "force-dynamic";
 
 const PRICE_ID = /^price_[A-Za-z0-9]+$/;
+// 支払いリンクは buy.stripe.com のURLだけを受け付ける。
+// 任意のURLを入れられると、運営が偽の決済ページを会員に配ってしまう。
+const PAYMENT_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9_\-]+$/;
 
 export async function GET() {
   const guard = await requireAdminMember();
@@ -21,7 +24,7 @@ export async function GET() {
 
   const { data, error } = await guard.supabase
     .from("billing_plans")
-    .select("code, label, amount, interval, stripe_price_id, note, is_active, sort_order")
+    .select("code, label, amount, interval, stripe_price_id, stripe_payment_link_url, note, is_active, sort_order")
     .order("sort_order");
 
   if (error) {
@@ -49,6 +52,7 @@ export async function PATCH(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     code?: string;
     stripePriceId?: string | null;
+    stripePaymentLinkUrl?: string | null;
     isActive?: boolean;
   } | null;
 
@@ -72,6 +76,17 @@ export async function PATCH(request: Request) {
     patch.stripe_price_id = priceId || null;
   }
 
+  if (body.stripePaymentLinkUrl !== undefined) {
+    const url = (body.stripePaymentLinkUrl ?? "").trim().replace(/\?.*$/, "");
+    if (url && !PAYMENT_LINK.test(url)) {
+      return NextResponse.json(
+        { error: "支払いリンクの形式が違います（https://buy.stripe.com/… のURLです）" },
+        { status: 400, headers: NO_STORE_HEADERS },
+      );
+    }
+    patch.stripe_payment_link_url = url || null;
+  }
+
   if (typeof body.isActive === "boolean") patch.is_active = body.isActive;
 
   if (Object.keys(patch).length === 0) {
@@ -85,7 +100,7 @@ export async function PATCH(request: Request) {
     .from("billing_plans")
     .update(patch)
     .eq("code", body.code)
-    .select("code, label, amount, interval, stripe_price_id, note, is_active, sort_order")
+    .select("code, label, amount, interval, stripe_price_id, stripe_payment_link_url, note, is_active, sort_order")
     .maybeSingle();
 
   if (error) {
