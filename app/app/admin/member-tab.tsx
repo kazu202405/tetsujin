@@ -19,7 +19,9 @@ import { useCurrentMember } from "@/lib/current-member";
 import { type MemberDbRow, formatStartMonth, useMembersDb } from "./members-data";
 import { MemberList, type MemberSort } from "./member-list";
 import { LedgerEditor } from "./ledger-editor";
+import { RenewalLink } from "./renewal-link";
 import { BillingPlansPanel } from "./billing-plans-panel";
+import { MatchingPanel } from "./matching-panel";
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -219,6 +221,7 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
   return (
     <>
       <BillingPlansPanel />
+      <MatchingPanel />
 
       <div className="flex items-start gap-2 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 leading-relaxed">
         <UserCog className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -662,6 +665,9 @@ function MemberDetailModal({
               </div>
             </div>
           </div>
+
+          {/* 継続の方へ送る更新リンク */}
+          <RenewalLink row={row} />
 
           {/* 台帳の編集 */}
           <LedgerEditor row={row} saving={saving} onPatch={onPatch} />

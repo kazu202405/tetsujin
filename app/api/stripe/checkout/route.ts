@@ -30,7 +30,7 @@ export async function POST() {
   // プランと課金開始日を取る（RLSで自分の行しか見えない）
   const { data: row, error } = await supabase
     .from("members")
-    .select("id, name, email, stripe_customer_id, billing_plan_code, billing_starts_on")
+    .select("id, name, email, stripe_customer_id, billing_plan_code, billing_starts_on, billing_exempt")
     .eq("id", member.id)
     .maybeSingle();
 
@@ -38,6 +38,15 @@ export async function POST() {
     return NextResponse.json(
       { error: "会員情報を取得できませんでした" },
       { status: 500, headers: NO_STORE_HEADERS },
+    );
+  }
+
+  // 会費免除の方は決済に進ませない。
+  // Stripeに顧客も契約も作らない＝誤請求の経路そのものを作らない。
+  if (row.billing_exempt) {
+    return NextResponse.json(
+      { error: "会費は免除されています。お支払いの登録は不要です" },
+      { status: 409, headers: NO_STORE_HEADERS },
     );
   }
 

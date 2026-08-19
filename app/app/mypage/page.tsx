@@ -11,9 +11,11 @@ import {
   Handshake,
   MessageCircle,
   ChevronRight,
+  Users,
 } from "lucide-react";
 import { EventCalendar } from "@/components/app/event-calendar";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
+import { MatchingSuggestions } from "@/components/app/matching-suggestions";
 import { useJoinedEvents } from "@/lib/events-api";
 import { useCurrentMember } from "@/lib/current-member";
 import { roleLabelOf } from "@/lib/member-roles";
@@ -149,13 +151,24 @@ export default function MyPage() {
               <p className="text-gray-600 leading-relaxed border-l-4 border-amber-300 pl-4 text-sm mb-4">
                 {myProfile.headline}
               </p>
-              <Link
-                href="/app/mypage/profile-sheet"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                <FileUser className="w-3.5 h-3.5" />
-                プロフィールシート
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/app/mypage/profile-sheet"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  <FileUser className="w-3.5 h-3.5" />
+                  プロフィールシート
+                </Link>
+                {/* つながりの設定。プロフィールシートが「見せる自分」なのに対し、
+                    こちらは「探す・探される」ための条件。役割が違うので並べて置く。 */}
+                <Link
+                  href="/app/mypage/matching"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  つながりの設定
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -192,6 +205,9 @@ export default function MyPage() {
             <p className="text-xs text-gray-400 mt-2">累計 {eventsTotal}件</p>
           </div>
         </div>
+
+        {/* 今月のおすすめ（つながりマッチング） */}
+        <MatchingSuggestions />
 
         {/* 掲示板 最新プレビュー */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6 mb-6">
