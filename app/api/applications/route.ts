@@ -22,6 +22,21 @@ function clean(value: unknown, max = 200): string | null {
   return s ? s.slice(0, max) : null;
 }
 
+/**
+ * つながりの設定（立場・業種・地域）のコード配列。
+ * 未ログインから来るので、長さも件数も必ず切る。
+ * 値そのものの正しさは承認時にマスタと突き合わせるより、
+ * 使う側（マッチング）が知らないコードを無視する作りにしてある。
+ */
+function codes(value: unknown, max = 60): string[] {
+  if (!Array.isArray(value)) return [];
+  const out = value
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0 && v.length <= 40);
+  return Array.from(new Set(out)).slice(0, max);
+}
+
 export async function POST(request: Request) {
   if (!isSupabaseConfigured) {
     return NextResponse.json({ error: "受付を準備中です" }, { status: 503, headers: HEADERS });
@@ -67,6 +82,10 @@ export async function POST(request: Request) {
     membership_type: membershipType === "個人" || membershipType === "法人" ? membershipType : null,
     payment_method: clean(body.paymentMethod, 30),
     note: clean(body.note, 2000),
+    // マッチング用。承認時に member_matching_profile へ引き継がれる。
+    positions: codes(body.positions),
+    industries: codes(body.industries),
+    regions: codes(body.regions),
     terms_agreed: true,
     status: "pending",
   });

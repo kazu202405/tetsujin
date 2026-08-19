@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/marketing/page-header";
 import { CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -75,6 +75,33 @@ export default function RegisterPage() {
   const [memberType, setMemberType] = useState<"個人" | "法人" | "">("");
   const [gender, setGender] = useState("");
   const [genderOther, setGenderOther] = useState("");
+
+  // つながりの設定（立場・業種・地域）。
+  // 既存441名でいちばん欠けているのがこの3つなので、新規はここで必ず埋める。
+  // 趣味・興味・つながりたい目的はフォームに置かない（長いほど申込みが落ちる）。
+  const [matchOptions, setMatchOptions] = useState<
+    { category: string; code: string; label: string }[]
+  >([]);
+  const [positions, setPositions] = useState<string[]>([]);
+  const [industries, setIndustries] = useState<string[]>([]);
+  const [regions, setRegions] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/matching-options")
+      .then(async (res) => (res.ok ? await res.json() : null))
+      .then((body) => {
+        if (body) setMatchOptions(body.options);
+      })
+      .catch(() => {
+        /* 取れなくても申込みは通せる（選択肢が出ないだけ） */
+      });
+  }, []);
+
+  const toggle = (
+    list: string[],
+    set: (v: string[]) => void,
+    code: string,
+  ) => set(list.includes(code) ? list.filter((c) => c !== code) : [...list, code]);
   const [paymentMethod, setPaymentMethod] = useState("");
 
   const [sending, setSending] = useState(false);
@@ -107,6 +134,9 @@ export default function RegisterPage() {
           startMonth: form.get("startMonth"),
           membershipType: memberType,
           paymentMethod,
+          positions,
+          industries,
+          regions,
           termsAgreed: true,
         }),
       });
@@ -182,19 +212,6 @@ export default function RegisterPage() {
             </div>
           ) : (
             <div className="bg-[var(--tetsu-warm)] rounded-2xl p-8 sm:p-10 border border-gray-100">
-              {/* 理念 */}
-              <div className="text-center mb-10">
-                <p className="text-xs text-gray-400 uppercase tracking-widest mb-2">
-                  TETSUJIN会の理念
-                </p>
-                <p
-                  className="text-lg font-bold text-gray-900"
-                  style={{ fontFamily: "'Noto Serif JP', serif" }}
-                >
-                  繋がりを通じて、誠実と信頼を基盤に自己実現を叶える
-                </p>
-              </div>
-
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* 名前 */}
                 <div>
@@ -318,6 +335,53 @@ export default function RegisterPage() {
                     placeholder="経営コンサルタント"
                   />
                 </div>
+
+                {/* つながりの設定（立場・業種・地域） */}
+                {matchOptions.length > 0 && (
+                  <div className="sm:col-span-2 rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                    <p className="text-sm font-bold text-gray-900 mb-1">
+                      あなたのことを教えてください
+                    </p>
+                    <p className="text-xs text-gray-500 leading-relaxed mb-4">
+                      会員同士でつながる相手を探すときに使います。
+                      <b>入れていない項目では見つけてもらえません。</b>
+                      あとからマイページで変更できます。
+                    </p>
+
+                    {(
+                      [
+                        ["position", "立場・事業形態", positions, setPositions],
+                        ["industry", "業種", industries, setIndustries],
+                        ["region", "活動している地域", regions, setRegions],
+                      ] as const
+                    ).map(([category, title, list, set]) => (
+                      <div key={category} className="mb-4 last:mb-0">
+                        <p className="text-xs font-bold text-gray-700 mb-2">{title}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {matchOptions
+                            .filter((o) => o.category === category)
+                            .map((o) => {
+                              const on = list.includes(o.code);
+                              return (
+                                <button
+                                  key={o.code}
+                                  type="button"
+                                  onClick={() => toggle([...list], set, o.code)}
+                                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                                    on
+                                      ? "bg-gray-900 text-white border-gray-900"
+                                      : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                                  }`}
+                                >
+                                  {o.label}
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* 紹介者 */}
                 <div>

@@ -10,6 +10,10 @@
 // （運営からの連絡先が変わるだけ）。画面でもそう書いている。
 //
 // 会員番号・会員種別・入会年月・更新状況などは契約の事実なので運営のみ。
+//
+// 年代・性別も本人が直せる。契約の事実ではなく本人の属性で、
+// トリガ(protect_member_admin_fields)でも止めていない。
+// つながりの設定で使うので、本人が入れられないと候補に出てこない。
 // ============================================================
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
@@ -18,11 +22,22 @@ export const dynamic = "force-dynamic";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// 🔴 台帳の既存表記に合わせる（全角＋前半/後半で10種類・336名分が既にこの形）。
+//    半角や「40代」で保存すると同じ人が別の値で二重に存在することになる。
+//    ７０代以上だけは既存データに無いが、選べないと困るので足してある。
+const AGE_RANGES = [
+  "２０代前半", "２０代後半", "３０代前半", "３０代後半", "４０代前半", "４０代後半",
+  "５０代前半", "５０代後半", "６０代前半", "６０代後半", "７０代以上",
+];
+const GENDERS = ["男", "女"];
+
 interface Body {
   name?: string;
   email?: string | null;
   phone?: string | null;
   grip?: string;
+  gender?: string | null;
+  ageRange?: string | null;
 }
 
 export async function PATCH(request: Request) {
@@ -39,6 +54,28 @@ export async function PATCH(request: Request) {
   }
 
   const patch: Record<string, unknown> = {};
+
+  if (body.gender !== undefined) {
+    const gender = (body.gender ?? "").trim();
+    if (gender && !GENDERS.includes(gender)) {
+      return NextResponse.json(
+        { error: "性別の値が正しくありません" },
+        { status: 400, headers: NO_STORE_HEADERS },
+      );
+    }
+    patch.gender = gender || null;
+  }
+
+  if (body.ageRange !== undefined) {
+    const age = (body.ageRange ?? "").trim();
+    if (age && !AGE_RANGES.includes(age)) {
+      return NextResponse.json(
+        { error: "年代の値が正しくありません" },
+        { status: 400, headers: NO_STORE_HEADERS },
+      );
+    }
+    patch.age_range = age || null;
+  }
 
   if (body.grip !== undefined) {
     const grip = body.grip.trim();
