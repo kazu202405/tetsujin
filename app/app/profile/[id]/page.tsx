@@ -12,6 +12,7 @@ import Link from "next/link";
 import { ArrowLeft, UserX } from "lucide-react";
 import { ProfileSheetCard, type ProfileSheetData } from "@/components/app/profile-sheet-card";
 import { SocialLinksSection } from "@/components/app/social-links-section";
+import { ConnectionRequestButton } from "@/components/app/connection-request-button";
 import { RoleBadge } from "@/components/app/role-badge";
 import { roleLabelOf, type MemberRoleCode } from "@/lib/member-roles";
 
@@ -179,6 +180,14 @@ export default function ProfilePage({
             scale={scale}
           />
         </div>
+
+        {/* つながり申請。シートを読んだ直後がいちばん申し込みたい瞬間なので、
+            連絡先(SNS)より前に置く。 */}
+        {!profile.isMe && (
+          <div className="flex justify-center">
+            <ConnectionRequestButton memberId={profile.id} memberName={profile.name} />
+          </div>
+        )}
 
         {/* SNS・リンク（見える分だけ。見えない分は開示申請できる） */}
         {!profile.isMe && <SocialLinksSection viewerMode={{ ownerId: profile.id }} />}

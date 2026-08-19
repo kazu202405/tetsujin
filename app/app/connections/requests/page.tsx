@@ -9,6 +9,7 @@
 // ============================================================
 
 import { useState } from "react";
+import { ConnectionRequestsPanel } from "@/components/app/connection-requests-panel";
 import Link from "next/link";
 import { Check, X, Clock, Inbox, Send, Handshake } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
@@ -58,9 +59,18 @@ export default function RequestsPage() {
 
   return (
     <div className="min-h-screen">
-      <ConnectionsHeader description="SNSの開示をお願いする・される画面です" />
+      <ConnectionsHeader description="つながりの申請と、SNSの開示をお願いする・される画面です" />
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24">
+        {/* つながりの申請（主役） */}
+        <ConnectionRequestsPanel />
+
+        {/* SNSリンクの開示申請（つながった後の連絡手段の話） */}
+        <h2 className="text-sm font-bold text-gray-900 mb-1">SNSリンクの開示申請</h2>
+        <p className="text-[11px] text-gray-400 mb-4">
+          LINEなどの連絡先を見せてもらう・見せるかどうかの申請です。
+        </p>
+
         <div className="flex gap-2 mb-5">
           <button
             onClick={() => setTab("incoming")}

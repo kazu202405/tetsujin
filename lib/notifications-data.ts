@@ -18,7 +18,11 @@ export type NotificationType =
   | "disclosure_request"
   | "disclosure_approved"
   | "announcement"
-  | "weekly_digest";
+  | "weekly_digest"
+  | "billing_alert"
+  | "connection_request"
+  | "connection_accepted"
+  | "connection_declined";
 
 export interface NotificationItem {
   id: string;

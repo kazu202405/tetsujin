@@ -11,6 +11,7 @@ import {
   UserPlus,
   CheckCircle2,
   Newspaper,
+  Mail,
 } from "lucide-react";
 import {
   NotificationItem,
@@ -66,6 +67,26 @@ const TYPE_META: Record<
     Icon: Newspaper,
     bg: "bg-indigo-50",
     iconColor: "text-indigo-500",
+  },
+  billing_alert: {
+    Icon: CreditCard,
+    bg: "bg-red-50",
+    iconColor: "text-red-500",
+  },
+  connection_request: {
+    Icon: UserPlus,
+    bg: "bg-[var(--tetsu-warm)]",
+    iconColor: "text-[var(--tetsu-pink)]",
+  },
+  connection_accepted: {
+    Icon: Handshake,
+    bg: "bg-emerald-50",
+    iconColor: "text-emerald-500",
+  },
+  connection_declined: {
+    Icon: Mail,
+    bg: "bg-gray-100",
+    iconColor: "text-gray-500",
   },
 };
 
