@@ -7,6 +7,7 @@ import {
   CalendarSearch,
   // UtensilsCrossed,
   GitBranch,
+  Sparkles,
   Users,
   User,
   UserCog,
@@ -70,6 +71,8 @@ const navItems: {
   { href: "/app/post", label: "会を探す", icon: CalendarSearch },
   // { href: "/app/discover", label: "おすすめ", icon: UtensilsCrossed },
   { href: "/app/connections", label: "出会い", icon: Handshake },
+  // 本部だけに見せている見本（会員に出す形が決まるまで adminOnly）
+  { href: "/app/quests", label: "お願いごと", icon: Sparkles, adminOnly: true },
   { href: "/app/tree", label: "紹介ツリー", icon: GitBranch, adminOnly: true },
   { href: "/app/members-admin", label: "つながり", icon: UserCog, adminOnly: true },
   { href: "/app/admin", label: "管理画面", icon: ShieldCheck, adminOnly: true },
