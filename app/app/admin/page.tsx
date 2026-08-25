@@ -186,7 +186,12 @@ function ApplicationsTab() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<ApplicationStatus | "all">("all");
+  // 🔴 既定は「審査中」。このタブを開く目的はほぼ「新しい申請を処理する」ことで、
+  //    「すべて」だと承認済みが積み上がるほど審査中が下に埋もれる。
+  //    承認しないと会員行が作られない（＝入会の唯一の経路）ため、
+  //    審査中の取りこぼしはそのまま「入会できない人が出る」につながる。
+  //    承認済み・却下はボタン1つで見られ、件数は上のサマリーに常に出ている。
+  const [filterStatus, setFilterStatus] = useState<ApplicationStatus | "all">("pending");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -445,7 +450,20 @@ function ApplicationsTab() {
         {filtered.length === 0 && (
           <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
             <UserCheck className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-400">該当する申請はありません</p>
+            {/* 「審査中が0件」と「検索で消えた」は原因が違うので文言を分ける。
+                同じ文言だと、処理し切ったのか絞り込みすぎたのか読めない。 */}
+            {search.trim() === "" && filterStatus === "pending" ? (
+              <>
+                <p className="text-sm font-bold text-gray-500">
+                  審査中の申請はありません
+                </p>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  新しい入会申請が届くとここに表示されます
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-gray-400">該当する申請はありません</p>
+            )}
           </div>
         )}
       </div>
