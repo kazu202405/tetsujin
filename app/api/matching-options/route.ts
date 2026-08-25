@@ -10,14 +10,14 @@
 // ============================================================
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isMockMode } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
 
 const FORM_CATEGORIES = ["position", "industry", "region"];
 
 export async function GET() {
-  if (!isSupabaseConfigured) {
+  if (isMockMode) {
     return NextResponse.json({ options: [] }, { headers: { "Cache-Control": "no-store" } });
   }
 

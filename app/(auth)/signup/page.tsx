@@ -6,16 +6,20 @@ import { UserPlus, Mail, Lock, User, AlertCircle, CheckCircle, Loader2 } from "l
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
-// 新規登録画面（動作確認用）
+// 新規登録画面（既存会員が自分のログインを作るための入口）
 //
-// 🔴 これは本番の入会導線ではない。
-//    テツジン会は年契約の有料コミュニティ（個人19,800円／法人30,000円）であり、
-//    本来は「入会申込(/register) → 入金確認 → 運営がアカウント発行」の順になるはず。
-//    ここを公開したまま運用すると、入金していない人が会員ページに入れてしまう。
-//    ∴ 本番の入会フローが決まるまでは動作確認専用として扱う。
+// ここは「入会」ではなく「すでに名簿にいる人がアカウントを作る」場所。
+// 入会そのものは /register（申込）→ 運営の承認 という別の流れになる。
 //
-// 補足: サインアップしたメールが既存会員のメールと一致する場合、
-//       新しい会員行は作らず既存の行に紐づく（policies.sql の handle_new_auth_user）。
+// 🔴 かつてはここが実質の入会導線になっていた。
+//    handle_new_auth_user が「メールが一致する会員行が無ければ新規作成」
+//    していたため、任意のメールでサインアップするだけで会員になれた。
+//    2026-08-25 の migration 0029 で「名簿にある行への紐づけのみ」に変更済み。
+//    ∴ 名簿に無いメールで登録しても会員にはならず、
+//      /app では NotAMember の案内が出る。
+//
+// この画面を消しても塞がらない点に注意。anon キーはクライアントバンドルに
+// 入っているので auth/v1/signup は直接叩ける。守りは必ずDB側に置くこと。
 export default function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -118,6 +122,12 @@ export default function SignupPage() {
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900">新規登録</h1>
           <p className="text-sm text-gray-500 mt-1">TETSUJIN会 メンバーページ</p>
+          {/* 名簿に無いメールでは会員にならないので、先に伝えておく */}
+          <p className="text-xs text-gray-500 mt-3 text-center leading-relaxed max-w-xs">
+            ご入会時に登録されたメールアドレスでご登録ください。
+            <br />
+            別のアドレスではメンバーページをご利用いただけません。
+          </p>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">

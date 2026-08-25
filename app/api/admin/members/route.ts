@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isMockMode } from "@/lib/supabase/config";
 import { createClient, getCurrentMember } from "@/lib/supabase/server";
 import { signAvatarPaths } from "@/lib/supabase/storage";
 import { isAdminRole } from "@/lib/member-roles";
@@ -19,7 +19,7 @@ const SELECT_COLUMNS = [
 export async function GET() {
   const headers = { "Cache-Control": "private, no-store, max-age=0" };
 
-  if (!isSupabaseConfigured) {
+  if (isMockMode) {
     return NextResponse.json({ error: "Supabase未設定" }, { status: 503, headers });
   }
 

@@ -9,7 +9,7 @@
 // ============================================================
 import { redirect } from "next/navigation";
 import { isAdminRole } from "@/lib/member-roles";
-import { isSupabaseConfigured } from "./config";
+import { isMockMode } from "./config";
 import { getCurrentMember } from "./server";
 
 /**
@@ -17,7 +17,8 @@ import { getCurrentMember } from "./server";
  * 管理画面のレイアウトから呼ぶ。管理者(owner)は運営の全権限を持つので通す。
  */
 export async function requireAdmin() {
-  if (!isSupabaseConfigured) return null;
+  // mock モードのときだけ素通し。本番で接続情報が欠けていても素通しさせない。
+  if (isMockMode) return null;
 
   const member = await getCurrentMember();
 

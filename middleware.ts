@@ -11,10 +11,23 @@
 // ============================================================
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from "@/lib/supabase/config";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, isMisconfigured, isMockMode } from "@/lib/supabase/config";
 
 export async function middleware(request: NextRequest) {
-  if (!isSupabaseConfigured) return NextResponse.next();
+  // 開発中の mock モードのときだけ素通しする
+  if (isMockMode) return NextResponse.next();
+
+  // 🔴 本番で接続情報が無いのは設定ミス。ここで素通しすると /app が全開になる。
+  //    公開ページは生かしたまま、会員ページだけ閉じる。
+  if (isMisconfigured) {
+    if (request.nextUrl.pathname.startsWith("/app")) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "?error=config";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
 
   let response = NextResponse.next({ request });
 

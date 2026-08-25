@@ -6,7 +6,7 @@
 // ============================================================
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isSupabaseConfigured } from "./config";
+import { isMockMode } from "./config";
 import { createClient, getCurrentMember } from "./server";
 import type { CurrentMember } from "@/lib/current-member";
 import { isAdminRole } from "@/lib/member-roles";
@@ -19,7 +19,7 @@ type Guarded =
 
 /** ログイン中の在籍会員であることを確認する。 */
 export async function requireMember(): Promise<Guarded> {
-  if (!isSupabaseConfigured) {
+  if (isMockMode) {
     return {
       ok: false,
       response: NextResponse.json(

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LogIn, Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isMockMode } from "@/lib/supabase/config";
 
 // ログイン画面
 // - Supabase接続済み … メール＋パスワードで実際に認証する（依頼主決定 2026-07-21）
@@ -39,12 +39,16 @@ function LoginForm() {
   // ログイン後の戻り先（middlewareが ?next= を付ける）
   const nextPath = searchParams.get("next") ?? "/app/mypage";
 
+  // middleware から ?error=config で戻された場合＝本番の接続情報が欠けている。
+  // 会員には原因が分からないので、運営に連絡してもらう文言にする。
+  const configError = searchParams.get("error") === "config";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // mockモード：接続情報がない間は従来どおり素通し
-    if (!isSupabaseConfigured) {
+    // mockモード：開発中で接続情報がない間だけ素通し（本番では成立しない）
+    if (isMockMode) {
       router.push("/app/mypage");
       return;
     }
@@ -106,6 +110,18 @@ function LoginForm() {
         {/* ログインカード */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* 接続設定の不備（middleware から戻された場合） */}
+            {configError && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-amber-800 leading-relaxed">
+                  ただいまシステムの設定に問題が発生しているため、
+                  メンバーページをご利用いただけません。
+                  お手数ですが運営までご連絡ください。
+                </p>
+              </div>
+            )}
+
             {/* エラー表示 */}
             {error && (
               <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
@@ -171,7 +187,7 @@ function LoginForm() {
                   />
                   メールアドレスを記憶する
                 </label>
-                {isSupabaseConfigured && (
+                {!isMockMode && (
                   <Link href="/forgot-password" className="text-xs font-bold text-[var(--tetsu-pink)] hover:underline">
                     パスワードを忘れた方
                   </Link>
@@ -200,7 +216,7 @@ function LoginForm() {
           </form>
 
           {/* 体験版の注記（mockモードのときだけ） */}
-          {!isSupabaseConfigured && (
+          {isMockMode && (
             <p className="text-center text-xs text-gray-400 mt-5 leading-relaxed">
               ※ 現在は体験版です。
               <br />
@@ -211,7 +227,7 @@ function LoginForm() {
 
         {/* 新規登録への導線 */}
         <p className="text-center text-sm text-gray-500 mt-6">
-          {isSupabaseConfigured ? (
+          {!isMockMode ? (
             <>
               アカウントをお持ちでない方は{" "}
               <Link

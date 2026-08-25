@@ -9,7 +9,7 @@
 // ============================================================
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isMockMode } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ function codes(value: unknown, max = 60): string[] {
 }
 
 export async function POST(request: Request) {
-  if (!isSupabaseConfigured) {
+  if (isMockMode) {
     return NextResponse.json({ error: "受付を準備中です" }, { status: 503, headers: HEADERS });
   }
 
