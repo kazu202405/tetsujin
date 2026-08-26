@@ -38,3 +38,6 @@ z copy.md
 .vercel
 # ※ .env*.local は上で無視済み。ここで .env* まで広げると
 #    テンプレートの .env.local.example まで無視されるので広げない。
+
+# supabase CLI の作業ファイル
+supabase/.temp/
