@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { WEBHOOK_SECRET, isStripeConfigured, stripe } from "@/lib/stripe";
 import { createAdminClient, isServiceRoleConfigured } from "@/lib/supabase/admin";
+import { CANCEL_REASON_WITHDRAWAL } from "@/lib/billing-withdrawal";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,43 @@ async function warnDuplicate(
   if (error) console.error("stripe webhook: 二重契約の通知に失敗", { code: error.code });
 }
 
+/**
+ * 会員が自分で解約したことを運営に知らせる。
+ *
+ * 🔴 自動で退会にはしない。支払いを止めたことと、コミュニティを抜けることは別。
+ *    勝手に退会させると、カードを変えたいだけの人まで締め出す。
+ *    ∴ 運営が本人に確認して判断できるよう、通知だけ出す。
+ *
+ * 運営の退会操作による解約は除く（自分がやった操作の通知は雑音にしかならない）。
+ * 判別には解約時に入れた cancellation_details.comment を使う。
+ */
+async function notifySelfCancel(
+  admin: ReturnType<typeof createAdminClient>,
+  memberId: string,
+  sub: Stripe.Subscription,
+) {
+  if (sub.cancellation_details?.comment === CANCEL_REASON_WITHDRAWAL) return;
+
+  const { data: member } = await admin
+    .from("members")
+    .select("name, is_withdrawn")
+    .eq("id", memberId)
+    .maybeSingle();
+
+  // 既に退会している人の解約は想定内なので通知しない
+  if (member?.is_withdrawn) return;
+
+  const name = member?.name ?? "会員";
+  const { error } = await admin.rpc("notify_admins_billing", {
+    p_title: `${name}さんが会費のお支払いを解約しました`,
+    p_message:
+      "ご本人がお支払い画面から解約されました。会員のままなので、" +
+      "退会にするか継続いただくか、ご本人に確認してください。",
+    p_href: "/app/admin",
+  });
+  if (error) console.error("stripe webhook: 解約通知に失敗", { code: error.code });
+}
+
 async function saveSubscription(sub: Stripe.Subscription, hintedMemberId?: string | null) {
   const admin = createAdminClient();
   const memberId = hintedMemberId ?? (await memberIdFor(admin, sub));
@@ -162,6 +200,11 @@ async function saveSubscription(sub: Stripe.Subscription, hintedMemberId?: strin
 
   if (isDuplicate) {
     await warnDuplicate(admin, memberId, sub.id, existing.stripe_subscription_id);
+  }
+
+  // 会員が自分で解約した場合は運営へ通知（運営の退会操作によるものは除く）
+  if (sub.status === "canceled") {
+    await notifySelfCancel(admin, memberId, sub);
   }
 }
 

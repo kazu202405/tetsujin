@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { createClient, getCurrentMember } from "@/lib/supabase/server";
 import { isMockMode } from "@/lib/supabase/config";
 import { isAdminRole } from "@/lib/member-roles";
+import { cancelSubscriptionForWithdrawal } from "@/lib/billing-withdrawal";
 
 export const dynamic = "force-dynamic";
 
@@ -269,5 +270,28 @@ export async function PATCH(
     return NextResponse.json({ error: "会員が見つかりません" }, { status: 404, headers });
   }
 
-  return NextResponse.json(data, { headers });
+  // ---- 退会させたら会費の引き落としも止める ----
+  // 🔴 台帳とStripeは別の場所にあるので、片方だけ変えると
+  //    「退会させたのに毎月引き落とされ続ける」が起きる。
+  //    解約に失敗しても退会は取り消さない（Stripeの一時的な不調で
+  //    運営が退会させられなくなる方が困る）。代わりに結果を必ず返し、
+  //    運営がStripeの画面で手で止められるようにする。
+  let billing: { canceled: boolean; message?: string } | undefined;
+  if (body.is_withdrawn === true) {
+    const outcome = await cancelSubscriptionForWithdrawal(id);
+    if (outcome.status === "canceled") {
+      billing = { canceled: true };
+    } else if (outcome.status === "failed") {
+      billing = {
+        canceled: false,
+        message:
+          "退会は完了しましたが、会費の解約に失敗しました。" +
+          "そのままでは引き落としが続きます。Stripeの画面で解約してください。",
+      };
+    }
+    // nothing_to_cancel（契約が無い）と skipped（決済が未設定）は
+    // 運営に伝えることが無いので何も返さない。
+  }
+
+  return NextResponse.json(billing ? { ...data, billing } : data, { headers });
 }

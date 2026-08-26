@@ -144,7 +144,10 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const result = (await response.json().catch(() => null)) as { error?: string } | null;
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+      billing?: { canceled: boolean; message?: string };
+    } | null;
     setSavingId(null);
 
     if (!response.ok) {
@@ -152,7 +155,17 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
       return false;
     }
     setOverrides((cur) => ({ ...cur, [row.id]: { ...cur[row.id], ...optimistic } }));
-    setMessage({ type: "success", text: successText });
+
+    // 🔴 退会はできたが会費の解約に失敗した場合は、成功のトーストで流さない。
+    //    そのままだと引き落としが続くので、運営が手で止める必要があると伝える。
+    if (result?.billing && !result.billing.canceled) {
+      setMessage({ type: "error", text: result.billing.message ?? "会費の解約に失敗しました" });
+      return true;
+    }
+    setMessage({
+      type: "success",
+      text: result?.billing?.canceled ? `${successText}（会費の引き落としも停止しました）` : successText,
+    });
     return true;
   };
 
