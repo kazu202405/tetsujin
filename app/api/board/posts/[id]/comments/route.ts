@@ -5,6 +5,7 @@
 // ============================================================
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
+import { checkWriteRate } from "@/lib/rate-limit";
 import { signAvatarPaths } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
@@ -107,6 +108,25 @@ export async function POST(
     return NextResponse.json(
       { error: "コメントが長すぎます（2000文字まで）" },
       { status: 400, headers: NO_STORE_HEADERS },
+    );
+  }
+
+  // 連投制限（1分に10件まで）。投稿より会話のテンポが速いので枠を広く取る。
+  const rate = await checkWriteRate(supabase, {
+    table: "post_comments",
+    authorCol: "author_id",
+    memberId: member.id,
+    limit: 10,
+    windowSec: 60,
+    label: "コメント",
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: rate.message },
+      {
+        status: 429,
+        headers: { ...NO_STORE_HEADERS, "Retry-After": String(rate.retryAfterSec) },
+      },
     );
   }
 

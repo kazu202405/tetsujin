@@ -37,7 +37,20 @@ function LoginForm() {
   }, []);
 
   // ログイン後の戻り先（middlewareが ?next= を付ける）
-  const nextPath = searchParams.get("next") ?? "/app/mypage";
+  // 🔴 ログイン後の戻り先は、必ず自サイト内のパスに限る（オープンリダイレクト対策）。
+  //    検証せずに router.push へ渡すと
+  //      /login?next=https://evil.example/fake
+  //      /login?next=//evil.example      ← プロトコル相対。パスに見えるが別ホストになる
+  //    が成立し、「tetsujin.vercel.app のログインリンク」を装った誘導ができてしまう。
+  //    会員は正規のドメインでログインした直後に偽サイトへ飛ばされるので気づきにくい。
+  //    ∴ 「/ で始まり、かつ // や /\ で始まらない」ものだけを通す。
+  const safeNextPath = (raw: string | null): string => {
+    if (!raw) return "/app/mypage";
+    if (!raw.startsWith("/")) return "/app/mypage";
+    if (raw.startsWith("//") || raw.startsWith("/\\")) return "/app/mypage";
+    return raw;
+  };
+  const nextPath = safeNextPath(searchParams.get("next"));
 
   // middleware から ?error=config で戻された場合＝本番の接続情報が欠けている。
   // 会員には原因が分からないので、運営に連絡してもらう文言にする。

@@ -6,6 +6,7 @@
 // ============================================================
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
+import { checkWriteRate } from "@/lib/rate-limit";
 import { signAvatarPaths, signPostImagePaths } from "@/lib/supabase/storage";
 import type { MemberRoleCode } from "@/lib/member-roles";
 
@@ -110,6 +111,26 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "本文が長すぎます（5000文字まで）" },
       { status: 400, headers: NO_STORE_HEADERS },
+    );
+  }
+
+  // 連投制限（1分に5件まで）。誤操作やクライアントのループで
+  // 掲示板が埋まるのを防ぐ。数える場所はDB（lib/rate-limit.ts の注記参照）。
+  const rate = await checkWriteRate(supabase, {
+    table: "posts",
+    authorCol: "author_id",
+    memberId: member.id,
+    limit: 5,
+    windowSec: 60,
+    label: "投稿",
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: rate.message },
+      {
+        status: 429,
+        headers: { ...NO_STORE_HEADERS, "Retry-After": String(rate.retryAfterSec) },
+      },
     );
   }
 
