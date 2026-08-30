@@ -3,7 +3,7 @@
 // DBの値        画面の呼び方   できること
 //   owner        管理者        運営の全権限 ＋ 会員のロール変更
 //   admin        運営          運営業務すべて（ロールだけは触れない）
-//   manager      部長          肩書き（特権なし）
+//   manager      部長          会を作成できる（2026-08-30〜。それまでは肩書きだけ）
 //   user         ユーザー      一般会員
 //
 // ロール変更は管理画面から set_member_role() 経由で行う。
@@ -22,6 +22,18 @@ export function isAdminRole(role: string | null | undefined): boolean {
 /** 管理者（全権限）か。ロール変更を許すのはこの人だけ。 */
 export function isOwnerRole(role: string | null | undefined): boolean {
   return role === "owner";
+}
+
+/**
+ * 会（イベント）を作れるか。管理者・運営・部長だけ。
+ *
+ * 🔴 2026-08-30まで会の作成は誰でもできた（部活動を会員が主催する想定）。
+ *    依頼主の判断で、主催は部長以上に限ることにした。
+ *    判定はここ1本にする。画面のあちこちで role を直接比べると、
+ *    ロールを足したときに出し分けを取り残す場所が必ず出る。
+ */
+export function canHostEventRole(role: string | null | undefined): boolean {
+  return isAdminRole(role) || role === "manager";
 }
 
 export type MemberRole = "管理者" | "運営" | "部長" | "ユーザー";

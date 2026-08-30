@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { CalendarDays, Plus, ChevronLeft } from "lucide-react";
 import type { Event, MyProfile, ParticipantRole, ToastMessage } from "./types";
 import { useCurrentMember } from "@/lib/current-member";
+import { canHostEventRole } from "@/lib/member-roles";
 import EventCard from "./components/EventCard";
 import CreateForm from "./components/CreateForm";
 import ManagePanel from "./components/ManagePanel";
@@ -128,6 +129,7 @@ export default function PostPage() {
   const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
   // 参加モーダルに出す自分の情報。以前は固定値だったのでログイン会員から作る。
   const me = useCurrentMember();
+  const canHost = canHostEventRole(me?.role);
   const [currentProfile, setCurrentProfile] = useState<MyProfile>({
     id: "",
     name: "会員",
@@ -411,13 +413,17 @@ export default function PostPage() {
                 カレンダーからイベントを探して参加しよう
               </p>
             </div>
-            <button
-              onClick={() => setShowCreate(!showCreate)}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              会を作成
-            </button>
+            {/* 会を作れるのは管理者・運営・部長だけ。
+                守っているのはRLS（events_insert）で、ここは押せなくするだけ。 */}
+            {canHost && (
+              <button
+                onClick={() => setShowCreate(!showCreate)}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                会を作成
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -453,7 +459,7 @@ export default function PostPage() {
           {/* 右カラム: イベント一覧 + 作成フォーム */}
           <div className="lg:col-span-3">
             {/* 作成フォーム */}
-            {showCreate && (
+            {canHost && showCreate && (
               <CreateForm
                 myProfile={currentProfile}
                 seriesList={seriesList}

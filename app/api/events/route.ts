@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
 import { signAvatarPaths } from "@/lib/supabase/storage";
+import { canHostEventRole } from "@/lib/member-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,16 @@ export async function POST(request: Request) {
   const guard = await requireMember();
   if (!guard.ok) return guard.response;
   const { supabase, member } = guard;
+
+  // 🔴 会を作れるのは管理者・運営・部長だけ（2026-08-30〜）。
+  //    最後の砦はRLS（events_insert）だが、そちらに任せると
+  //    「保存できませんでした」しか出せず、理由が伝わらない。
+  if (!canHostEventRole(member.role)) {
+    return NextResponse.json(
+      { error: "会を作成できるのは運営・部長のみです" },
+      { status: 403, headers: NO_STORE_HEADERS },
+    );
+  }
 
   const body = (await request.json().catch(() => null)) as {
     title?: string;
