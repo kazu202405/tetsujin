@@ -21,6 +21,8 @@ interface Option {
   code: string;
   label: string;
   is_sales: boolean;
+  /** 運営が「使わない」にした項目。新しくは選べないが、選んでいた人には出す */
+  is_active: boolean;
 }
 
 type Bag = Record<string, string[]>;
@@ -78,22 +80,32 @@ function Chips({
   selected: string[];
   onToggle: (code: string) => void;
 }) {
+  // 🔴 使わなくなった項目は、自分が選んでいるときだけ出す。
+  //    黙って消すと、本人には見えないのに候補の判定には効き続け、
+  //    外すこともできなくなる。選び直せないことが分かる見た目にする。
+  const visible = options.filter((o) => o.is_active || selected.includes(o.code));
+
   return (
     <div className="flex flex-wrap gap-2">
-      {options.map((o) => {
+      {visible.map((o) => {
         const on = selected.includes(o.code);
+        const retired = !o.is_active;
         return (
           <button
             key={o.code}
             type="button"
             onClick={() => onToggle(o.code)}
+            title={retired ? "いまは使われていない項目です。外すと選び直せません" : undefined}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
               on
-                ? "bg-gray-900 text-white border-gray-900"
+                ? retired
+                  ? "bg-gray-400 text-white border-gray-400"
+                  : "bg-gray-900 text-white border-gray-900"
                 : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
             }`}
           >
             {o.label}
+            {retired && <span className="ml-1 opacity-70">（終了）</span>}
             {o.is_sales && (
               <span className={`ml-1 ${on ? "text-amber-200" : "text-amber-600"}`}>※</span>
             )}

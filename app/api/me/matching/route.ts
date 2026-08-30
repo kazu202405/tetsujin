@@ -46,10 +46,14 @@ export async function GET() {
   const { supabase, member } = guard;
 
   const [optionsRes, profileRes, wantsRes, meRes] = await Promise.all([
+    // 🔴 使わなくなった選択肢もここでは返す（is_active を付けて渡す）。
+    //    運営が「使わない」にしたあと、既に選んでいた人の画面から
+    //    その項目だけ消えると、本人には見えないのに候補の判定には
+    //    効き続け、外すこともできなくなる。
+    //    出すのは「自分が選んでいる分だけ」で、画面側で絞る。
     supabase
       .from("matching_options")
-      .select("category, code, label, is_sales, sort_order")
-      .eq("is_active", true)
+      .select("category, code, label, is_sales, sort_order, is_active")
       .order("category")
       .order("sort_order"),
     supabase.from("member_matching_profile").select("*").eq("member_id", member.id).maybeSingle(),
