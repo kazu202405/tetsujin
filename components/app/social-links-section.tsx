@@ -27,6 +27,7 @@ import {
   SocialVisibility,
   SOCIAL_PLATFORM_META,
   VISIBILITY_META,
+  socialHref,
 } from "@/lib/social-links";
 import {
   type OwnSocialLink,
@@ -69,10 +70,11 @@ function SocialLinkChip({
   showVisibility?: boolean;
 }) {
   const meta = SOCIAL_PLATFORM_META[link.platform];
-  if (!link.url) return null;
+  const href = socialHref(link.platform, link.url);
+  if (!href) return null;
   return (
     <a
-      href={link.url}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex items-center gap-2 pl-2 pr-3 py-2 rounded-xl border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all group"

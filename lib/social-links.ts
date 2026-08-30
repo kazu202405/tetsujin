@@ -66,3 +66,51 @@ export const VISIBILITY_META: Record<
   },
   private: { label: "非公開", description: "自分だけに表示されます" },
 };
+
+// ============================================================
+// URLの正規化と、リンクとして踏ませてよいかの判定
+// ============================================================
+
+const HTTP_SCHEME = /^https?:\/\//i;
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+
+// 🔴 https://line.me/ti/p/XXXX は、スマホで開いてもLINEアプリに渡らず
+//    QRコードを載せたWebページが出る。見た人はそれをスクショして
+//    別の端末で読み取るしかない。/R/ を挟んだ形がアプリを直接開く。
+//    （PCで開いたときは今までどおりWebページに落ちる）
+function toLineAppUrl(url: string): string {
+  return url.replace(/^(https?:\/\/(?:www\.)?line\.me)\/ti\/p\//i, "$1/R/ti/p/");
+}
+
+/**
+ * 保存する前に整える。受け付けられないものは null。
+ *
+ * 🔴 スキームを必ず見る。`javascript:` は <a href> に入れると
+ *    クリックした人の画面でそのまま動く＝会員が別の会員を踏ませられる。
+ *    「URLっぽい文字列か」では判定にならない。
+ */
+export function normalizeSocialUrl(platform: SocialPlatform, raw: string): string | null {
+  const url = raw.trim();
+  if (!url) return null;
+
+  // スキームが無いものは https を補う。補わないと
+  // <a href="line.me/ti/p/x"> がアプリ内の相対パスとして扱われ、
+  // どこにも飛ばないのに壊れて見えない。
+  const withScheme = HAS_SCHEME.test(url) ? url : `https://${url}`;
+  if (!HTTP_SCHEME.test(withScheme)) return null;
+
+  return platform === "line" ? toLineAppUrl(withScheme) : withScheme;
+}
+
+/**
+ * 画面でリンクにするときのURL。踏ませてよくないものは null。
+ *
+ * 保存時にも同じことをしているが、ここでも見る。
+ * 保存の検証が入る前に置かれた行が残っているし、
+ * 「表示する側が確かめる」形にしておけば入口が増えても漏れない。
+ */
+export function socialHref(platform: SocialPlatform, url: string | null): string | null {
+  const trimmed = (url ?? "").trim();
+  if (!trimmed || !HTTP_SCHEME.test(trimmed)) return null;
+  return platform === "line" ? toLineAppUrl(trimmed) : trimmed;
+}

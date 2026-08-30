@@ -6,6 +6,7 @@
 // ============================================================
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
+import { type SocialPlatform, normalizeSocialUrl } from "@/lib/social-links";
 
 export const dynamic = "force-dynamic";
 
@@ -73,8 +74,8 @@ export async function PUT(request: Request) {
   }[] = [];
 
   for (const [index, link] of body.links.entries()) {
-    const url = (link.url ?? "").trim();
-    if (!url) continue; // 入力途中の空行は保存しない
+    const raw = (link.url ?? "").trim();
+    if (!raw) continue; // 入力途中の空行は保存しない
 
     if (!PLATFORMS.has(link.platform ?? "")) {
       return NextResponse.json(
@@ -88,9 +89,20 @@ export async function PUT(request: Request) {
         { status: 400, headers: NO_STORE_HEADERS },
       );
     }
-    if (url.length > 500) {
+    if (raw.length > 500) {
       return NextResponse.json(
         { error: "URLが長すぎます" },
+        { status: 400, headers: NO_STORE_HEADERS },
+      );
+    }
+
+    // 🔴 http/https 以外は受け付けない。`javascript:` を入れられると
+    //    そのリンクを踏んだ別の会員の画面で動いてしまう。
+    //    ついでにスキームの補完と、LINEのアプリを開く形への直しもここで。
+    const url = normalizeSocialUrl(link.platform as SocialPlatform, raw);
+    if (!url) {
+      return NextResponse.json(
+        { error: "リンクは http:// または https:// で始まるものだけ登録できます" },
         { status: 400, headers: NO_STORE_HEADERS },
       );
     }
