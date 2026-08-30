@@ -170,7 +170,7 @@ export function ConnectionRequestButton({
       )}
 
       <p className="text-[11px] text-gray-400 leading-relaxed mb-3">
-        受けていただけた場合、おたがいの連絡先（「つながり済みのみ」に設定しているもの）が見えるようになります。
+        受けていただけた場合、相手が選んだ連絡先が見えるようになります（何を教えるかは相手が決めます）。
         <br />
         お返事が無いまま1週間が過ぎると、申請は自動的に取り下げられます。
       </p>

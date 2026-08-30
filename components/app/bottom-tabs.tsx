@@ -16,7 +16,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CalendarSearch, Handshake, MessageCircle, User, Users } from "lucide-react";
 import { useBoardUnread } from "@/lib/board-api";
-import { usePendingIncomingCount } from "@/lib/social-api";
+import { usePendingIncomingCount } from "@/lib/connection-requests-api";
 
 const TABS: { href: string; label: string; icon: typeof User }[] = [
   { href: "/app/board", label: "掲示板", icon: MessageCircle },

@@ -964,7 +964,7 @@ export default function ProfileSheetPage() {
               </div>
 
               {/* SNSリンク＝「全員に公開」にしたものだけ。
-                  名刺は誰の手にも渡る紙なので、つながり済み限定のものは載せない。 */}
+                  名刺は誰の手にも渡る紙なので、承認した人だけのものは載せない。 */}
               {publicLinks.length > 0 && (
                 <div className="px-5 pb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-gray-100 pt-2.5 mx-5">
                   {publicLinks.map((l) => (

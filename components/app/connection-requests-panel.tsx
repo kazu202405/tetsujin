@@ -11,29 +11,18 @@
 // やりとりは一往復まで。承諾したら既存の連絡先で直接続けてもらう。
 // ============================================================
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { Handshake, Loader2, Clock, X, AlertCircle, ChevronRight } from "lucide-react";
+import { Handshake, Loader2, Clock, X, AlertCircle, ChevronRight, Lock } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
-
-interface Req {
-  id: string;
-  direction: "sent" | "received";
-  other: { id: string; name: string; job: string | null; avatarUrl: string | null };
-  purposes: string[];
-  message: string | null;
-  status: "pending" | "accepted" | "declined" | "expired";
-  declineReason: string | null;
-  replyMessage: string | null;
-  isSales: boolean;
-  createdAt: string;
-}
-
-interface PurposeOption {
-  code: string;
-  label: string;
-  is_sales: boolean;
-}
+import { PlatformIcon } from "@/components/app/platform-icon";
+import { SOCIAL_PLATFORM_META } from "@/lib/social-links";
+import { type OwnSocialLink, fetchMySocialLinks } from "@/lib/social-api";
+import {
+  type ConnectionRequestItem as Req,
+  notifyConnectionRequestsUpdated,
+  useConnectionRequests,
+} from "@/lib/connection-requests-api";
 
 /** 断り方の選択肢。理由を書かせず、選ぶだけで済むようにする。 */
 const DECLINE_CHOICES = [
@@ -49,56 +38,70 @@ const DECLINE_LABEL: Record<string, string> = {
 };
 
 export function ConnectionRequestsPanel() {
-  const [items, setItems] = useState<Req[]>([]);
-  const [options, setOptions] = useState<PurposeOption[]>([]);
+  const { requests: items, purposeOptions: options, status, reload } = useConnectionRequests();
   const [tab, setTab] = useState<"received" | "sent">("received");
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [declineTarget, setDeclineTarget] = useState<Req | null>(null);
   const [declineReason, setDeclineReason] = useState("not_now");
   const [declineMessage, setDeclineMessage] = useState("");
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/me/connection-requests", { cache: "no-store" });
-      const body = (await res.json().catch(() => null)) as
-        | { requests: Req[]; purposeOptions: PurposeOption[] }
-        | null;
-      if (body) {
-        setItems(body.requests);
-        setOptions(body.purposeOptions);
-      }
-    } catch {
-      /* 読めなければ空のまま */
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // 承認するときに「どれを教えるか」を選ぶ
+  const [acceptTarget, setAcceptTarget] = useState<Req | null>(null);
+  const [myLinks, setMyLinks] = useState<OwnSocialLink[] | null>(null);
+  const [chosen, setChosen] = useState<string[]>([]);
 
   const labelOf = (code: string) => options.find((o) => o.code === code)?.label ?? code;
 
-  const respond = async (id: string, accept: boolean, reason?: string, message?: string) => {
+  const respond = async (
+    id: string,
+    accept: boolean,
+    opts?: { reason?: string; message?: string; linkIds?: string[] },
+  ) => {
     setBusyId(id);
     setError(null);
     try {
       const res = await fetch("/api/me/connection-requests", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, accept, reason, message }),
+        body: JSON.stringify({
+          id,
+          accept,
+          reason: opts?.reason,
+          message: opts?.message,
+          linkIds: opts?.linkIds ?? [],
+        }),
       });
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) setError(body?.error ?? "返答できませんでした");
-      else await load();
+      else {
+        await reload();
+        notifyConnectionRequestsUpdated();
+      }
     } catch {
       setError("返答できませんでした（通信エラー）");
     }
     setBusyId(null);
     setDeclineTarget(null);
+    setAcceptTarget(null);
     setDeclineMessage("");
+  };
+
+  // 🔴 教えられるのは「承認した人だけ」にしているリンクだけ。
+  //    全員に公開しているものはもう見えているし、非公開は誰にも見せないと
+  //    決めたもの。∴ ここに並べると意味が変わってしまう。
+  const openAccept = async (r: Req) => {
+    setAcceptTarget(r);
+    setMyLinks(null);
+    setChosen([]);
+    try {
+      const links = await fetchMySocialLinks();
+      const offerable = links.filter((l) => l.visibility === "approved" && l.id);
+      setMyLinks(offerable);
+      setChosen(offerable.map((l) => l.id as string));
+    } catch {
+      setMyLinks([]);
+    }
   };
 
   const received = items.filter((r) => r.direction === "received");
@@ -106,7 +109,7 @@ export function ConnectionRequestsPanel() {
   const pendingCount = received.filter((r) => r.status === "pending").length;
   const list = tab === "received" ? received : sent;
 
-  if (loading) return <div className="h-32 rounded-2xl bg-white animate-pulse mb-6" />;
+  if (status === "loading") return <div className="h-32 rounded-2xl bg-white animate-pulse mb-6" />;
 
   return (
     <div className="mb-8">
@@ -222,7 +225,7 @@ export function ConnectionRequestsPanel() {
               {r.status === "accepted" && (
                 <>
                   <p className="text-[11px] text-gray-400 leading-relaxed mb-2">
-                    連絡先はプロフィールの「SNS・リンク」からご確認ください。
+                    教えてもらった連絡先は、プロフィールの「SNS・リンク」に出ます。
                   </p>
                   <Link
                     href={`/app/profile/${r.other.id}`}
@@ -238,11 +241,11 @@ export function ConnectionRequestsPanel() {
               {r.status === "pending" && tab === "received" && (
                 <>
                 <p className="text-[11px] text-gray-400 leading-relaxed mb-2">
-                  受けると、おたがいの連絡先（「つながり済みのみ」に設定しているもの）が見えるようになります。
+                  受けるときに、自分の連絡先のどれを教えるかを選べます。
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
-                    onClick={() => void respond(r.id, true)}
+                    onClick={() => void openAccept(r)}
                     disabled={busyId === r.id}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--tetsu-pink)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-40"
                   >
@@ -274,6 +277,103 @@ export function ConnectionRequestsPanel() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 受けるときのモーダル。何を教えるかを持ち主が選ぶ。 */}
+      {acceptTarget && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <h3 className="text-sm font-bold text-gray-900">
+                {acceptTarget.other.name}さんに教えるものを選んでください
+              </h3>
+              <button
+                onClick={() => setAcceptTarget(null)}
+                className="text-gray-400 hover:text-gray-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+              選んだものだけが、この方のプロフィール画面に表示されます。
+              あとから増やすことも、教えないまま受けることもできます。
+            </p>
+
+            {myLinks === null ? (
+              <div className="h-20 rounded-xl bg-gray-50 animate-pulse mb-4" />
+            ) : myLinks.length === 0 ? (
+              /* 🔴 ここが空になるのは「登録していない」か「全部が公開/非公開」のとき。
+                    どちらなのかを本人が直せる場所へ案内する。 */
+              <div className="mb-4 rounded-xl bg-gray-50 px-4 py-4">
+                <p className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed mb-2">
+                  <Lock className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-gray-400" />
+                  「承認した人だけ」に設定している連絡先がまだありません。
+                </p>
+                <Link
+                  href="/app/mypage/profile-sheet"
+                  className="text-xs font-bold text-[var(--tetsu-pink)] hover:underline"
+                >
+                  マイページで登録する
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2 mb-4">
+                {myLinks.map((link) => {
+                  const id = link.id as string;
+                  const checked = chosen.includes(id);
+                  return (
+                    <label
+                      key={id}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
+                        checked ? "border-gray-900 bg-gray-50" : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setChosen((prev) =>
+                            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                          )
+                        }
+                        className="w-4 h-4 accent-gray-900"
+                      />
+                      <span className="w-6 h-6 rounded-md bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0">
+                        <PlatformIcon platform={link.platform} className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="text-xs text-gray-700 min-w-0 flex-1 truncate">
+                        {link.platform === "other"
+                          ? link.label?.trim() || "リンク"
+                          : SOCIAL_PLATFORM_META[link.platform].label}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setAcceptTarget(null)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50"
+              >
+                やめる
+              </button>
+              <button
+                onClick={() => void respond(acceptTarget.id, true, { linkIds: chosen })}
+                disabled={busyId === acceptTarget.id || myLinks === null}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[var(--tetsu-pink)] text-white text-xs font-bold hover:opacity-90 disabled:opacity-40"
+              >
+                {busyId === acceptTarget.id ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Handshake className="w-3.5 h-3.5" />
+                )}
+                {chosen.length > 0 ? "これで教える" : "教えずに受ける"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -335,7 +435,10 @@ export function ConnectionRequestsPanel() {
               </button>
               <button
                 onClick={() =>
-                  void respond(declineTarget.id, false, declineReason, declineMessage)
+                  void respond(declineTarget.id, false, {
+                    reason: declineReason,
+                    message: declineMessage,
+                  })
                 }
                 disabled={busyId === declineTarget.id}
                 className="px-5 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-gray-800 disabled:opacity-40"

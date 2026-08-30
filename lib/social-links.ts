@@ -8,7 +8,7 @@ export type SocialPlatform =
   | "website"
   | "other";
 
-export type SocialVisibility = "public" | "connections" | "private";
+export type SocialVisibility = "public" | "approved" | "private";
 
 export interface SocialLink {
   id: string;
@@ -60,22 +60,9 @@ export const VISIBILITY_META: Record<
   { label: string; description: string }
 > = {
   public: { label: "全員に公開", description: "メンバー全員に見えます" },
-  connections: {
-    label: "つながり済みのみ",
-    description: "出会ったことのある人だけに見えます",
+  approved: {
+    label: "承認した人だけ",
+    description: "つながり申請を受けたときに、自分が選んで教えた相手だけに見えます",
   },
   private: { label: "非公開", description: "自分だけに表示されます" },
 };
-
-// 閲覧者視点で見える SocialLink だけにフィルタ
-export function filterVisibleLinks(
-  links: SocialLink[],
-  context: { isOwner: boolean; isConnected: boolean }
-): SocialLink[] {
-  if (context.isOwner) return links;
-  return links.filter((link) => {
-    if (link.visibility === "public") return true;
-    if (link.visibility === "connections") return context.isConnected;
-    return false;
-  });
-}

@@ -4,8 +4,10 @@
 // 出会い記録
 // ============================================================
 // 記録は本人のメモ。中身は相手にも他人にも見せない。
-// 記録すると「つながっている」状態になり、相手の SNS リンクのうち
-// 「つながり済みのみ」公開のものが見えるようになる。
+//
+// 🔴 2026-08-30まで、この記録がSNSの公開範囲の鍵を兼ねていた。
+//    相手の同意も通知もなく作れるメモで相手の連絡先が開いてしまうため切り離した。
+//    連絡先を教えてもらう道は「つながり申請」だけ。ここはただのメモに戻した。
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
@@ -235,7 +237,7 @@ export default function ConnectionsPage() {
   return (
     <div className="min-h-screen">
       <ConnectionsHeader
-        description="会った人を記録すると、その方の「つながり済みのみ」のSNSが見えます"
+        description="会った方を自分用に記録しておく場所です（相手には見えません）"
         action={
           <button
             onClick={() => setShowForm((v) => !v)}
@@ -537,7 +539,7 @@ export default function ConnectionsPage() {
           >
             <h2 className="text-base font-bold text-gray-900 mb-2">この記録を削除しますか？</h2>
             <p className="text-sm text-gray-600 leading-relaxed mb-5">
-              削除すると「つながり済み」ではなくなり、相手のSNSが見えなくなる場合があります。
+              自分のメモから消えるだけで、相手には何も起きません。
             </p>
             <div className="flex gap-3 justify-end">
               <button

@@ -189,7 +189,7 @@ export default function ProfilePage({
           </div>
         )}
 
-        {/* SNS・リンク（見える分だけ。見えない分は開示申請できる） */}
+        {/* SNS・リンク（教えてもらった分だけ。残りは上のつながり申請から） */}
         {!profile.isMe && <SocialLinksSection viewerMode={{ ownerId: profile.id }} />}
 
         {profile.isMe && (

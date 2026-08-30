@@ -4,7 +4,7 @@
 // オーナーの編集ページ（/app/mypage/profile-sheet）と
 // 他メンバーの閲覧ページ（/app/profile/[id]）で共有する。
 // - 値が空のセクションは非表示（メンバーごとに埋まっている項目だけ出す）
-// - SNSフッターは snsLinks がある時だけ（閲覧側は空にして下に開示申請UIを置く）
+// - SNSフッターは snsLinks がある時だけ（閲覧側は空にして下にSNS欄を置く）
 
 import { Upload } from "lucide-react";
 import { SocialPlatform, SOCIAL_PLATFORM_META } from "@/lib/social-links";
@@ -234,9 +234,9 @@ export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Pro
           </div>
         </div>
 
-        {/* SNSリンク（owner の名刺出力用。閲覧側は空にして下に開示申請UIを置く）
+        {/* SNSリンク（owner の名刺出力用。閲覧側は空にして下にSNS欄を置く）
             載せるのは「全員に公開」にしたものだけ。名刺は誰の手にも渡る紙なので、
-            「つながり済みのみ」のリンクをここに出すと公開範囲の意味が無くなる。
+            「承認した人だけ」のリンクをここに出すと公開範囲の意味が無くなる。
             URLそのものは長くて読めないため、アイコンとサービス名で出す。 */}
         {data.snsLinks.filter((l) => has(l.url)).length > 0 && (
           <div className="px-5 pb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-gray-100 pt-2.5 mx-5">

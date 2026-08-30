@@ -24,7 +24,7 @@ import { NotificationBell } from "./notification-bell";
 import { MemberAvatar } from "./member-avatar";
 import { useNotifications } from "@/lib/notifications-data";
 import { useBoardUnread } from "@/lib/board-api";
-import { usePendingIncomingCount } from "@/lib/social-api";
+import { usePendingIncomingCount } from "@/lib/connection-requests-api";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { useCurrentMember } from "@/lib/current-member";

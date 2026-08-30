@@ -1,13 +1,13 @@
 "use client";
 
 // ============================================================
-// SNSリンク（本人の編集 / 他の会員から見た表示＋開示申請）
+// SNSリンク（本人の編集 / 他の会員から見た表示）
 // ============================================================
 // 見えないリンクの URL は API の時点で返ってこない（DB側で NULL にしている）。
 // ∴ ここでは「表示するかどうか」だけを扱えばよい。
 // ============================================================
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Globe,
   Instagram,
@@ -20,8 +20,6 @@ import {
   Lock,
   Users,
   ExternalLink,
-  Clock,
-  Send,
   Save,
 } from "lucide-react";
 import {
@@ -33,21 +31,18 @@ import {
 import {
   type OwnSocialLink,
   type VisibleSocialLink,
-  cancelDisclosure,
   fetchMySocialLinks,
   fetchProfileSocialLinks,
-  requestDisclosure,
   saveMySocialLinks,
-  useDisclosureRequests,
 } from "@/lib/social-api";
 import { PlatformIcon } from "./platform-icon";
 
 function VisibilityBadge({ visibility }: { visibility: SocialVisibility }) {
-  const Icon = visibility === "public" ? Eye : visibility === "connections" ? Users : Lock;
+  const Icon = visibility === "public" ? Eye : visibility === "approved" ? Users : Lock;
   const color =
     visibility === "public"
       ? "bg-green-50 text-green-700 border-green-200"
-      : visibility === "connections"
+      : visibility === "approved"
         ? "bg-blue-50 text-blue-700 border-blue-200"
         : "bg-gray-100 text-gray-500 border-gray-200";
   return (
@@ -98,40 +93,30 @@ function SocialLinkChip({
 // ============================================================
 // 閲覧モード
 // ============================================================
+// 🔴 ここに「開示を申請」ボタンは置かない（2026-08-30に廃止）。
+//    連絡先を教えてもらう入口は、この上にある「つながり申請」1本だけ。
+//    リンクごとに申請できると、相手には同じ人から2件3件と細切れに届き、
+//    しかも何のためにつながりたいのかが伝わらない。
+//    ∴ ここは「何を持っているか」と「まだ見えていないこと」を示すだけにする。
 function ViewerLinks({ ownerId }: { ownerId: string }) {
   const [links, setLinks] = useState<VisibleSocialLink[]>([]);
   const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const { requests, reload: reloadRequests } = useDisclosureRequests();
-
-  const load = useCallback(async () => {
-    try {
-      setLinks(await fetchProfileSocialLinks(ownerId));
-      setStatus("loaded");
-    } catch {
-      setStatus("error");
-    }
-  }, [ownerId]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  const apply = async (
-    linkId: string,
-    action: () => Promise<{ ok: true } | { ok: false; error: string }>,
-  ) => {
-    setBusyId(linkId);
-    setError(null);
-    const result = await action();
-    setBusyId(null);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    await Promise.all([load(), reloadRequests()]);
-  };
+    let cancelled = false;
+    fetchProfileSocialLinks(ownerId)
+      .then((rows) => {
+        if (cancelled) return;
+        setLinks(rows);
+        setStatus("loaded");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ownerId]);
 
   if (status === "loading") return null;
   if (status === "error") {
@@ -146,64 +131,38 @@ function ViewerLinks({ ownerId }: { ownerId: string }) {
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
       <h3 className="text-base font-bold text-gray-900 mb-4">SNS・リンク</h3>
 
-      {error && (
-        <p className="mb-3 text-xs bg-red-50 text-red-700 rounded-lg px-3 py-2">{error}</p>
-      )}
-
       {visible.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
+        <div className="flex flex-wrap gap-2">
           {visible.map((link) => (
             <SocialLinkChip key={link.id} link={link} />
           ))}
         </div>
       )}
 
-      {/* 「つながり済みのみ」で、まだ見えないリンク */}
-      {locked.map((link) => {
-        const pending = requests.find(
-          (r) => r.direction === "outgoing" && r.status === "pending" && r.platform === link.platform,
-        );
-        return (
-          <div
-            key={link.id}
-            className="flex items-center gap-2 py-2 border-t border-gray-100 first:border-t-0"
-          >
-            <span className="w-7 h-7 rounded-lg bg-gray-100 text-gray-400 flex items-center justify-center flex-shrink-0">
-              <Lock className="w-3.5 h-3.5" />
-            </span>
-            <span className="text-sm text-gray-500 flex-1">
-              {linkTitle(link.platform, link.label)}
-            </span>
-
-            {link.disclosureStatus === "pending" ? (
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                  <Clock className="w-3.5 h-3.5" />
-                  申請中
-                </span>
-                {pending && (
-                  <button
-                    onClick={() => apply(link.id, () => cancelDisclosure(pending.id))}
-                    disabled={busyId === link.id}
-                    className="text-xs text-gray-400 hover:text-gray-600 underline disabled:opacity-50"
-                  >
-                    取り下げ
-                  </button>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={() => apply(link.id, () => requestDisclosure(link.id, ownerId))}
-                disabled={busyId === link.id}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-gray-800 transition-colors disabled:opacity-50"
+      {/* まだ教えてもらっていないもの。鍵の理由と、開け方だけを書く */}
+      {locked.length > 0 && (
+        <div className={visible.length > 0 ? "mt-4 pt-4 border-t border-gray-100" : ""}>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {locked.map((link) => (
+              <span
+                key={link.id}
+                className="inline-flex items-center gap-2 pl-2 pr-3 py-2 rounded-xl border border-gray-200 bg-gray-50"
               >
-                <Send className="w-3 h-3" />
-                {link.disclosureStatus === "declined" ? "再申請" : "開示を申請"}
-              </button>
-            )}
+                <span className="w-7 h-7 rounded-lg bg-gray-200 text-gray-400 flex items-center justify-center flex-shrink-0">
+                  <Lock className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-sm text-gray-400">
+                  {linkTitle(link.platform, link.label)}
+                </span>
+              </span>
+            ))}
           </div>
-        );
-      })}
+          <p className="text-[11px] text-gray-400 leading-relaxed">
+            つながり申請を送って、受けてもらえたときに教えてもらえます。
+            何を教えるかは相手が選びます。
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -279,8 +238,8 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
         </button>
       </div>
       <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-        「つながり済みのみ」にすると、出会いを記録した相手だけに表示されます。それ以外の方からは
-        「開示を申請」が届き、承認した相手にだけ見えるようになります。
+        「承認した人だけ」にすると、つながり申請を受けたときに自分が選んで教えた相手にだけ
+        表示されます。教える前は、リンクがあること自体は見えますがURLは渡りません。
       </p>
 
       {message && (
@@ -355,7 +314,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
         onClick={() =>
           setLinks((prev) => [
             ...prev,
-            { platform: "line", label: null, url: "", visibility: "connections" },
+            { platform: "line", label: null, url: "", visibility: "approved" },
           ])
         }
         className="mt-3 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"

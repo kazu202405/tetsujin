@@ -10,7 +10,7 @@ import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
 export const dynamic = "force-dynamic";
 
 const PLATFORMS = new Set(["line", "instagram", "x", "facebook", "website", "other"]);
-const VISIBILITIES = new Set(["public", "connections", "private"]);
+const VISIBILITIES = new Set(["public", "approved", "private"]);
 const MAX_LINKS = 12;
 
 export async function GET() {

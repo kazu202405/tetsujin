@@ -13,7 +13,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { usePendingIncomingCount } from "@/lib/social-api";
+import { usePendingIncomingCount } from "@/lib/connection-requests-api";
 
 const SUB_TABS = [
   { href: "/app/connections", label: "記録" },

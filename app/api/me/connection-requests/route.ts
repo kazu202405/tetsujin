@@ -12,6 +12,8 @@ import { signAvatarPaths } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface Row {
   id: string;
   direction: "sent" | "received";
@@ -132,6 +134,8 @@ export async function PATCH(request: Request) {
     accept?: boolean;
     reason?: string;
     message?: string;
+    /** 承認するときに「相手に教える」リンクのid */
+    linkIds?: unknown;
   } | null;
 
   if (!body?.id || typeof body.accept !== "boolean") {
@@ -144,11 +148,21 @@ export async function PATCH(request: Request) {
   const reason =
     body.reason && ["not_now", "timing", "other"].includes(body.reason) ? body.reason : "other";
 
+  // 🔴 UUIDの形だけをそのまま通す。
+  //    「自分のリンクか」「承認した人だけに設定しているか」の判定は
+  //    respond_connection_request() の中でやる（ここで信じない）。
+  const linkIds = Array.isArray(body.linkIds)
+    ? body.linkIds
+        .filter((v): v is string => typeof v === "string" && UUID_RE.test(v))
+        .slice(0, 20)
+    : [];
+
   const { error } = await supabase.rpc("respond_connection_request", {
     p_id: body.id,
     p_accept: body.accept,
     p_reason: body.accept ? null : reason,
     p_message: typeof body.message === "string" ? body.message.slice(0, 1000) : null,
+    p_link_ids: linkIds,
   });
 
   if (error) {
