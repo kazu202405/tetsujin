@@ -7,6 +7,20 @@
 // 既存会員は年払い済みの期間が残っているので、
 // その終わり（billing_starts_on）まで請求しない。
 // Stripe の trial_end に渡すと、その日から最初の請求が始まる。
+//
+// ------------------------------------------------------------
+// 請求日を毎月1日に揃える（2026-08-30 依頼主決定）
+// ------------------------------------------------------------
+// 入金の確認がバラバラの日に来るのを避けるため。申込日から月末までは
+// 無料にする（billing_cycle_anchor ＋ proration_behavior: "none"）。
+//
+// 🔴 trial_end は使えない。「48時間以上先」でないと Stripe に弾かれるため、
+//    月末（30日・31日）に申し込んだ人の決済画面が開けなくなる。
+//
+// 🔴 Checkout では trial_end と billing_cycle_anchor を同時に指定できない。
+//    ∴ どちらか一方。年払い済みの期間が残っている人（billing_starts_on）は
+//    そちらを優先する。その人の請求日は1日に揃わないが、
+//    「払った分より早く請求する」よりはるかにましなので、こちらを立てる。
 // ============================================================
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
@@ -14,6 +28,24 @@ import { appUrl, isStripeConfigured, stripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * 次に来る「1日 00:00 JST」の Unix 秒。
+ *
+ * 今日が1日なら undefined を返す＝起点を指定せず、その場で請求する。
+ * 指定してしまうと翌月1日まで丸ごと1か月無料になってしまう。
+ * 起点を渡さなければ Stripe は「今」を起点にするので、
+ * 結果として毎月1日の請求になり、揃えたい形と一致する。
+ *
+ * Vercel の実行環境はUTCなので、日付の判定は必ず+9時間してから行う。
+ * ここを素のローカル時刻でやると、日本の1日の朝が「まだ前月末」に見える。
+ */
+function nextFirstOfMonthJst(now: Date = new Date()): number | undefined {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  if (jst.getUTCDate() === 1) return undefined;
+  // 翌月1日 00:00 JST ＝ UTC では「翌月1日の -9時」。Date.UTC が桁上がりを吸収する。
+  return Math.floor(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth() + 1, 1, -9, 0, 0) / 1000);
+}
 
 export async function POST() {
   if (!isStripeConfigured) {
@@ -120,12 +152,18 @@ export async function POST() {
         ? Math.floor(startsOn.getTime() / 1000)
         : undefined;
 
+    // 請求日を1日に揃える。trial_end がある人には付けない（同時指定は不可）。
+    const anchor = trialEnd ? undefined : nextFirstOfMonthJst();
+
     const session = await client.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
       line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
       subscription_data: {
         ...(trialEnd ? { trial_end: trialEnd } : {}),
+        ...(anchor
+          ? { billing_cycle_anchor: anchor, proration_behavior: "none" as const }
+          : {}),
         metadata: { member_id: member.id },
       },
       // 誰の支払いかを取り違えないよう、Webhookで使う印を必ず付ける
