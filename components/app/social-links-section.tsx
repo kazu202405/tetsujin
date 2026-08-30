@@ -35,6 +35,7 @@ import {
   fetchProfileSocialLinks,
   saveMySocialLinks,
 } from "@/lib/social-api";
+import { setCached } from "@/lib/client-cache";
 import { PlatformIcon } from "./platform-icon";
 
 function VisibilityBadge({ visibility }: { visibility: SocialVisibility }) {
@@ -207,7 +208,11 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
     setMessage({ type: "success", text: "保存しました" });
     // 採番されたIDを取り込む（次の保存で作り直しにならないように）
     try {
-      setLinks(await fetchMySocialLinks());
+      const saved = await fetchMySocialLinks();
+      setLinks(saved);
+      // 🔴 マイページの「連絡先を登録しませんか」は覚えている内容で出す。
+      //    ここで入れ替えないと、登録したのに戻ると案内が出たままになる。
+      setCached("my-social-links", saved);
     } catch {
       /* 取得できなくても保存自体は済んでいる */
     }

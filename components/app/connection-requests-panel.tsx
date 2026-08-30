@@ -311,7 +311,7 @@ export function ConnectionRequestsPanel() {
                   「承認した人だけ」に設定している連絡先がまだありません。
                 </p>
                 <Link
-                  href="/app/mypage/profile-sheet"
+                  href="/app/mypage/profile-sheet#sns"
                   className="text-xs font-bold text-[var(--tetsu-pink)] hover:underline"
                 >
                   マイページで登録する

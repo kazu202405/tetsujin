@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 const EMPTY = {
   hasAvatar: false,
   hasSheet: false,
+  hasSocialLink: false,
   visitedBoard: false,
   hasPost: false,
   joinedEvent: false,
@@ -24,6 +25,7 @@ const EMPTY = {
 interface Row {
   has_avatar: boolean;
   has_sheet: boolean;
+  has_social_link: boolean;
   visited_board: boolean;
   has_post: boolean;
   joined_event: boolean;
@@ -50,6 +52,7 @@ export async function GET() {
     {
       hasAvatar: row.has_avatar,
       hasSheet: row.has_sheet,
+      hasSocialLink: row.has_social_link,
       visitedBoard: row.visited_board,
       hasPost: row.has_post,
       joinedEvent: row.joined_event,

@@ -21,6 +21,7 @@ import { useCachedResource, setCached } from "@/lib/client-cache";
 export interface OnboardingProgress {
   hasAvatar: boolean;
   hasSheet: boolean;
+  hasSocialLink: boolean;
   visitedBoard: boolean;
   hasPost: boolean;
   joinedEvent: boolean;
@@ -34,6 +35,7 @@ const CACHE_KEY = "onboarding";
 const UNKNOWN: OnboardingProgress = {
   hasAvatar: false,
   hasSheet: false,
+  hasSocialLink: false,
   visitedBoard: false,
   hasPost: false,
   joinedEvent: false,
@@ -65,6 +67,15 @@ export function OnboardingChecklist() {
       href: "/app/mypage/profile-sheet",
     },
     {
+      // 🔴 これが無いと、マッチングで相手を見つけても連絡する手段が無い。
+      //    申請を受けた側も、承認画面で「教えられるものがありません」になる。
+      key: "social",
+      label: "連絡先（LINEなど）を登録する",
+      hint: "つながり申請を受けたとき、教える相手を選べます",
+      done: data.hasSocialLink,
+      href: "/app/mypage/profile-sheet#sns",
+    },
+    {
       key: "board",
       label: "掲示板を見る",
       hint: "会の動きはここに集まります",
@@ -88,7 +99,7 @@ export function OnboardingChecklist() {
     {
       key: "connection",
       label: "会った人を記録する",
-      hint: "記録するとその方のSNSが見えます",
+      hint: "いつ・どこで会ったかを自分用に残せます",
       done: data.hasConnection,
       href: "/app/connections",
     },

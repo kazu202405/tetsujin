@@ -211,6 +211,22 @@ export default function ProfileSheetPage() {
     return () => observer.disconnect();
   }, [mode]);
 
+  // ------------------------------------------------------------
+  // 「連絡先を登録する」から #sns で来たとき
+  // ------------------------------------------------------------
+  // 🔴 このページの既定は preview で、SNS欄は編集モードでしか描画されない。
+  //    そのまま送っても、着いた先には何も無い（登録が進まない理由のひとつ）。
+  //    ∴ 編集を開いてから、描画された後に送る。
+  useEffect(() => {
+    if (window.location.hash === "#sns") setMode("edit");
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "edit" || window.location.hash !== "#sns") return;
+    // setMode の再描画が済んでから測る（この時点で #sns は必ずDOMにある）
+    document.getElementById("sns")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [mode]);
+
   // 外側クリックでカラーピッカーを閉じる
   useEffect(() => {
     if (!showColorPicker) return;
@@ -801,7 +817,9 @@ export default function ProfileSheetPage() {
                   無いまま全会員に見えていた。入力口が2つあると必ず片方に入って事故るので、
                   member_social_links の1本に統一している。
                   名刺カードに載るのは「全員に公開」にしたものだけ。 */}
-              <SocialLinksSection ownerMode onSaved={reloadPublicLinks} />
+              <div id="sns" className="scroll-mt-24">
+                <SocialLinksSection ownerMode onSaved={reloadPublicLinks} />
+              </div>
             </div>
           )}
 
