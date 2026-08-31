@@ -181,6 +181,7 @@ export function MatchingOptionsPanel() {
       </h2>
       <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
         マイページの「つながりの設定」に出る選択肢です。ここでの変更はすぐ全会員に反映されます。
+        左の数字は並び順（小さいほど先）。10・20・30 と空けてあるのは、あとから間に挿し込めるようにするためです。
       </p>
 
       <div className="flex flex-wrap gap-1.5 mb-4">
@@ -248,6 +249,7 @@ export function MatchingOptionsPanel() {
                   }
                   inputMode="numeric"
                   aria-label="並び順"
+                  title="並び順（小さいほど先）。10・20・30 と数字を空けてあるのは、あとから間に挿し込めるようにするためです。1・2・3 だと間に入れるときに全部振り直しになります"
                   className="w-14 px-2 py-1.5 rounded-lg border border-gray-200 text-xs text-center focus:outline-none focus:ring-2 focus:ring-gray-900"
                 />
                 <input
@@ -346,7 +348,7 @@ export function MatchingOptionsPanel() {
           <input
             value={newCode}
             onChange={(e) => setNewCode(e.target.value)}
-            placeholder="コード（例：kyoto）"
+            placeholder="コード（例：kyoto／京都 でも可）"
             className="w-40 px-2.5 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
           <button
@@ -362,9 +364,16 @@ export function MatchingOptionsPanel() {
             追加
           </button>
         </div>
+        {/* 🔴 「半角英数字で」と書いていたが、DBが弾いているのは空白とカンマだけ。
+               実際、年代は 20代 / 30代、性別は 男 / 女 と日本語のコードが入っている
+               （会員台帳の値と一致させる必要があるため）。守られていない決まりを
+               書くと、他の注意書きまで信用されなくなる。 */}
         <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
-          コードは会員のデータが指す名前で、<strong>あとから変えられません</strong>。
-          半角英数字（空白・カンマは不可）で、意味の分かる短い名前にしてください。表示名はいつでも直せます。
+          <strong>表示名</strong>は会員に見える文字で、いつでも直せます。
+          <strong>コード</strong>は会員のデータに保存される名前で、
+          <strong>あとから変えられません</strong>
+          （変えると、それを選んでいた人の設定が黙って外れます）。
+          コードは画面に出ないので、意味が分かれば何でも構いません。空白とカンマだけ使えません。
         </p>
       </div>
     </div>
