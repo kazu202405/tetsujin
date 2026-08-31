@@ -8,6 +8,8 @@ import { roleLabelOf, type MemberRoleCode } from "@/lib/member-roles";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { useCachedResource } from "@/lib/client-cache";
 import { LoadingRows } from "@/components/app/skeleton";
+import { useCurrentMember } from "@/lib/current-member";
+import { Tags, ChevronRight } from "lucide-react";
 
 const EMPTY_MEMBERS: DirectoryMember[] = [];
 
@@ -21,6 +23,8 @@ type DirectoryMember = {
   membership_type: string | null;
   role: MemberRoleCode;
   avatar_url?: string | null;
+  /** 本人が「つながりの設定」で選んだ業種の表示名。未設定なら空 */
+  industries: string[];
 };
 
 // カードを押すとその人のプロフィールシートへ。
@@ -54,6 +58,18 @@ function MemberCard({ member }: { member: DirectoryMember }) {
         {member.nickname && <p className="text-[11px] text-gray-400 truncate mt-0.5">{member.nickname}</p>}
         {member.job && <p className="text-xs text-gray-500 truncate mt-0.5">{member.job}</p>}
         {member.grip && <p className="text-xs text-gray-400 truncate mt-0.5">{member.grip}</p>}
+        {member.industries.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {member.industries.map((label) => (
+              <span
+                key={label}
+                className="px-1.5 py-0.5 rounded bg-[var(--tetsu-warm)] text-[10px] text-gray-600"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       {member.member_no != null && (
         <span className="text-[10px] font-mono text-gray-300 flex-shrink-0">#{member.member_no}</span>
@@ -73,24 +89,48 @@ export default function MembersPage() {
   const loadError = status === "error";
   const [searchQuery, setSearchQuery] = useState("");
   const [memberTypeFilter, setMemberTypeFilter] = useState<"全て" | "法人" | "個人">("全て");
+  const [industryFilter, setIndustryFilter] = useState<string | null>(null);
+  const me = useCurrentMember();
 
+  // 🔴 業種で探せる画面に来た人が、自分は探されない側にいると気づける場所。
+  //    一覧に自分の行も入っているので、そこから見る（別のAPIを増やさない）。
+  //    登録すれば自然に消えるので、閉じるボタンは付けない。
+  const myIndustriesEmpty = useMemo(() => {
+    if (!members || !me) return false;
+    const mine = members.find((m) => m.id === me.id);
+    return Boolean(mine) && mine!.industries.length === 0;
+  }, [members, me]);
 
+  // 🔴 出すのは「実際に誰かが選んでいる業種」だけ。24項目を並べると
+  //    ほとんどが0件のまま出て、空っぽさだけが目立つ。
+  //    件数を添えるのは、0件でないことを見せるためではなく、
+  //    「まだ誰も入れていない」を壊れていると誤解させないため。
+  const industries = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const m of members ?? []) {
+      for (const label of m.industries) count.set(label, (count.get(label) ?? 0) + 1);
+    }
+    return [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"));
+  }, [members]);
 
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return (members ?? []).filter((member) => {
       const matchesType =
         memberTypeFilter === "全て" || member.membership_type === memberTypeFilter;
+      const matchesIndustry = !industryFilter || member.industries.includes(industryFilter);
       const matchesSearch =
         !query ||
         member.name.toLowerCase().includes(query) ||
         member.nickname?.toLowerCase().includes(query) ||
         member.job?.toLowerCase().includes(query) ||
         member.grip?.toLowerCase().includes(query) ||
+        // 業種名でも引けるようにする（「不動産」と打った人の期待に合う）
+        member.industries.some((i) => i.toLowerCase().includes(query)) ||
         String(member.member_no ?? "").includes(query);
-      return matchesType && Boolean(matchesSearch);
+      return matchesType && matchesIndustry && Boolean(matchesSearch);
     });
-  }, [members, memberTypeFilter, searchQuery]);
+  }, [members, memberTypeFilter, industryFilter, searchQuery]);
 
   return (
     <div className="min-h-screen">
@@ -121,16 +161,65 @@ export default function MembersPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="名前・呼び名・職業・会員番号で検索..."
+              placeholder="名前・呼び名・職業・業種・会員番号で検索..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
             />
           </div>
+
+          {/* 業種。誰も選んでいない業種は出さない（0件が並ぶと空っぽさだけが目立つ） */}
+          {industries.length > 0 && (
+            <div className="flex gap-1.5 mt-3 overflow-x-auto pb-0.5">
+              <button
+                onClick={() => setIndustryFilter(null)}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
+                  industryFilter === null
+                    ? "bg-gray-900 text-white"
+                    : "bg-white text-gray-500 border border-gray-200"
+                }`}
+              >
+                業種すべて
+              </button>
+              {industries.map(([label, count]) => (
+                <button
+                  key={label}
+                  onClick={() => setIndustryFilter(industryFilter === label ? null : label)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
+                    industryFilter === label
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-500 border border-gray-200"
+                  }`}
+                >
+                  {label}
+                  <span className="ml-1 font-normal text-gray-400">{count}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24">
+        {myIndustriesEmpty && (
+          <Link href="/app/mypage/matching" className="block mb-6 group">
+            <div className="bg-white rounded-2xl border border-[var(--tetsu-pink)]/30 shadow-sm p-4 flex items-center gap-3 hover:border-[var(--tetsu-pink)]/60 transition-colors">
+              <span className="w-9 h-9 rounded-xl bg-[var(--tetsu-pink-pale)] text-[var(--tetsu-pink)] flex items-center justify-center flex-shrink-0">
+                <Tags className="w-4 h-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-gray-900">
+                  あなたの業種を登録しませんか
+                </span>
+                <span className="block text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                  登録すると、この一覧で業種から探してもらえるようになります。
+                </span>
+              </span>
+              <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-[var(--tetsu-pink)] flex-shrink-0" />
+            </div>
+          </Link>
+        )}
+
         {members === null ? (
           <LoadingRows rows={6} />
         ) : loadError ? (

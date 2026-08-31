@@ -31,6 +31,9 @@ export async function GET() {
   const withAvatars = rows.map((row) => ({
     ...row,
     avatar_url: signed[row.avatar_path as string] ?? null,
+    // 🔴 必ず配列で返す。member_directory() に industries を足す前の状態でも
+    //    画面が落ちないようにする（アプリのデプロイとDBの適用は別々に起きる）。
+    industries: Array.isArray(row.industries) ? (row.industries as string[]) : [],
   }));
 
   return NextResponse.json(withAvatars, { headers });
