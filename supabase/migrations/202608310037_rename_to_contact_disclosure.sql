@@ -28,7 +28,7 @@ CREATE OR REPLACE FUNCTION public.send_connection_request(
   p_purposes TEXT[],
   p_message  TEXT DEFAULT NULL
 )
-RETURNS VOID
+RETURNS UUID
 LANGUAGE plpgsql
 VOLATILE
 SECURITY DEFINER
@@ -36,8 +36,10 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_me       UUID := public.current_member_id();
+  v_id       UUID;
   v_name     TEXT;
   v_is_sales BOOLEAN;
+  v_last     TIMESTAMPTZ;
 BEGIN
   IF v_me IS NULL THEN
     RAISE EXCEPTION 'ログインが必要です' USING ERRCODE = '42501';
@@ -46,27 +48,48 @@ BEGIN
     RAISE EXCEPTION '自分には申請できません' USING ERRCODE = '22023';
   END IF;
   IF COALESCE(array_length(p_purposes, 1), 0) = 0 THEN
-    RAISE EXCEPTION '目的を1つ以上選んでください' USING ERRCODE = '22023';
+    RAISE EXCEPTION 'つながりたい目的を選んでください' USING ERRCODE = '22023';
   END IF;
 
-  -- 生きている申請が既にあるなら二重に出させない
+  IF NOT EXISTS (SELECT 1 FROM public.members WHERE id = p_to AND is_withdrawn = FALSE) THEN
+    RAISE EXCEPTION 'この方には申請できません' USING ERRCODE = 'P0002';
+  END IF;
+
+  -- 生きている申請があるなら二重に出させない
   IF EXISTS (
-    SELECT 1 FROM public.connection_requests r
-     WHERE r.from_member_id = v_me AND r.to_member_id = p_to
-       AND r.status = 'pending' AND r.expires_at > NOW()
+    SELECT 1 FROM public.connection_requests
+     WHERE from_member_id = v_me AND to_member_id = p_to
+       AND status = 'pending' AND expires_at > NOW()
   ) THEN
     RAISE EXCEPTION 'すでに申請中です' USING ERRCODE = '23505';
   END IF;
 
+  -- 🔴 断られた直後の再申請を止める（方針書の「断られたら追わない」）。
+  --    止めないと、この機能が一方的な営業の道具になる。
+  SELECT MAX(responded_at) INTO v_last
+    FROM public.connection_requests
+   WHERE from_member_id = v_me AND to_member_id = p_to AND status = 'declined';
+
+  IF v_last IS NOT NULL AND v_last > NOW() - INTERVAL '90 days' THEN
+    RAISE EXCEPTION 'この方には、しばらく経ってからもう一度お試しください' USING ERRCODE = '22023';
+  END IF;
+
+  -- 期限切れの pending が残っていると一意制約に当たるので畳んでおく
+  UPDATE public.connection_requests
+     SET status = 'declined', responded_at = COALESCE(responded_at, expires_at)
+   WHERE from_member_id = v_me AND to_member_id = p_to
+     AND status = 'pending' AND expires_at <= NOW();
+
   INSERT INTO public.connection_requests (from_member_id, to_member_id, purposes, message)
-  VALUES (v_me, p_to, p_purposes, NULLIF(TRIM(COALESCE(p_message, '')), ''));
+  VALUES (v_me, p_to, p_purposes, NULLIF(TRIM(COALESCE(p_message, '')), ''))
+  RETURNING id INTO v_id;
 
   SELECT name INTO v_name FROM public.members WHERE id = v_me;
 
+  -- 営業目的が含まれるなら、お知らせの時点で伝える（方針書6番）
   SELECT EXISTS (
-    SELECT 1 FROM public.matching_options o
-     WHERE o.category = 'purpose' AND o.is_sales
-       AND o.code = ANY (p_purposes)
+    SELECT 1 FROM public.matching_options
+     WHERE category = 'purpose' AND is_sales AND code = ANY(p_purposes)
   ) INTO v_is_sales;
 
   INSERT INTO public.notifications (recipient_id, actor_id, type, title, message, href)
@@ -79,6 +102,8 @@ BEGIN
     END,
     '/app/requests'
   );
+
+  RETURN v_id;
 END;
 $$;
 
@@ -173,8 +198,6 @@ BEGIN
   );
 END;
 $$;
-
-REVOKE ALL ON FUNCTION public.respond_connection_request(UUID, BOOLEAN, TEXT, TEXT, UUID[]) FROM PUBLIC, anon;
 
 REVOKE ALL ON FUNCTION public.respond_connection_request(UUID, BOOLEAN, TEXT, TEXT, UUID[])
   FROM PUBLIC, anon;
