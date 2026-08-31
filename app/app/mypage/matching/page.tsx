@@ -62,6 +62,50 @@ const AGE_RANGES = [
 ];
 const GENDERS = ["男", "女"];
 
+// ------------------------------------------------------------
+// 地域のまとめ選択
+// ------------------------------------------------------------
+// 🔴 47都道府県を1つずつ押させない。「全国で活動している」人が
+//    47回タップするのは現実的でなく、途中でやめる＝地域が空のまま
+//    になる。地域が空だと、地域で探している人からは見つからない。
+//
+// 区分は一般的な8地方区分。どの県が入るかはボタンを押す前に
+// title で読めるようにする（「関西に三重は入るのか」で迷わせない）。
+//
+// 運営が地域を足した場合、その項目はどのまとめにも入らない
+// （個別に押せば選べる）。まとめの中身を勝手に広げるより、
+// 押した内容が毎回同じである方が信用できる。
+const REGION_GROUPS: { label: string; codes: string[] }[] = [
+  {
+    label: "北海道・東北",
+    codes: ["hokkaido", "aomori", "iwate", "miyagi", "akita", "yamagata", "fukushima"],
+  },
+  {
+    label: "関東",
+    codes: ["ibaraki", "tochigi", "gunma", "saitama", "chiba", "tokyo", "kanagawa"],
+  },
+  {
+    label: "中部",
+    codes: [
+      "niigata", "toyama", "ishikawa", "fukui", "yamanashi",
+      "nagano", "gifu", "shizuoka", "aichi",
+    ],
+  },
+  {
+    label: "関西",
+    codes: ["mie", "shiga", "kyoto", "osaka", "hyogo", "nara", "wakayama"],
+  },
+  { label: "中国", codes: ["tottori", "shimane", "okayama", "hiroshima", "yamaguchi"] },
+  { label: "四国", codes: ["tokushima", "kagawa", "ehime", "kochi"] },
+  {
+    label: "九州・沖縄",
+    codes: ["fukuoka", "saga", "nagasaki", "kumamoto", "oita", "miyazaki", "kagoshima", "okinawa"],
+  },
+];
+
+/** 全国＝47都道府県。海外は含めない（「全国」は国内のことなので） */
+const ALL_PREFECTURES = REGION_GROUPS.flatMap((g) => g.codes);
+
 /** 必須指定に使うカテゴリ名（DB側の required に入れる値） */
 const REQUIRED_KEY: Record<string, string> = {
   purposes: "purpose",
@@ -74,6 +118,50 @@ const REQUIRED_KEY: Record<string, string> = {
   hobbies: "hobby",
   interests: "interest",
 };
+
+/** 地域だけに出すまとめ選択。押すと、その地方の県をまとめて付け外しする。 */
+function BulkPicker({
+  options,
+  selected,
+  onBulk,
+}: {
+  options: Option[];
+  selected: string[];
+  onBulk: (codes: string[], on: boolean) => void;
+}) {
+  const nameOf = (code: string) => options.find((o) => o.code === code)?.label ?? code;
+
+  const button = (label: string, codes: string[]) => {
+    // 全部入っていれば「外す」、そうでなければ「付ける」。
+    // 半分だけ選んでいる状態から押したときは、まず全部付くほうが素直
+    // （いきなり消えると、それまでの選択まで失われたように見える）。
+    const all = codes.every((c) => selected.includes(c));
+    return (
+      <button
+        key={label}
+        type="button"
+        onClick={() => onBulk(codes, !all)}
+        // 🔴 中身を読めるようにする。「関西に三重は入るのか」で
+        //    迷わせないため、押す前に確かめられること自体が必要。
+        title={codes.map(nameOf).join("・")}
+        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+          all
+            ? "bg-gray-700 text-white border-gray-700"
+            : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
+        }`}
+      >
+        {label}
+      </button>
+    );
+  };
+
+  return (
+    <div className="flex flex-wrap gap-1.5 mb-3 pb-3 border-b border-gray-100">
+      {button("全国", ALL_PREFECTURES)}
+      {REGION_GROUPS.map((g) => button(g.label, g.codes))}
+    </div>
+  );
+}
 
 function Chips({
   options,
@@ -175,6 +263,22 @@ export default function MatchingSettingsPage() {
   const toggle = (bag: Bag, setBag: (b: Bag) => void, key: string, code: string) => {
     const cur = bag[key] ?? [];
     setBag({ ...bag, [key]: cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code] });
+  };
+
+  // まとめ選択。付けるときは重複させない、外すときは指定分だけ抜く
+  // （その地方以外の選択や、まとめに入っていない項目は触らない）。
+  const setMany = (
+    bag: Bag,
+    setBag: (b: Bag) => void,
+    key: string,
+    codes: string[],
+    on: boolean,
+  ) => {
+    const cur = bag[key] ?? [];
+    const next = on
+      ? [...cur, ...codes.filter((c) => !cur.includes(c))]
+      : cur.filter((c) => !codes.includes(c));
+    setBag({ ...bag, [key]: next });
   };
 
   const save = async () => {
@@ -370,6 +474,13 @@ export default function MatchingSettingsPage() {
                     <h2 className="text-sm font-bold text-gray-900 mb-1">{s.title}</h2>
                     {s.hint && <p className="text-[11px] text-gray-400 mb-3">{s.hint}</p>}
                     <div className={s.hint ? "" : "mt-3"}>
+                      {s.category === "region" && (
+                        <BulkPicker
+                          options={byCategory[s.category] ?? []}
+                          selected={profile[s.key] ?? []}
+                          onBulk={(codes, on) => setMany(profile, setProfile, s.key, codes, on)}
+                        />
+                      )}
                       <Chips
                         options={byCategory[s.category] ?? []}
                         selected={profile[s.key] ?? []}
@@ -425,6 +536,13 @@ export default function MatchingSettingsPage() {
                       </div>
                       {s.hint && <p className="text-[11px] text-gray-400 mb-3">{s.hint}</p>}
                       <div className={s.hint ? "" : "mt-3"}>
+                        {s.category === "region" && (
+                          <BulkPicker
+                            options={byCategory[s.category] ?? []}
+                            selected={wants[s.key] ?? []}
+                            onBulk={(codes, on) => setMany(wants, setWants, s.key, codes, on)}
+                          />
+                        )}
                         <Chips
                           options={byCategory[s.category] ?? []}
                           selected={wants[s.key] ?? []}
