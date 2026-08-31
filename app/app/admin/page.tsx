@@ -649,8 +649,9 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
     sheet: rows.filter((r) => !r.isWithdrawn && r.hasSheet).length,
     matching: rows.filter((r) => !r.isWithdrawn && r.hasMatching).length,
   };
+  // ひとことは必須ではないので、未記入の数には入れない（依頼主判断）
   const notFilled = rows.filter(
-    (r) => !r.isWithdrawn && (!r.hasGrip || !r.hasSheet || !r.hasMatching),
+    (r) => !r.isWithdrawn && (!r.hasSheet || !r.hasMatching),
   );
 
   return (
@@ -664,7 +665,7 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
         </p>
         <div className="grid grid-cols-3 gap-3 mb-4">
           {[
-            { label: "ひとこと", value: filled.grip, hint: "メンバー一覧に出る1行" },
+            { label: "ひとこと", value: filled.grip, hint: "任意。一覧に出る1行" },
             { label: "プロフィールシート", value: filled.sheet, hint: "名刺カード" },
             { label: "つながりの設定", value: filled.matching, hint: "業種・立場・地域" },
           ].map((x) => {
@@ -684,7 +685,9 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
           })}
         </div>
         <p className="text-[11px] text-gray-500">
-          どれか1つでも未記入の方：<b className="text-gray-900">{notFilled.length}名</b>
+          プロフィールシートかつながりの設定が未記入の方：
+          <b className="text-gray-900">{notFilled.length}名</b>
+          <span className="text-gray-400">（ひとことは任意なので数に入れていません）</span>
         </p>
       </div>
 
@@ -840,8 +843,21 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
                   </p>
                 </div>
                 <div>
-                  <p className="text-gray-400">紹介</p>
-                  <p className="text-gray-700 font-medium">{row.referralCount}人</p>
+                  {/* 🔴 ひとことは必須にしない（依頼主判断）。書いてほしいが、
+                         書かないことを未記入として責める種類の欄ではない。
+                         ∴ ここに出すのはプロフィールシートとつながりの設定だけ。 */}
+                  <p className="text-gray-400">未記入</p>
+                  <p className="font-medium">
+                    {!row.hasSheet || !row.hasMatching ? (
+                      <span className="text-amber-700">
+                        {[!row.hasSheet && "シート", !row.hasMatching && "つながり"]
+                          .filter(Boolean)
+                          .join("・")}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">なし</span>
+                    )}
+                  </p>
                 </div>
                 <div>
                   <p className="text-gray-400">継続</p>
