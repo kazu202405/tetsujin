@@ -18,7 +18,12 @@
 -- 一覧のどのカードでも同じ順で並ぶようにする。
 -- ============================================================
 
-CREATE OR REPLACE FUNCTION public.member_directory()
+-- 🔴 戻り値の列が増えるので CREATE OR REPLACE では作り直せない
+--    （42P13 cannot change return type of existing function）。
+--    先に落とす。GRANT も作り直しになるので下で付け直している。
+DROP FUNCTION IF EXISTS public.member_directory();
+
+CREATE FUNCTION public.member_directory()
 RETURNS TABLE (
   id              UUID,
   member_no       INTEGER,
