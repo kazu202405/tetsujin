@@ -1,7 +1,10 @@
 "use client";
 
 // ============================================================
-// つながり申請を出す
+// 連絡先を教えてもらう申し込み
+// 🔴 「つながり申請」という言い方はやめた（2026-08-31）。アプリの中だけの
+//    つながりには意味が無く、実際にやっているのは「自分のSNSのどれを
+//    この人に教えるか」を相手が決めることだけだから。
 // ============================================================
 // 方針書6番の実装。目的の選択を必須にすることで
 // 「営業目的を隠した接触」が構造的にできなくなる。
@@ -103,7 +106,7 @@ export function ConnectionRequestButton({
         className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[var(--tetsu-pink)] text-white text-sm font-bold hover:opacity-90 transition-opacity"
       >
         <Handshake className="w-4 h-4" />
-        つながりを申請する
+        連絡先を教えてもらう
       </button>
     );
   }
@@ -111,17 +114,17 @@ export function ConnectionRequestButton({
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5">
       <div className="flex items-start justify-between gap-3 mb-1">
-        <h3 className="text-sm font-bold text-gray-900">{memberName}さんにつながりを申請</h3>
+        <h3 className="text-sm font-bold text-gray-900">{memberName}さんに連絡先を聞く</h3>
         <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700">
           <X className="w-4 h-4" />
         </button>
       </div>
       <p className="text-[11px] text-gray-500 leading-relaxed mb-4">
-        何のためにつながりたいかを伝えます。相手は内容を見てから決めます。
+        何のために連絡を取りたいかを伝えます。相手は内容を見て、どの連絡先を教えるかを決めます。
       </p>
 
       <p className="text-xs font-bold text-gray-700 mb-2">
-        つながりたい目的<span className="text-[var(--tetsu-pink)] ml-1">必須</span>
+        連絡を取りたい目的<span className="text-[var(--tetsu-pink)] ml-1">必須</span>
       </p>
       <div className="flex flex-wrap gap-2 mb-4">
         {options.map((o) => {
@@ -155,7 +158,7 @@ export function ConnectionRequestButton({
         </p>
       )}
 
-      <p className="text-xs font-bold text-gray-700 mb-2">なぜつながりたいか</p>
+      <p className="text-xs font-bold text-gray-700 mb-2">なぜ連絡を取りたいか</p>
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}

@@ -71,7 +71,7 @@ export function OnboardingChecklist() {
       //    申請を受けた側も、承認画面で「教えられるものがありません」になる。
       key: "social",
       label: "連絡先（LINEなど）を登録する",
-      hint: "つながり申請を受けたとき、教える相手を選べます",
+      hint: "連絡先を聞かれたとき、どれを教えるか選べます",
       done: data.hasSocialLink,
       href: "/app/mypage/profile-sheet#sns",
     },

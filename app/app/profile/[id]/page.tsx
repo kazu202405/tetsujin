@@ -181,15 +181,15 @@ export default function ProfilePage({
           />
         </div>
 
-        {/* つながり申請。シートを読んだ直後がいちばん申し込みたい瞬間なので、
-            連絡先(SNS)より前に置く。 */}
+        {/* 連絡先を聞く導線。シートを読んだ直後がいちばん聞きたい瞬間なので、
+            SNS欄より前に置く。 */}
         {!profile.isMe && (
           <div className="flex justify-center">
             <ConnectionRequestButton memberId={profile.id} memberName={profile.name} />
           </div>
         )}
 
-        {/* SNS・リンク（教えてもらった分だけ。残りは上のつながり申請から） */}
+        {/* SNS・リンク（教えてもらった分だけ。残りは上の「連絡先を教えてもらう」から） */}
         {!profile.isMe && <SocialLinksSection viewerMode={{ ownerId: profile.id }} />}
 
         {profile.isMe && (

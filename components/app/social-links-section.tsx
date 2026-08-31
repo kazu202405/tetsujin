@@ -161,8 +161,7 @@ function ViewerLinks({ ownerId }: { ownerId: string }) {
             ))}
           </div>
           <p className="text-[11px] text-gray-400 leading-relaxed">
-            つながり申請を送って、受けてもらえたときに教えてもらえます。
-            何を教えるかは相手が選びます。
+            「連絡先を教えてもらう」から申し込むと、相手が教えると決めたものだけ見えます。
           </p>
         </div>
       )}
@@ -245,7 +244,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
         </button>
       </div>
       <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-        「承認した人だけ」にすると、つながり申請を受けたときに自分が選んで教えた相手にだけ
+        「承認した人だけ」にすると、連絡先を聞かれたときに自分が選んで教えた相手にだけ
         表示されます。教える前は、リンクがあること自体は見えますがURLは渡りません。
       </p>
 

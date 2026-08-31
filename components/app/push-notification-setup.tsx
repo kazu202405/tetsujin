@@ -373,7 +373,7 @@ export function PushNotificationSetup() {
       {msg && <p className="mt-3 text-xs text-gray-500 leading-relaxed">{msg}</p>}
 
       <p className="mt-5 pt-4 border-t border-gray-100 text-[11px] text-gray-400 leading-relaxed">
-        ※ コメント・つながり申請・イベントのお知らせが、アプリを閉じていても届きます。
+        ※ コメント・連絡先の申請・イベントのお知らせが、アプリを閉じていても届きます。
         種類ごとの受け取りは下の「通知」で切り替えられます。
       </p>
     </div>

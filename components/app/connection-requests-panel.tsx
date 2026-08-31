@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================================
-// つながり申請（受けた分・送った分）
+// 連絡先の申請（受けた分・送った分）
 // ============================================================
 // 🔴 期限切れの見せ方がこの機能の肝。
 //    受けた側には出さない（もう返答できないものを見せても気まずいだけ）。
@@ -115,10 +115,10 @@ export function ConnectionRequestsPanel() {
     <div className="mb-8">
       <h2 className="text-sm font-bold text-gray-900 mb-1 flex items-center gap-2">
         <Handshake className="w-4 h-4 text-[var(--tetsu-pink)]" />
-        つながりの申請
+        連絡先の申請
       </h2>
       <p className="text-[11px] text-gray-400 mb-4">
-        目的を伝えて申し込み、相手が受けるかどうかを選びます。
+        目的を伝えて連絡先をお願いし、相手が教えるかどうかを選びます。
       </p>
 
       <div className="flex gap-2 mb-4">
@@ -168,7 +168,7 @@ export function ConnectionRequestsPanel() {
                 </div>
                 {r.status === "accepted" && (
                   <span className="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold flex-shrink-0">
-                    つながりました
+                    教えてもらいました
                   </span>
                 )}
                 {r.status === "expired" && (
@@ -241,7 +241,7 @@ export function ConnectionRequestsPanel() {
               {r.status === "pending" && tab === "received" && (
                 <>
                 <p className="text-[11px] text-gray-400 leading-relaxed mb-2">
-                  受けるときに、自分の連絡先のどれを教えるかを選べます。
+                  教える連絡先は、このあと自分で選べます。
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
@@ -254,7 +254,7 @@ export function ConnectionRequestsPanel() {
                     ) : (
                       <Handshake className="w-3.5 h-3.5" />
                     )}
-                    つながりを受ける
+                    連絡先を教える
                   </button>
                   <button
                     onClick={() => {
@@ -286,7 +286,7 @@ export function ConnectionRequestsPanel() {
           <div className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[85vh] overflow-y-auto">
             <div className="flex items-start justify-between gap-3 mb-1">
               <h3 className="text-sm font-bold text-gray-900">
-                {acceptTarget.other.name}さんに教えるものを選んでください
+                {acceptTarget.other.name}さんに教える連絡先を選んでください
               </h3>
               <button
                 onClick={() => setAcceptTarget(null)}
