@@ -1,8 +1,9 @@
 // ============================================================
 // 出会い記録 一覧 / 追加
 // ============================================================
-// 記録は本人のメモ。相手にも他人にも中身は見せない。
-// 「つながっている」事実だけが SNS の公開範囲判定に効く。
+// 一覧は「参加した会から自動で作る分」＋「自分で記録した分」。
+// 自動ぶんは保存していない（読むたびに組み立てる）ので、
+// 参加を取り消せば自然に消える。手で書いた分だけが編集・削除できる。
 // ============================================================
 import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
 
 interface Row {
   id: string;
+  /** 'event' = 参加した会から自動で作った分（保存されていない）／'manual' = 自分で記録した分 */
+  source: "manual" | "event";
   person_id: string;
   person_name: string;
   person_job: string | null;
@@ -30,9 +33,9 @@ export async function GET() {
   if (!guard.ok) return guard.response;
   const { supabase } = guard;
 
-  const { data, error } = await supabase.rpc("my_connections");
+  const { data, error } = await supabase.rpc("my_meetings");
   if (error) {
-    console.error("my_connections failed", { code: error.code });
+    console.error("my_meetings failed", { code: error.code });
     return NextResponse.json(
       { error: "出会い記録を取得できませんでした" },
       { status: 500, headers: NO_STORE_HEADERS },
@@ -45,6 +48,9 @@ export async function GET() {
   return NextResponse.json(
     rows.map((r) => ({
       id: r.id,
+      // 会から自動で出している分は編集も削除もできない（元の行が無い）。
+      // 画面がそれを取り違えないよう、必ず一緒に返す。
+      source: r.source ?? "manual",
       occasion: r.occasion ?? "",
       metOn: r.met_on,
       location: r.location ?? "",

@@ -3,7 +3,8 @@
 // ============================================================
 // 出会い記録
 // ============================================================
-// 記録は本人のメモ。中身は相手にも他人にも見せない。
+// 一覧は参加した会から自動で並ぶ。ここで手入力するのは会の外で
+// 会った方の分だけ（自動で拾えないため）。中身は本人にしか見えない。
 //
 // 🔴 2026-08-30まで、この記録がSNSの公開範囲の鍵を兼ねていた。
 //    相手の同意も通知もなく作れるメモで相手の連絡先が開いてしまうため切り離した。
@@ -123,13 +124,26 @@ function ConnectionCard({
           )}
         </div>
 
-        <button
-          onClick={() => onDelete(connection.id)}
-          className="p-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
-          aria-label="削除"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {/* 🔴 会から自動で並んでいる分には削除を出さない。
+               消す元の行が無いので押しても何も起きず、
+               「消えない」という別の壊れ方に見える。
+               参加を取り消せばこの行も自然に消える。 */}
+        {connection.source === "manual" ? (
+          <button
+            onClick={() => onDelete(connection.id)}
+            className="p-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+            aria-label="削除"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        ) : (
+          <span
+            className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold flex-shrink-0"
+            title="参加した会から自動で並んでいます。参加を取り消すと消えます"
+          >
+            会から
+          </span>
+        )}
       </div>
     </div>
   );
@@ -237,14 +251,14 @@ export default function ConnectionsPage() {
   return (
     <div className="min-h-screen">
       <ConnectionsHeader
-        description="会った方を自分用に記録しておく場所です（相手には見えません）"
+        description="参加した会でご一緒した方が並びます。会の外で会った方は自分で追加できます"
         action={
           <button
             onClick={() => setShowForm((v) => !v)}
             className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors flex-shrink-0"
           >
             <Plus className="w-4 h-4" />
-            記録する
+            {showForm ? "閉じる" : "会の外で会った方を追加"}
           </button>
         }
       />
@@ -442,12 +456,12 @@ export default function ConnectionsPage() {
                 <Handshake className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                 <p className="text-sm text-gray-400">
                   {connections.length === 0
-                    ? "まだ記録がありません"
+                    ? "まだ出会いがありません"
                     : "このタグの記録はありません"}
                 </p>
                 {connections.length === 0 && (
                   <p className="text-xs text-gray-300 mt-1">
-                    会に参加したら「記録する」から残しておきましょう
+                    会に参加すると、同じ会に出た方がここに並びます
                   </p>
                 )}
               </div>
