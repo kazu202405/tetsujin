@@ -5,10 +5,13 @@
 // 他メンバーの閲覧ページ（/app/profile/[id]）で共有する。
 // - 値が空のセクションは非表示（メンバーごとに埋まっている項目だけ出す）
 // - SNSフッターは snsLinks がある時だけ（閲覧側は空にして下にSNS欄を置く）
+// - 自由記述のURLはリンクにする。JPEGに書き出すと青い下線つきの文字になるだけで
+//   崩れはしないが、画面で読む人はそのまま押せる方が早い。
 
 import { Upload } from "lucide-react";
 import { SocialPlatform, SOCIAL_PLATFORM_META } from "@/lib/social-links";
 import { PlatformIcon } from "./platform-icon";
+import { RichText } from "@/components/app/rich-text";
 
 // 名刺カードに載せるSNS（自由に追加/削除）
 export interface SheetSnsLink {
@@ -209,7 +212,7 @@ export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Pro
               <div className="flex-[2]">
                 <LineHeader>MY生歴</LineHeader>
                 <p className="px-5 py-3 text-base text-gray-600 whitespace-pre-wrap leading-[1.9]">
-                  {data.myHistory}
+                  <RichText text={data.myHistory} />
                 </p>
               </div>
             )}
@@ -218,7 +221,7 @@ export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Pro
               <div className="flex-1">
                 <LineHeader>TETSUJIN特典</LineHeader>
                 <p className="px-5 py-3 text-base text-gray-600 whitespace-pre-wrap leading-relaxed">
-                  {data.tetsujinBenefit}
+                  <RichText text={data.tetsujinBenefit} />
                 </p>
               </div>
             )}
@@ -227,7 +230,7 @@ export function ProfileSheetCard({ data, primaryColor, scale = 1, cardRef }: Pro
               <div className="flex-1">
                 <LineHeader>一言</LineHeader>
                 <p className="px-5 py-3 text-base text-gray-600 whitespace-pre-wrap leading-relaxed">
-                  {data.hitokoto}
+                  <RichText text={data.hitokoto} />
                 </p>
               </div>
             )}

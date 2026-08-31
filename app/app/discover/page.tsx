@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Search, MapPin, UtensilsCrossed, Plus, Trash2, X } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { AutoTextarea } from "@/components/app/auto-textarea";
+import { RichText } from "@/components/app/rich-text";
 
 interface RecommendationItem {
   id: string;
@@ -285,7 +286,7 @@ export default function DiscoverPage() {
 
                 {rec.story && (
                   <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-3">
-                    {rec.story}
+                    <RichText text={rec.story} />
                   </p>
                 )}
 

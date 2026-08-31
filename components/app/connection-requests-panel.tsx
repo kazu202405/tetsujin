@@ -18,6 +18,7 @@ import { MemberAvatar } from "@/components/app/member-avatar";
 import { PlatformIcon } from "@/components/app/platform-icon";
 import { SOCIAL_PLATFORM_META } from "@/lib/social-links";
 import { type OwnSocialLink, fetchMySocialLinks } from "@/lib/social-api";
+import { RichText } from "@/components/app/rich-text";
 import {
   type ConnectionRequestItem as Req,
   notifyConnectionRequestsUpdated,
@@ -200,7 +201,7 @@ export function ConnectionRequestsPanel() {
 
               {r.message && (
                 <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 rounded-lg px-3 py-2 mb-3 whitespace-pre-wrap">
-                  {r.message}
+                  <RichText text={r.message} />
                 </p>
               )}
 
@@ -212,7 +213,11 @@ export function ConnectionRequestsPanel() {
                       {DECLINE_LABEL[r.declineReason] ?? "お返事をいただきました"}
                     </p>
                   )}
-                  {r.replyMessage && <p className="whitespace-pre-wrap">{r.replyMessage}</p>}
+                  {r.replyMessage && (
+                    <p className="whitespace-pre-wrap">
+                      <RichText text={r.replyMessage} />
+                    </p>
+                  )}
                 </div>
               )}
 

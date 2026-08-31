@@ -42,6 +42,7 @@ import { useCurrentMember } from "@/lib/current-member";
 import { isAdminRole } from "@/lib/member-roles";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { QuestCover } from "@/components/app/quest-cover";
+import { RichText } from "@/components/app/rich-text";
 
 // ------------------------------------------------------------
 // 種類（アイコンと色）
@@ -400,7 +401,7 @@ export default function QuestsPage() {
               </div>
 
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-4">
-                {detail.body}
+                <RichText text={detail.body} />
               </p>
 
               <div className="flex flex-wrap gap-1.5 mb-4">

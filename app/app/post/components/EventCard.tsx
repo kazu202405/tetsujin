@@ -18,6 +18,7 @@ import {
 import type { Event, Series } from "../types";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { PersonLink } from "@/components/app/person-link";
+import { RichText } from "@/components/app/rich-text";
 
 interface EventCardProps {
   event: Event;
@@ -206,8 +207,8 @@ export default function EventCard({
 
       {/* 説明 */}
       {event.description && (
-        <p className="text-sm text-gray-500 leading-relaxed mb-4">
-          {event.description}
+        <p className="text-sm text-gray-500 leading-relaxed mb-4 whitespace-pre-wrap">
+          <RichText text={event.description} />
         </p>
       )}
 

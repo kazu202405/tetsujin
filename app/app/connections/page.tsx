@@ -39,6 +39,7 @@ import {
   useConnections,
 } from "@/lib/connections-api";
 import { LoadingRows } from "@/components/app/skeleton";
+import { RichText } from "@/components/app/rich-text";
 
 interface DirectoryMember {
   id: string;
@@ -105,7 +106,7 @@ function ConnectionCard({
           {connection.note && (
             <p className="mt-2 flex items-start gap-1.5 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2 whitespace-pre-wrap">
               <MessageSquare className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
-              <span>{connection.note}</span>
+              <span><RichText text={connection.note} /></span>
             </p>
           )}
 
