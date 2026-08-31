@@ -14,7 +14,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Trash2, Loader2, Save, AlertCircle, Tags } from "lucide-react";
+import { Plus, Trash2, Loader2, Save, AlertCircle, Tags, Users, Search } from "lucide-react";
 
 interface Option {
   category: string;
@@ -26,30 +26,52 @@ interface Option {
   usedCount: number;
 }
 
-// 並びは会員の「つながりの設定」と同じにする（探すときの頭の順番に合わせる）
-const CATEGORIES: { code: string; label: string; note?: string }[] = [
+// 🔴 どのカテゴリがどちら側に出るかは、運営には見えない。
+//    会員の画面は「自分のこと」と「探している条件」に分かれていて、
+//    多くのカテゴリは両方に出る（同じ選択肢を、自分の属性としても
+//    相手に求める条件としても使う）。目的・年代・性別だけは
+//    探す側にしか出ない。
+//    ここを示さないと「地域を1つ足したら、会員のどこに増えるのか」が
+//    分からないまま編集することになる。
+//
+//    自分側の年代・性別は選択肢ではなく会員台帳の値を使うため、
+//    このマスタは探す側の絞り込みにしか使われない。
+//
+//    出どころ＝app/app/mypage/matching/page.tsx の
+//    PROFILE_SECTIONS / WANTS_SECTIONS。あちらを増減したらここも直す。
+type Side = "both" | "wants";
+
+const CATEGORIES: { code: string; label: string; side: Side; note?: string }[] = [
   {
     code: "purpose",
     label: "つながりたい目的",
+    side: "wants",
     note: "「営業目的」を付けた項目は、申請を受けた相手に先に表示されます",
   },
-  { code: "position", label: "立場・事業形態" },
-  { code: "industry", label: "業種" },
-  { code: "region", label: "地域" },
-  { code: "lifestyle", label: "ライフスタイル" },
-  { code: "hobby", label: "趣味・好きなこと" },
-  { code: "interest", label: "興味・関心" },
+  { code: "position", label: "立場・事業形態", side: "both" },
+  { code: "industry", label: "業種", side: "both" },
+  { code: "region", label: "地域", side: "both" },
+  { code: "lifestyle", label: "ライフスタイル", side: "both" },
+  { code: "hobby", label: "趣味・好きなこと", side: "both" },
+  { code: "interest", label: "興味・関心", side: "both" },
   {
     code: "age_range",
     label: "年代",
+    side: "wants",
     note: "コードは会員台帳の年代に合わせてあります。増減させると突き合わせが外れて候補が出なくなります",
   },
   {
     code: "gender",
     label: "性別",
+    side: "wants",
     note: "コードは会員台帳の値（男 / 女）そのものです。表示名だけ変えてください",
   },
 ];
+
+const SIDE_LABEL: Record<Side, string> = {
+  both: "会員の「自分のこと」と「探している条件」の両方に出ます",
+  wants: "会員の「探している条件」にだけ出ます（自分側は会員台帳の値を使います）",
+};
 
 export function MatchingOptionsPanel() {
   const [options, setOptions] = useState<Option[]>([]);
@@ -181,35 +203,60 @@ export function MatchingOptionsPanel() {
       </h2>
       <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
         マイページの「つながりの設定」に出る選択肢です。ここでの変更はすぐ全会員に反映されます。
+        会員側は「自分のこと」と「探している条件」に分かれていて、
+        多くのカテゴリは<b>同じ選択肢が両方に出ます</b>（自分の属性としても、相手に求める条件としても使うため）。
+        <br />
         左の数字は並び順（小さいほど先）。10・20・30 と空けてあるのは、あとから間に挿し込めるようにするためです。
       </p>
 
-      <div className="flex flex-wrap gap-1.5 mb-4">
-        {CATEGORIES.map((c) => {
-          const count = options.filter((o) => o.category === c.code).length;
-          const on = category === c.code;
-          return (
-            <button
-              key={c.code}
-              onClick={() => {
-                setCategory(c.code);
-                setError(null);
-                setNotice(null);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                on
-                  ? "bg-gray-900 text-white"
-                  : "bg-white border border-gray-200 text-gray-600 hover:border-gray-300"
-              }`}
-            >
-              {c.label}
-              <span className={`ml-1 font-normal ${on ? "text-gray-400" : "text-gray-400"}`}>
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {/* 🔴 「両方に出る」と「探す側だけ」で分けて並べる。一列に並べると、
+             足した選択肢が会員のどこに増えるのかが分からないまま編集することになる。
+             同じカテゴリを2か所に出すと別の選択肢に見えるので、群を分けて1回ずつ出す。 */}
+      {(["both", "wants"] as Side[]).map((side) => (
+        <div key={side} className="mb-3">
+          <p className="text-[10px] text-gray-400 mb-1.5">
+            {side === "both" ? "自分のこと・探している条件の両方に出る" : "探している条件にだけ出る"}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {CATEGORIES.filter((c) => c.side === side).map((c) => {
+              const count = options.filter((o) => o.category === c.code).length;
+              const on = category === c.code;
+              return (
+                <button
+                  key={c.code}
+                  onClick={() => {
+                    setCategory(c.code);
+                    setError(null);
+                    setNotice(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    on
+                      ? "bg-gray-900 text-white"
+                      : "bg-white border border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  {c.label}
+                  <span className="ml-1 font-normal text-gray-400">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {/* いま編集しているカテゴリが会員のどこに出るか。選んだあとも消えないように出す。 */}
+      {meta && (
+        <p className="flex items-center gap-1.5 mt-3 mb-2 text-[11px] text-gray-600 bg-gray-100 rounded-lg px-3 py-1.5">
+          {meta.side === "both" ? (
+            <Users className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+          ) : (
+            <Search className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+          )}
+          <span>
+            <b className="text-gray-900">{meta.label}</b>は{SIDE_LABEL[meta.side]}
+          </span>
+        </p>
+      )}
 
       {meta?.note && (
         <p className="flex items-start gap-2 mb-4 text-[11px] text-amber-800 bg-amber-50 rounded-lg px-3 py-2 leading-relaxed">
