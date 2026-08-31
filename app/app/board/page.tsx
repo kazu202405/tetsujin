@@ -33,8 +33,7 @@ import {
   EyeOff,
   Reply,
   CornerDownRight,
-  type LucideIcon,
-} from "lucide-react";
+  type LucideIcon, ChevronUp, ChevronDown } from "lucide-react";
 import { markBoardVisited } from "@/lib/board-data";
 import { useCurrentMember } from "@/lib/current-member";
 import { isAdminRole } from "@/lib/member-roles";
@@ -347,6 +346,33 @@ export default function BoardPage() {
     await reloadChannels();
   };
 
+  // 🔴 並び替えは「隣と sort_order を入れ替える」だけにする。
+  //    全件に連番を振り直すと、途中で1件失敗したときに順番が壊れた状態で
+  //    残る。2件だけなら、失敗しても元のままか、入れ替わったかのどちらか。
+  const handleMoveChannel = async (id: string, dir: -1 | 1) => {
+    setChannelError(null);
+    const list = [...channels].sort((a, b) => a.sort_order - b.sort_order);
+    const i = list.findIndex((c) => c.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return;
+
+    const a = list[i];
+    const b = list[j];
+    // 値が同じだと入れ替えても順番が変わらないので、その場合だけずらす
+    const aNext = b.sort_order === a.sort_order ? a.sort_order + dir * 10 : b.sort_order;
+
+    const r1 = await updateChannel(a.id, { sort_order: aNext });
+    if (!r1.ok) {
+      setChannelError(r1.error);
+      return;
+    }
+    const r2 = await updateChannel(b.id, { sort_order: a.sort_order });
+    if (!r2.ok) {
+      setChannelError(`${r2.error}（並びが途中まで変わっています。もう一度お試しください）`);
+    }
+    await reloadChannels();
+  };
+
   const handleArchiveChannel = async (id: string) => {
     setChannelError(null);
     const result = await updateChannel(id, { is_archived: true });
@@ -470,7 +496,7 @@ export default function BoardPage() {
 
               {/* 既存チャンネル一覧 */}
               <div className="space-y-1.5 mb-5">
-                {channels.map((ch) => {
+                {channels.map((ch, idx) => {
                   const Icon = getIconComponent(ch.icon_key);
                   const colorCls = getColorClass(ch.color);
 
@@ -539,6 +565,22 @@ export default function BoardPage() {
                       <Icon className={`w-4 h-4 ${colorCls}`} />
                       <span className="text-sm text-gray-700 flex-1 truncate">{ch.name}</span>
                       <span className="text-[10px] text-gray-400">{ch.post_count}件</span>
+                      <button
+                        onClick={() => handleMoveChannel(ch.id, -1)}
+                        disabled={idx === 0}
+                        className="p-1.5 text-gray-300 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-20 disabled:hover:bg-transparent"
+                        title="上へ"
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleMoveChannel(ch.id, 1)}
+                        disabled={idx === channels.length - 1}
+                        className="p-1.5 text-gray-300 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-20 disabled:hover:bg-transparent"
+                        title="下へ"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={() => {
                           setEditingId(ch.id);

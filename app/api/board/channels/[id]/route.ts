@@ -22,6 +22,7 @@ export async function PATCH(
     icon_key?: string;
     color?: string;
     is_archived?: boolean;
+    sort_order?: number;
   } | null;
   if (!body) {
     return NextResponse.json(
@@ -44,6 +45,16 @@ export async function PATCH(
   if (body.icon_key !== undefined) patch.icon_key = body.icon_key;
   if (body.color !== undefined) patch.color = body.color;
   if (body.is_archived !== undefined) patch.is_archived = body.is_archived;
+  // 並び順。小さいほど上。10刻みで入っているので、入れ替えは値の交換で行う。
+  if (body.sort_order !== undefined) {
+    if (!Number.isFinite(body.sort_order)) {
+      return NextResponse.json(
+        { error: "並び順が不正です" },
+        { status: 400, headers: NO_STORE_HEADERS },
+      );
+    }
+    patch.sort_order = Math.trunc(body.sort_order);
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(

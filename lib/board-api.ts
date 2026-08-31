@@ -108,7 +108,14 @@ export async function createChannel(input: {
 
 export async function updateChannel(
   id: string,
-  input: { name?: string; icon_key?: string; color?: string; is_archived?: boolean },
+  input: {
+    name?: string;
+    icon_key?: string;
+    color?: string;
+    is_archived?: boolean;
+    /** 小さいほど上。並び替えは隣と値を入れ替える */
+    sort_order?: number;
+  },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const response = await fetch(`/api/board/channels/${id}`, {
     method: "PATCH",
