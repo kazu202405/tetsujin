@@ -29,8 +29,7 @@ import {
   Handshake,
   Megaphone,
   Send,
-  Link2,
-} from "lucide-react";
+  Link2, AlertCircle } from "lucide-react";
 import { RoleBadge } from "@/components/app/role-badge";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { MemberTab } from "./member-tab";
@@ -104,6 +103,18 @@ interface Application {
   reviewed_at: string | null;
   review_note: string | null;
   created_at: string;
+  /** 同じ名前の在籍会員。メールが無い台帳行とは自動で照合できないための保険 */
+  sameNameMembers?: {
+    member_id: string;
+    member_no: number | null;
+    name: string;
+    job: string | null;
+    email: string | null;
+    phone: string | null;
+    start_year: number | null;
+    start_month: number | null;
+    has_login: boolean;
+  }[];
 }
 
 const statusConfig: Record<ApplicationStatus, { label: string; color: string; bg: string; icon: typeof Clock }> = {
@@ -391,6 +402,40 @@ function ApplicationsTab() {
                   </div>
                   {app.status === "pending" && (
                     <div className="space-y-3">
+                      {/* 🔴 同じ名前の在籍会員がいたら、承認する前に必ず見せる。
+                             台帳から取り込んだ行にはメールが無い人が100名いて、
+                             メールでの自動照合が空振りする。そのまま承認すると
+                             既存会員なのに番号なし・新料金の別行ができる
+                             （池田さんで実際に起きた）。
+                             自動では紐づけない——同姓同名は実在するので、
+                             気づかせて判断は運営に残す。 */}
+                      {(app.sameNameMembers?.length ?? 0) > 0 && (
+                        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                          <p className="flex items-start gap-2 text-xs font-bold text-amber-900 mb-2">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            同じ名前の在籍会員がいます。すでに会員の方ではありませんか？
+                          </p>
+                          <ul className="space-y-1 mb-2">
+                            {app.sameNameMembers?.map((m) => (
+                              <li key={m.member_id} className="text-xs text-amber-900">
+                                ・{m.name}
+                                {m.member_no != null && `（会員番号${m.member_no}）`}
+                                {m.job && ` / ${m.job}`}
+                                <span className="text-amber-700">
+                                  {m.email ? ` / ${m.email}` : " / メール未登録"}
+                                  {m.has_login ? " / ログインあり" : ""}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="text-[11px] text-amber-800 leading-relaxed">
+                            同じ方なら「既存会員に紐づける」を選んでください。そのまま承認すると、
+                            会員番号の無い別の行がもう1つできます。同姓同名の別の方であれば、
+                            そのまま承認して問題ありません。
+                          </p>
+                        </div>
+                      )}
+
                       {/* 既に会員の方からの申請なら、新しく作らず台帳の行に紐づける。
                           台帳にメールが入っていない会員は自動では一致しないため、
                           運営が番号と氏名を見て選ぶ。 */}
