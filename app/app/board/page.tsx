@@ -58,6 +58,7 @@ import {
   useBoardChannels,
 } from "@/lib/board-api";
 import { CardSkeleton, LoadingRows } from "@/components/app/skeleton";
+import { RichText } from "@/components/app/rich-text";
 
 // アイコンマップ（文字列キー → コンポーネント）
 const iconMap: Record<string, LucideIcon> = {
@@ -97,18 +98,6 @@ function getIconComponent(iconKey: string): LucideIcon {
 }
 
 // @メンション部分をハイライト表示
-function renderMentionText(text: string) {
-  return text.split(/(@\S+)/g).map((part, i) =>
-    part.startsWith("@") ? (
-      <span key={i} className="text-amber-600 font-bold">
-        {part}
-      </span>
-    ) : (
-      <span key={i}>{part}</span>
-    )
-  );
-}
-
 // 退会者はプロフィールへ飛ばさない（既存方針＝名前は残すがクリック不可）
 //
 // 🔴 whitespace-nowrap は必須。日本語は文字と文字の間どこでも改行できるので、
@@ -765,7 +754,7 @@ export default function BoardPage() {
                       </div>
 
                       <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-3">
-                        {post.content}
+                        <RichText text={post.content} />
                       </p>
 
                       {post.imageUrl && (
@@ -844,7 +833,7 @@ export default function BoardPage() {
                                               )}
                                             </div>
                                             <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                              {comment.content}
+                                              <RichText text={comment.content} />
                                             </p>
                                           </div>
                                           <div className="flex items-center gap-3 mt-1 ml-1">
@@ -917,7 +906,7 @@ export default function BoardPage() {
                                                           />
                                                         </div>
                                                         <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                                          {renderMentionText(reply.content)}
+                                                          <RichText text={reply.content} />
                                                         </p>
                                                       </div>
                                                       <div className="flex items-center gap-3 mt-0.5 ml-1">
