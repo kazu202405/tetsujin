@@ -44,6 +44,8 @@ export interface BoardPost {
   commentCount: number;
   likedByMe: boolean;
   isMine: boolean;
+  /** 編集された投稿には日時が入る（画面に「編集済み」と出す） */
+  editedAt: string | null;
   author: BoardAuthor;
 }
 
@@ -53,6 +55,9 @@ export interface BoardComment {
   content: string;
   createdAt: string;
   isMine: boolean;
+  editedAt: string | null;
+  /** 削除済み。返信がぶら下がっていると会話が読めなくなるので行は残してある */
+  isDeleted: boolean;
   author: BoardAuthor;
   replies?: BoardComment[];
 }
@@ -272,4 +277,50 @@ export async function markBoardRead(channelId?: string): Promise<void> {
   } catch {
     /* 既読化に失敗してもバッジが残るだけなので握りつぶす */
   }
+}
+
+// ============ 編集・削除 ============
+// 判定はDB側（本人だけ編集できる／削除は本人か運営）。
+// ここは呼ぶだけで、返ってきた理由をそのまま画面に渡す。
+
+export async function editPost(
+  id: string,
+  content: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const response = await fetch(`/api/board/posts/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!response.ok) return { ok: false, error: await readError(response, "編集できませんでした") };
+  return { ok: true };
+}
+
+export async function deletePost(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const response = await fetch(`/api/board/posts/${id}`, { method: "DELETE" });
+  if (!response.ok) return { ok: false, error: await readError(response, "削除できませんでした") };
+  return { ok: true };
+}
+
+export async function editComment(
+  id: string,
+  content: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const response = await fetch(`/api/board/comments/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!response.ok) return { ok: false, error: await readError(response, "編集できませんでした") };
+  return { ok: true };
+}
+
+export async function deleteComment(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const response = await fetch(`/api/board/comments/${id}`, { method: "DELETE" });
+  if (!response.ok) return { ok: false, error: await readError(response, "削除できませんでした") };
+  return { ok: true };
 }

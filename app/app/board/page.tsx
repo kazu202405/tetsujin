@@ -47,6 +47,10 @@ import {
   createComment,
   createPost,
   deleteChannel,
+  deleteComment,
+  deletePost,
+  editComment,
+  editPost,
   fetchComments,
   fetchPosts,
   formatPostedAt,
@@ -371,6 +375,68 @@ export default function BoardPage() {
       setChannelError(`${r2.error}（並びが途中まで変わっています。もう一度お試しください）`);
     }
     await reloadChannels();
+  };
+
+  // ---------- 投稿・コメントの編集／削除 ----------
+  // 🔴 編集できるのは本人だけ、削除は本人か運営。判定はDB側にもある。
+  //    ここはボタンを出すかどうかを決めるだけで、守っているのはDB。
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editingPostText, setEditingPostText] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState("");
+  const [boardError, setBoardError] = useState<string | null>(null);
+  // 🔴 削除は取り消せない（運営が他人の投稿も消せる）ので必ず一度確認する
+  const [confirmDeletePost, setConfirmDeletePost] = useState<string | null>(null);
+  const [confirmDeleteComment, setConfirmDeleteComment] = useState<
+    { id: string; postId: string } | null
+  >(null);
+
+  const afterChange = async (postId?: string) => {
+    if (activeChannelId) await loadPosts(activeChannelId);
+    if (postId) await loadComments(postId);
+    await reloadChannels();
+  };
+
+  const submitEditPost = async (id: string) => {
+    setBoardError(null);
+    const result = await editPost(id, editingPostText);
+    if (!result.ok) {
+      setBoardError(result.error);
+      return;
+    }
+    setEditingPostId(null);
+    await afterChange();
+  };
+
+  const removePost = async (id: string) => {
+    setBoardError(null);
+    const result = await deletePost(id);
+    if (!result.ok) {
+      setBoardError(result.error);
+      return;
+    }
+    await afterChange();
+  };
+
+  const submitEditComment = async (id: string, postId: string) => {
+    setBoardError(null);
+    const result = await editComment(id, editingCommentText);
+    if (!result.ok) {
+      setBoardError(result.error);
+      return;
+    }
+    setEditingCommentId(null);
+    await afterChange(postId);
+  };
+
+  const removeComment = async (id: string, postId: string) => {
+    setBoardError(null);
+    const result = await deleteComment(id);
+    if (!result.ok) {
+      setBoardError(result.error);
+      return;
+    }
+    await afterChange(postId);
   };
 
   const handleArchiveChannel = async (id: string) => {
@@ -798,12 +864,67 @@ export default function BoardPage() {
                         </div>
                         <span className="text-xs text-gray-300 flex-shrink-0">
                           {formatPostedAt(post.createdAt)}
+                          {post.editedAt && (
+                            <span className="ml-1 text-gray-300">（編集済み）</span>
+                          )}
                         </span>
+                        {/* 編集は本人だけ。削除は本人か運営。 */}
+                        {(post.isMine || isAdmin) && editingPostId !== post.id && (
+                          <span className="flex items-center gap-0.5 flex-shrink-0">
+                            {post.isMine && (
+                              <button
+                                onClick={() => {
+                                  setEditingPostId(post.id);
+                                  setEditingPostText(post.content);
+                                  setBoardError(null);
+                                }}
+                                className="p-1 text-gray-300 hover:text-gray-600 rounded"
+                                title="編集"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setConfirmDeletePost(post.id)}
+                              className="p-1 text-gray-300 hover:text-red-500 rounded"
+                              title="削除"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </span>
+                        )}
                       </div>
 
-                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-3">
-                        <RichText text={post.content} />
-                      </p>
+                      {editingPostId === post.id ? (
+                        <div className="mb-3">
+                          <textarea
+                            value={editingPostText}
+                            onChange={(e) => setEditingPostText(e.target.value)}
+                            rows={4}
+                            maxLength={5000}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                          />
+                          <div className="flex justify-end gap-2 mt-2">
+                            <button
+                              onClick={() => setEditingPostId(null)}
+                              className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50"
+                            >
+                              やめる
+                            </button>
+                            <button
+                              onClick={() => void submitEditPost(post.id)}
+                              disabled={!editingPostText.trim()}
+                              className="px-4 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-gray-800 disabled:opacity-30"
+                            >
+                              保存
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-3">
+                          <RichText text={post.content} />
+                        </p>
+                      )}
 
                       {post.imageUrl && (
                         <div className="mb-3 rounded-xl overflow-hidden max-w-lg">
@@ -858,7 +979,15 @@ export default function BoardPage() {
                               </button>
                               <div className="pt-3 border-t border-gray-100">
                                 <div className="space-y-3">
-                                  {comments.map((comment) => (
+                                  {/* 🔴 削除済みで返信が無いコメントは出さない。
+                                         「削除されました」だけが並ぶと読みにくいだけ。
+                                         返信がぶら下がっているものは残す（消すと
+                                         会話のつながりが読めなくなるため）。 */}
+                                  {comments
+                                    .filter(
+                                      (c) => !c.isDeleted || (c.replies?.filter((r) => !r.isDeleted).length ?? 0) > 0,
+                                    )
+                                    .map((comment) => (
                                     <div key={comment.id}>
                                       <div className="flex gap-2.5">
                                         <MemberAvatar
@@ -880,14 +1009,81 @@ export default function BoardPage() {
                                                 </span>
                                               )}
                                             </div>
-                                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                              <RichText text={comment.content} />
-                                            </p>
+                                            {comment.isDeleted ? (
+                                              <p className="text-xs text-gray-400 italic">
+                                                このコメントは削除されました
+                                              </p>
+                                            ) : editingCommentId === comment.id ? (
+                                              <div>
+                                                <textarea
+                                                  value={editingCommentText}
+                                                  onChange={(e) =>
+                                                    setEditingCommentText(e.target.value)
+                                                  }
+                                                  rows={3}
+                                                  maxLength={2000}
+                                                  className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-gray-900"
+                                                />
+                                                <div className="flex justify-end gap-2 mt-1.5">
+                                                  <button
+                                                    onClick={() => setEditingCommentId(null)}
+                                                    className="px-2.5 py-1 rounded-lg border border-gray-200 text-[10px] text-gray-600"
+                                                  >
+                                                    やめる
+                                                  </button>
+                                                  <button
+                                                    onClick={() =>
+                                                      void submitEditComment(comment.id, post.id)
+                                                    }
+                                                    disabled={!editingCommentText.trim()}
+                                                    className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[10px] font-bold disabled:opacity-30"
+                                                  >
+                                                    保存
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                                <RichText text={comment.content} />
+                                              </p>
+                                            )}
                                           </div>
                                           <div className="flex items-center gap-3 mt-1 ml-1">
                                             <span className="text-[10px] text-gray-300">
                                               {formatPostedAt(comment.createdAt)}
+                                              {comment.editedAt && !comment.isDeleted && (
+                                                <span className="ml-1">（編集済み）</span>
+                                              )}
                                             </span>
+                                            {!comment.isDeleted &&
+                                              (comment.isMine || isAdmin) &&
+                                              editingCommentId !== comment.id && (
+                                                <>
+                                                  {comment.isMine && (
+                                                    <button
+                                                      onClick={() => {
+                                                        setEditingCommentId(comment.id);
+                                                        setEditingCommentText(comment.content);
+                                                        setBoardError(null);
+                                                      }}
+                                                      className="text-[10px] text-gray-400 hover:text-gray-700"
+                                                    >
+                                                      編集
+                                                    </button>
+                                                  )}
+                                                  <button
+                                                    onClick={() =>
+                                                      setConfirmDeleteComment({
+                                                        id: comment.id,
+                                                        postId: post.id,
+                                                      })
+                                                    }
+                                                    className="text-[10px] text-gray-400 hover:text-red-500"
+                                                  >
+                                                    削除
+                                                  </button>
+                                                </>
+                                              )}
                                             <button
                                               onClick={() => {
                                                 if (replyTarget?.commentId === comment.id) {
@@ -913,13 +1109,13 @@ export default function BoardPage() {
                                             >
                                               <Reply className="w-3 h-3" />
                                               返信
-                                              {(comment.replies?.length ?? 0) > 0 &&
-                                                ` ${comment.replies?.length}件`}
+                                              {(comment.replies?.filter((r) => !r.isDeleted).length ?? 0) > 0 &&
+                                                ` ${comment.replies?.filter((r) => !r.isDeleted).length}件`}
                                             </button>
                                           </div>
 
                                           {/* 返信一覧（折りたたみ） */}
-                                          {(comment.replies?.length ?? 0) > 0 &&
+                                          {(comment.replies?.filter((r) => !r.isDeleted).length ?? 0) > 0 &&
                                             !expandedReplies.has(comment.id) && (
                                               <button
                                                 onClick={() =>
@@ -930,13 +1126,13 @@ export default function BoardPage() {
                                                 className="mt-1.5 ml-2 inline-flex items-center gap-1.5 text-[11px] text-amber-600 hover:text-amber-700 font-medium transition-colors"
                                               >
                                                 <CornerDownRight className="w-3 h-3" />
-                                                返信 {comment.replies?.length}件を表示
+                                                返信 {comment.replies?.filter((r) => !r.isDeleted).length}件を表示
                                               </button>
                                             )}
-                                          {(comment.replies?.length ?? 0) > 0 &&
+                                          {(comment.replies?.filter((r) => !r.isDeleted).length ?? 0) > 0 &&
                                             expandedReplies.has(comment.id) && (
                                               <div className="mt-2 space-y-2 ml-2">
-                                                {comment.replies?.map((reply) => (
+                                                {comment.replies?.filter((r) => !r.isDeleted).map((reply) => (
                                                   <div key={reply.id} className="flex gap-2">
                                                     <CornerDownRight className="w-3 h-3 text-gray-300 flex-shrink-0 mt-2" />
                                                     <MemberAvatar
@@ -953,14 +1149,83 @@ export default function BoardPage() {
                                                             className="text-[11px] font-bold text-gray-800 hover:text-amber-700 transition-colors"
                                                           />
                                                         </div>
-                                                        <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                                          <RichText text={reply.content} />
-                                                        </p>
+                                                        {editingCommentId === reply.id ? (
+                                                          <div>
+                                                            <textarea
+                                                              value={editingCommentText}
+                                                              onChange={(e) =>
+                                                                setEditingCommentText(e.target.value)
+                                                              }
+                                                              rows={3}
+                                                              maxLength={2000}
+                                                              className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-gray-900"
+                                                            />
+                                                            <div className="flex justify-end gap-2 mt-1.5">
+                                                              <button
+                                                                onClick={() =>
+                                                                  setEditingCommentId(null)
+                                                                }
+                                                                className="px-2.5 py-1 rounded-lg border border-gray-200 text-[10px] text-gray-600"
+                                                              >
+                                                                やめる
+                                                              </button>
+                                                              <button
+                                                                onClick={() =>
+                                                                  void submitEditComment(
+                                                                    reply.id,
+                                                                    post.id,
+                                                                  )
+                                                                }
+                                                                disabled={!editingCommentText.trim()}
+                                                                className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[10px] font-bold disabled:opacity-30"
+                                                              >
+                                                                保存
+                                                              </button>
+                                                            </div>
+                                                          </div>
+                                                        ) : (
+                                                          <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                                            <RichText text={reply.content} />
+                                                          </p>
+                                                        )}
                                                       </div>
                                                       <div className="flex items-center gap-3 mt-0.5 ml-1">
                                                         <span className="text-[10px] text-gray-300">
                                                           {formatPostedAt(reply.createdAt)}
+                                                          {reply.editedAt && (
+                                                            <span className="ml-1">（編集済み）</span>
+                                                          )}
                                                         </span>
+                                                        {(reply.isMine || isAdmin) &&
+                                                          editingCommentId !== reply.id && (
+                                                            <>
+                                                              {reply.isMine && (
+                                                                <button
+                                                                  onClick={() => {
+                                                                    setEditingCommentId(reply.id);
+                                                                    setEditingCommentText(
+                                                                      reply.content,
+                                                                    );
+                                                                    setBoardError(null);
+                                                                  }}
+                                                                  className="text-[10px] text-gray-400 hover:text-gray-700"
+                                                                >
+                                                                  編集
+                                                                </button>
+                                                              )}
+                                                              <button
+                                                                onClick={() =>
+                                                                  setConfirmDeleteComment({
+                                                                    id: reply.id,
+                                                                    postId: post.id,
+                                                                  })
+                                                                }
+                                                                className="text-[10px] text-gray-400 hover:text-red-500"
+                                                              >
+                                                                削除
+                                                              </button>
+                                                            </>
+                                                          )}
                                                         <button
                                                           onClick={() => {
                                                             setReplyTarget({
@@ -1098,6 +1363,64 @@ export default function BoardPage() {
           )}
         </div>
       </div>
+
+      {/* エラーは画面の下に出す。編集も削除も画面のどこからでも押せるため */}
+      {boardError && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-sm w-[90%]">
+          <p className="text-xs bg-red-600 text-white rounded-xl px-4 py-3 shadow-lg">
+            {boardError}
+            <button
+              onClick={() => setBoardError(null)}
+              className="ml-2 underline"
+            >
+              閉じる
+            </button>
+          </p>
+        </div>
+      )}
+
+      {/* 削除の確認。取り消せないので必ず一度止める */}
+      {(confirmDeletePost || confirmDeleteComment) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-base font-bold text-gray-900 mb-2">
+              {confirmDeletePost ? "この投稿を削除しますか？" : "このコメントを削除しますか？"}
+            </h3>
+            <p className="text-sm text-gray-600 leading-relaxed mb-5">
+              {confirmDeletePost
+                ? "元に戻せません。付いているコメントも見えなくなります。"
+                : "元に戻せません。返信が付いている場合は「削除されました」と表示され、返信は残ります。"}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setConfirmDeletePost(null);
+                  setConfirmDeleteComment(null);
+                }}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                やめる
+              </button>
+              <button
+                onClick={() => {
+                  if (confirmDeletePost) {
+                    const id = confirmDeletePost;
+                    setConfirmDeletePost(null);
+                    void removePost(id);
+                  } else if (confirmDeleteComment) {
+                    const t = confirmDeleteComment;
+                    setConfirmDeleteComment(null);
+                    void removeComment(t.id, t.postId);
+                  }
+                }}
+                className="px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700"
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

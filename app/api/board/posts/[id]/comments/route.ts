@@ -11,6 +11,8 @@ import { signAvatarPaths } from "@/lib/supabase/storage";
 export const dynamic = "force-dynamic";
 
 interface ThreadRow {
+  edited_at: string | null;
+  is_deleted: boolean;
   id: string;
   post_id: string;
   parent_comment_id: string | null;
@@ -53,9 +55,13 @@ export async function GET(
   const toItem = (r: ThreadRow) => ({
     id: r.id,
     parentId: r.parent_comment_id,
-    content: r.content,
+    // 🔴 削除済みの本文は返さない。DB側でも空にしてあるが、
+    //    「見せない」判断をここでも持たせておく（入口が増えても漏れない）。
+    content: r.is_deleted ? "" : r.content,
     createdAt: r.created_at,
     isMine: r.is_mine,
+    editedAt: r.edited_at ?? null,
+    isDeleted: Boolean(r.is_deleted),
     author: {
       id: r.author_id,
       name: r.author_name,

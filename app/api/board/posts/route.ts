@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 const DEFAULT_LIMIT = 50;
 
 interface FeedRow {
+  edited_at: string | null;
   id: string;
   channel_id: string;
   content: string;
@@ -75,6 +76,7 @@ export async function GET(request: Request) {
     commentCount: Number(r.comment_count),
     likedByMe: r.liked_by_me,
     isMine: r.is_mine,
+    editedAt: r.edited_at ?? null,
     author: {
       id: r.author_id,
       name: r.author_name,
