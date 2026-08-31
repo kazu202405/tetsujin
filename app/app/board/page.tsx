@@ -33,7 +33,7 @@ import {
   EyeOff,
   Reply,
   CornerDownRight,
-  type LucideIcon, ChevronUp, ChevronDown } from "lucide-react";
+  type LucideIcon, ChevronUp, ChevronDown, Settings } from "lucide-react";
 import { markBoardVisited } from "@/lib/board-data";
 import { useCurrentMember } from "@/lib/current-member";
 import { isAdminRole } from "@/lib/member-roles";
@@ -406,9 +406,25 @@ export default function BoardPage() {
       {/* ヘッダー */}
       <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between gap-3 mb-4">
             <h1 className="text-xl font-bold text-gray-900">掲示板</h1>
-            <span className="text-xs text-gray-400">{posts.length}件の投稿</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-400">{posts.length}件の投稿</span>
+              {/* 🔴 以前はチャンネルタブの末尾に「＋」だけの丸ボタンを置いていたが、
+                     ①名前が無く（マウスを乗せたときだけ表示＝スマホでは出ない）
+                     ②「追加」に見えて「管理・並び替え」に読めず
+                     ③タブ列の最後なので画面が狭いと右端に隠れる
+                     の3つで、運営が見つけられなかった。見出しの横に名前付きで出す。 */}
+              {isAdmin && (
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-600 hover:border-gray-300 hover:text-gray-900 transition-colors flex-shrink-0"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  チャンネル管理
+                </button>
+              )}
+            </div>
           </div>
 
           {/* チャンネルタブ */}
@@ -443,16 +459,6 @@ export default function BoardPage() {
                 </button>
               );
             })}
-            {/* チャンネル管理は運営のみ */}
-            {isAdmin && (
-              <button
-                onClick={() => setShowModal(true)}
-                className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium transition-colors bg-white text-gray-400 border border-gray-200 hover:border-gray-300 hover:text-gray-600"
-                title="チャンネル管理"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
         </div>
       </div>
