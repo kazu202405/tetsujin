@@ -21,8 +21,6 @@ import { MemberList, type MemberSort } from "./member-list";
 import { LedgerEditor } from "./ledger-editor";
 import { RenewalLink } from "./renewal-link";
 import { BillingPlansPanel } from "./billing-plans-panel";
-import { MatchingPanel } from "./matching-panel";
-import { MatchingOptionsPanel } from "./matching-options-panel";
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -234,11 +232,10 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
 
   return (
     <>
+      {/* マッチング（充足率・選択肢）は「マッチング」タブへ移した。
+          会員を見に来た人にとっては、会員テーブルより先に別の表が
+          出てくる形になっていたため。 */}
       <BillingPlansPanel />
-      <MatchingPanel />
-      {/* 充足率のすぐ下に置く。「地域が埋まっていない」を見た運営が、
-          その場で選択肢を足したり並べ替えたりできるように。 */}
-      <MatchingOptionsPanel />
 
       <div className="flex items-start gap-2 p-4 mb-6 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 leading-relaxed">
         <UserCog className="w-4 h-4 flex-shrink-0 mt-0.5" />

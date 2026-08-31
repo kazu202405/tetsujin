@@ -34,6 +34,8 @@ import {
 import { RoleBadge } from "@/components/app/role-badge";
 import { MemberAvatar } from "@/components/app/member-avatar";
 import { MemberTab } from "./member-tab";
+import { MatchingPanel } from "./matching-panel";
+import { MatchingOptionsPanel } from "./matching-options-panel";
 import { MemberPicker, type MemberHit } from "./member-picker";
 import { useEvents } from "@/lib/events-api";
 
@@ -42,13 +44,22 @@ import { useEvents } from "@/lib/events-api";
 // ============================================================
 // 権限（運営/部長/一般）の変更は「会員管理」タブの各行に統合したため、
 // 独立した「権限管理」タブは廃止した（変更口が2か所あると事故るため）。
-type AdminTab = "applications" | "activity" | "participation" | "members" | "announce";
+type AdminTab =
+  | "applications"
+  | "activity"
+  | "participation"
+  | "members"
+  | "matching"
+  | "announce";
 
 const tabs: { id: AdminTab; label: string; icon: typeof Clock }[] = [
   { id: "applications", label: "入会申請", icon: ClipboardList },
   { id: "activity", label: "メンバーの状況", icon: Activity },
   { id: "participation", label: "参加状況", icon: CalendarDays },
   { id: "members", label: "会員", icon: UserCog },
+  // マッチングは会員タブの中にあったが、会員テーブルより下に置かれるため
+  // 「会員を見に来たのに関係ない表が先に出る」形になっていた。独立させる。
+  { id: "matching", label: "マッチング", icon: Handshake },
   { id: "announce", label: "お知らせ送信", icon: Megaphone },
 ];
 
@@ -130,9 +141,13 @@ export default function AdminPage() {
     setFocusMemberId(id);
     setActiveTab("members");
   };
-  // 会員DBタブは情報量が多いのでコンテナを広めに
-  const containerMaxWidth =
-    "max-w-5xl";
+  // 表を出すタブだけコンテナを広げる。会員は10列あり、5xl(1024px)では
+  // 収まらず横スクロールが出ていた。申請・お知らせは1カラムの読み物なので
+  // 広げると逆に読みにくくなる（1行が長くなりすぎる）。
+  //
+  // Tailwind v4 では max-w-screen-* が無いので、実寸で指定する。
+  const WIDE_TABS: AdminTab[] = ["members", "participation", "activity", "matching"];
+  const containerMaxWidth = WIDE_TABS.includes(activeTab) ? "max-w-[96rem]" : "max-w-5xl";
 
   return (
     <div className="min-h-screen">
@@ -172,6 +187,12 @@ export default function AdminPage() {
         {activeTab === "activity" && <ActivityTab onSelectMember={openMember} />}
         {activeTab === "participation" && <ParticipationTab onSelectMember={openMember} />}
         {activeTab === "members" && <MemberTab focusMemberId={focusMemberId} />}
+        {activeTab === "matching" && (
+          <>
+            <MatchingPanel />
+            <MatchingOptionsPanel />
+          </>
+        )}
         {activeTab === "announce" && <AnnounceTab />}
 
       </div>
