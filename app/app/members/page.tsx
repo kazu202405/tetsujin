@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Building2, Search, User } from "lucide-react";
+import { Building2, Search, User, Sparkles } from "lucide-react";
 import { RoleBadge } from "@/components/app/role-badge";
 import { roleLabelOf, type MemberRoleCode } from "@/lib/member-roles";
 import { MemberAvatar } from "@/components/app/member-avatar";
@@ -25,6 +25,8 @@ type DirectoryMember = {
   avatar_url?: string | null;
   /** 本人が「つながりの設定」で選んだ業種の表示名。未設定なら空 */
   industries: string[];
+  /** 🔴 入会日ではない。名簿を取り込んだ日が入っている人が436名いる */
+  created_at: string;
 };
 
 // カードを押すとその人のプロフィールシートへ。
@@ -95,6 +97,7 @@ export default function MembersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [memberTypeFilter, setMemberTypeFilter] = useState<"全て" | "法人" | "個人">("全て");
   const [industryFilter, setIndustryFilter] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"number" | "newest">("number");
   const me = useCurrentMember();
 
   // 🔴 業種で探せる画面に来た人が、自分は探されない側にいると気づける場所。
@@ -120,7 +123,7 @@ export default function MembersPage() {
 
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return (members ?? []).filter((member) => {
+    const list = (members ?? []).filter((member) => {
       const matchesType =
         memberTypeFilter === "全て" || member.membership_type === memberTypeFilter;
       const matchesIndustry = !industryFilter || member.industries.includes(industryFilter);
@@ -135,7 +138,18 @@ export default function MembersPage() {
         String(member.member_no ?? "").includes(query);
       return matchesType && matchesIndustry && Boolean(matchesSearch);
     });
-  }, [members, memberTypeFilter, industryFilter, searchQuery]);
+
+    if (sortBy === "number") return list;
+
+    // 🔴 新しい順。ただし既存会員は436名が取込日で同着になるので、
+    //    同じ日のときは会員番号の大きい順にする。
+    //    これから承認で入る人は created_at が実際の日付になるので上に出る。
+    return [...list].sort((a, b) => {
+      const d = b.created_at.localeCompare(a.created_at);
+      if (d !== 0) return d;
+      return (b.member_no ?? -1) - (a.member_no ?? -1);
+    });
+  }, [members, memberTypeFilter, industryFilter, searchQuery, sortBy]);
 
   return (
     <div className="min-h-screen">
@@ -145,6 +159,19 @@ export default function MembersPage() {
             <h1 className="text-xl font-bold text-gray-900">コミュニティメンバー</h1>
             {members && <span className="text-xs text-gray-400">{members.length}人</span>}
             <div className="flex gap-1 flex-shrink-0 ml-auto">
+              {/* 並び順。挨拶チャンネルの代わりに「最近入った人」を見る場所になる */}
+              <button
+                onClick={() => setSortBy(sortBy === "newest" ? "number" : "newest")}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors mr-1 ${
+                  sortBy === "newest"
+                    ? "bg-gray-900 text-white"
+                    : "bg-white text-gray-500 border border-gray-200"
+                }`}
+                title="最近入った方が上に出ます（既存の会員は会員番号の大きい順）"
+              >
+                <Sparkles className="w-3 h-3" />
+                新しい順
+              </button>
               {(["全て", "法人", "個人"] as const).map((type) => (
                 <button
                   key={type}
