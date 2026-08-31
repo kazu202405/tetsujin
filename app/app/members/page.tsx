@@ -141,12 +141,12 @@ export default function MembersPage() {
 
     // 新しい順＝会員番号の大きい順（依頼主定義）。
     //
-    // 🔴 会員番号が無い126名は先頭に置く。そのうち75名は申込フォームから
-    //    入った直近の分（contact_only）で、まだ運営が番号を振っていない
-    //    ＝一番新しい層。最後に置くと「新しい順」で一番見たい人が埋もれる。
+    // 会員番号が無い126名は末尾に置く。運用上、番号が無いのは
+    // プロフィールシートをまだ埋めていない方なので、上に出すと
+    // 「新しい人」と混ざって読めなくなる（依頼主判断 2026-08-31）。
     return [...list].sort((a, b) => {
-      const an = a.member_no ?? Number.POSITIVE_INFINITY;
-      const bn = b.member_no ?? Number.POSITIVE_INFINITY;
+      const an = a.member_no ?? Number.NEGATIVE_INFINITY;
+      const bn = b.member_no ?? Number.NEGATIVE_INFINITY;
       return bn - an;
     });
   }, [members, memberTypeFilter, industryFilter, searchQuery, sortBy]);
@@ -167,7 +167,7 @@ export default function MembersPage() {
                     ? "bg-gray-900 text-white"
                     : "bg-white text-gray-500 border border-gray-200"
                 }`}
-                title="会員番号の大きい方が上に出ます。番号がまだ無い方は先頭"
+                title="会員番号の大きい方が上に出ます。番号がまだ無い方は末尾"
               >
                 <Sparkles className="w-3 h-3" />
                 新しい順
