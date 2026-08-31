@@ -214,6 +214,11 @@ export default function MatchingSettingsPage() {
   const [profile, setProfile] = useState<Bag>({});
   const [wants, setWants] = useState<Bag>({});
   const [required, setRequired] = useState<string[]>([]);
+  // 🔴 「いまは探していない」。DBとAPIには最初からあったが、画面が
+  //    一度も送っていなかったため会員が触れなかった。
+  //    エンジンは WHERE w.is_active で見ているので、これがオフの人には
+  //    候補が出ない。行が無い人は既定で探している扱い（DBのDEFAULT TRUE）。
+  const [wantsActive, setWantsActive] = useState(true);
   const [profileNote, setProfileNote] = useState("");
   const [wantsNote, setWantsNote] = useState("");
   const [me, setMe] = useState<{ ageRange: string | null; gender: string | null }>({
@@ -244,6 +249,7 @@ export default function MatchingSettingsPage() {
           Object.fromEntries(WANTS_SECTIONS.map((s) => [s.key, (w[s.key] as string[]) ?? []])),
         );
         setRequired((w.required as string[]) ?? []);
+        setWantsActive(w.is_active !== false);
         setProfileNote(p.note ?? "");
         setWantsNote(w.note ?? "");
         setLoading(false);
@@ -292,7 +298,7 @@ export default function MatchingSettingsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             profile: { ...profile, note: profileNote },
-            wants: { ...wants, required, note: wantsNote },
+            wants: { ...wants, required, note: wantsNote, is_active: wantsActive },
           }),
         }),
         fetch("/api/me/profile", {
@@ -506,6 +512,34 @@ export default function MatchingSettingsPage() {
               </>
             ) : (
               <>
+                {/* 🔴 全体のオン/オフ。DBとAPIには最初からあったのに画面に
+                       出ておらず、会員が「一旦やめる」手段を持っていなかった。
+                       消して止めるしかないと、再開するとき全部入れ直しになる。 */}
+                <div
+                  className={`rounded-2xl border p-5 ${
+                    wantsActive ? "bg-white border-gray-100" : "bg-gray-100 border-gray-300"
+                  }`}
+                >
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={wantsActive}
+                      onChange={() => setWantsActive((v) => !v)}
+                      className="w-4 h-4 mt-0.5 accent-gray-900 flex-shrink-0"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-gray-900">
+                        マッチングを使う
+                      </span>
+                      <span className="block text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                        {wantsActive
+                          ? "下の条件に合う方を、月に3人までお知らせします。"
+                          : "いまは候補をお知らせしません。下の条件は消さずに残るので、再開するときはここを入れ直すだけです。"}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
                 {WANTS_SECTIONS.map((s) => {
                   const reqKey = REQUIRED_KEY[s.key];
                   const isRequired = required.includes(reqKey);
@@ -549,11 +583,22 @@ export default function MatchingSettingsPage() {
                           onToggle={(code) => toggle(wants, setWants, s.key, code)}
                         />
                       </div>
-                      {isRequired && (
-                        <p className="mt-3 text-[11px] text-amber-700">
-                          この条件に当てはまらない人は候補に出ません。絞りすぎると候補がいなくなります。
-                        </p>
-                      )}
+                      {/* 🔴 いまの設定が何をするかを必ず出す。
+                             これまでは「必須」を押したときだけ説明が出ていたので、
+                             選んだだけの状態が効いているのかどうかが読めず、
+                             「必須にしないと効かない」と誤解される作りだった。
+                             実際は3段階（選ばない＝無効 / 選ぶ＝加点 / 必須＝足切り）。 */}
+                      <p
+                        className={`mt-3 text-[11px] ${
+                          isRequired ? "text-amber-700" : hasAny ? "text-gray-600" : "text-gray-400"
+                        }`}
+                      >
+                        {isRequired
+                          ? "→ この条件に合わない人は出しません。絞りすぎると候補がいなくなります。"
+                          : hasAny
+                            ? "→ 合う人を優先して出します（合わない人も出ます）。"
+                            : "→ 条件にしていません。"}
+                      </p>
                       {s.key === "purposes" && (wants.purposes ?? []).includes("propose") && (
                         <p className="mt-3 text-[11px] text-amber-700 leading-relaxed">
                           ※「商品・サービスを提案したい」を選ぶと、申請したときに
