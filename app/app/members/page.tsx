@@ -95,7 +95,10 @@ export default function MembersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [memberTypeFilter, setMemberTypeFilter] = useState<"全て" | "法人" | "個人">("全て");
   const [industryFilter, setIndustryFilter] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"number" | "newest">("number");
+  // 🔴 既定は「新しい順」。この一覧が新規ご入会挨拶チャンネルの代わりになるので、
+  //    開いた瞬間に新しく入った人が見えている必要がある。
+  //    特定の人を探すのは検索とフィルタで足りる。
+  const [sortBy, setSortBy] = useState<"number" | "newest">("newest");
   const me = useCurrentMember();
 
   // 🔴 業種で探せる画面に来た人が、自分は探されない側にいると気づける場所。

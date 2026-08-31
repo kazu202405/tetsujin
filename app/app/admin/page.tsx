@@ -518,6 +518,10 @@ interface ActivityRow {
   renewalStatus: string | null;
   startYear: number | null;
   startMonth: number | null;
+  /** 記入状況。運営が声を掛けるためのもので、会員向けの一覧には出さない */
+  hasGrip: boolean;
+  hasSheet: boolean;
+  hasMatching: boolean;
 }
 
 /** 参加・投稿・アクセスから状態を判定する。 */
@@ -639,8 +643,51 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
     .map(([label, count]) => ({ label, count }))
     .sort((a, b) => b.count - a.count);
 
+  // プロフィールの埋まり具合。誰に声を掛ければよいかを運営が見る。
+  const filled = {
+    grip: rows.filter((r) => !r.isWithdrawn && r.hasGrip).length,
+    sheet: rows.filter((r) => !r.isWithdrawn && r.hasSheet).length,
+    matching: rows.filter((r) => !r.isWithdrawn && r.hasMatching).length,
+  };
+  const notFilled = rows.filter(
+    (r) => !r.isWithdrawn && (!r.hasGrip || !r.hasSheet || !r.hasMatching),
+  );
+
   return (
     <>
+      {/* 🔴 これは運営だけが見る。会員向けの一覧に「未記入」の印は出さない
+             （本人に烙印が付くのは気分が悪い）。 */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+        <h2 className="text-sm font-bold text-gray-900 mb-1">プロフィールの埋まり具合</h2>
+        <p className="text-[11px] text-gray-400 mb-4">
+          在籍{activeTotal}名のうち、どれだけ書いてもらえているか。声を掛ける相手を探すために出しています。
+        </p>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          {[
+            { label: "ひとこと", value: filled.grip, hint: "メンバー一覧に出る1行" },
+            { label: "プロフィールシート", value: filled.sheet, hint: "名刺カード" },
+            { label: "つながりの設定", value: filled.matching, hint: "業種・立場・地域" },
+          ].map((x) => {
+            const pct = activeTotal > 0 ? Math.round((x.value / activeTotal) * 100) : 0;
+            return (
+              <div key={x.label} className="rounded-xl bg-gray-50 px-3 py-2.5">
+                <p className="text-[11px] text-gray-500">{x.label}</p>
+                <p className="text-lg font-bold text-gray-900 leading-tight">
+                  {x.value}
+                  <span className="text-xs font-normal text-gray-400">
+                    /{activeTotal}（{pct}%）
+                  </span>
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{x.hint}</p>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-gray-500">
+          どれか1つでも未記入の方：<b className="text-gray-900">{notFilled.length}名</b>
+        </p>
+      </div>
+
       <div className="flex items-start gap-2 p-4 mb-6 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 leading-relaxed">
         <Activity className="w-4 h-4 flex-shrink-0 mt-0.5" />
         <span>

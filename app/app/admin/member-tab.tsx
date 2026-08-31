@@ -380,7 +380,7 @@ function MemberDetailModal({
     { label: "年代", value: row.age_range },
     { label: "職業", value: row.job },
     { label: "法人・個人", value: row.membership_type },
-    { label: "グリップ", value: row.grip },
+    { label: "ひとこと", value: row.grip },
     { label: "参加頻度", value: row.frequency },
     { label: "スタート", value: formatStartMonth(row) },
     { label: "更新状況", value: row.renewal_status },

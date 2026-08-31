@@ -7,6 +7,9 @@ import { signAvatarPaths } from "@/lib/supabase/storage";
 export const dynamic = "force-dynamic";
 
 interface ActivityRow {
+  has_grip: boolean;
+  has_sheet: boolean;
+  has_matching: boolean;
   member_id: string;
   name: string;
   job: string | null;
@@ -62,6 +65,10 @@ export async function GET() {
       renewalStatus: r.renewal_status,
       startYear: r.start_year,
       startMonth: r.start_month,
+      // 記入状況。DBに列が無いうちは undefined になるので、必ず真偽値にする
+      hasGrip: Boolean(r.has_grip),
+      hasSheet: Boolean(r.has_sheet),
+      hasMatching: Boolean(r.has_matching),
     })),
     { headers: NO_STORE_HEADERS },
   );

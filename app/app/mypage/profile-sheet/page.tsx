@@ -798,15 +798,18 @@ export default function ProfileSheetPage() {
                     />
                   </div>
                   <div>
+                    {/* 🔴 設定画面の「ひとこと」（メンバー一覧に出る短い方）と
+                           名前が同じで区別できず、両方に同じ文を書いている人がいた。
+                           こちらは名刺に載る方だと分かる名前にする。 */}
                     <label className="block text-xs font-medium text-gray-500 mb-1">
-                      一言
+                      名刺の一言
                     </label>
                     <AutoTextarea
                       minRows={3}
                       value={data.hitokoto}
                       onChange={(v) => update("hitokoto", v)}
                       className={textareaClass}
-                      placeholder="改行して複数行で書けます"
+                      placeholder="名刺カードに載る文です。改行して複数行で書けます"
                     />
                   </div>
                 </div>

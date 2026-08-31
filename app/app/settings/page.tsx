@@ -177,12 +177,14 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">一言</label>
+              {/* 🔴 名刺の「一言」と同じ名前だったので区別できず、両方に同じ文を
+                     書いている人が実際にいた。こちらは一覧に出る短い方。 */}
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">ひとこと</label>
               <input
                 type="text"
                 value={grip}
                 onChange={(e) => setGrip(e.target.value)}
-                placeholder="メンバー一覧に表示される短い紹介文"
+                placeholder="例：なんでも聞いてください／飲み友、壁打ち大歓迎！"
                 className={FIELD}
               />
             </div>

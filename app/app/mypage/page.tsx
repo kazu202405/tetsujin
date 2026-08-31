@@ -16,6 +16,7 @@ import {
 import { EventCalendar } from "@/components/app/event-calendar";
 import { OnboardingChecklist } from "@/components/app/onboarding-checklist";
 import { SocialLinkNudge } from "@/components/app/social-link-nudge";
+import { GripEditor } from "@/components/app/grip-editor";
 import { MatchingSuggestions } from "@/components/app/matching-suggestions";
 import { useJoinedEvents } from "@/lib/events-api";
 import { useCurrentMember } from "@/lib/current-member";
@@ -130,6 +131,9 @@ export default function MyPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-24">
         {/* 使い始めチェックリスト（自動判定・×で閉じる・全完了で消える） */}
         <OnboardingChecklist />
+
+        {/* 一覧に出る1行。未記入なら促し、書いてあれば静かに出す */}
+        <GripEditor />
 
         {/* 連絡先が1件も無いあいだだけ出る（登録すれば自然に消える） */}
         <SocialLinkNudge />
