@@ -34,8 +34,6 @@ export async function GET() {
     // 🔴 必ず配列で返す。member_directory() に industries を足す前の状態でも
     //    画面が落ちないようにする（アプリのデプロイとDBの適用は別々に起きる）。
     industries: Array.isArray(row.industries) ? (row.industries as string[]) : [],
-    // 同じ理由で、created_at も必ず文字列で返す（未適用でも並び替えが落ちない）
-    created_at: typeof row.created_at === "string" ? row.created_at : "",
   }));
 
   return NextResponse.json(withAvatars, { headers });

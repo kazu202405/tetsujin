@@ -25,8 +25,6 @@ type DirectoryMember = {
   avatar_url?: string | null;
   /** 本人が「つながりの設定」で選んだ業種の表示名。未設定なら空 */
   industries: string[];
-  /** 🔴 入会日ではない。名簿を取り込んだ日が入っている人が436名いる */
-  created_at: string;
 };
 
 // カードを押すとその人のプロフィールシートへ。
@@ -141,13 +139,15 @@ export default function MembersPage() {
 
     if (sortBy === "number") return list;
 
-    // 🔴 新しい順。ただし既存会員は436名が取込日で同着になるので、
-    //    同じ日のときは会員番号の大きい順にする。
-    //    これから承認で入る人は created_at が実際の日付になるので上に出る。
+    // 新しい順＝会員番号の大きい順（依頼主定義）。
+    //
+    // 🔴 会員番号が無い126名は先頭に置く。そのうち75名は申込フォームから
+    //    入った直近の分（contact_only）で、まだ運営が番号を振っていない
+    //    ＝一番新しい層。最後に置くと「新しい順」で一番見たい人が埋もれる。
     return [...list].sort((a, b) => {
-      const d = b.created_at.localeCompare(a.created_at);
-      if (d !== 0) return d;
-      return (b.member_no ?? -1) - (a.member_no ?? -1);
+      const an = a.member_no ?? Number.POSITIVE_INFINITY;
+      const bn = b.member_no ?? Number.POSITIVE_INFINITY;
+      return bn - an;
     });
   }, [members, memberTypeFilter, industryFilter, searchQuery, sortBy]);
 
@@ -167,7 +167,7 @@ export default function MembersPage() {
                     ? "bg-gray-900 text-white"
                     : "bg-white text-gray-500 border border-gray-200"
                 }`}
-                title="最近入った方が上に出ます（既存の会員は会員番号の大きい順）"
+                title="会員番号の大きい方が上に出ます。番号がまだ無い方は先頭"
               >
                 <Sparkles className="w-3 h-3" />
                 新しい順
