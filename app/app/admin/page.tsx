@@ -572,6 +572,8 @@ function agoLabel(value: string | null): string {
 }
 
 function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void }) {
+  // 毎日見る数字ではないので既定は畳んでおく
+  const [showCompleteness, setShowCompleteness] = useState(false);
   const [rows, setRows] = useState<ActivityRow[]>([]);
   const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [search, setSearch] = useState("");
@@ -644,8 +646,8 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
     .sort((a, b) => b.count - a.count);
 
   // プロフィールの埋まり具合。誰に声を掛ければよいかを運営が見る。
+  // ひとことは任意なので充足率は出さない（依頼主判断）
   const filled = {
-    grip: rows.filter((r) => !r.isWithdrawn && r.hasGrip).length,
     sheet: rows.filter((r) => !r.isWithdrawn && r.hasSheet).length,
     matching: rows.filter((r) => !r.isWithdrawn && r.hasMatching).length,
   };
@@ -656,41 +658,6 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
 
   return (
     <>
-      {/* 🔴 これは運営だけが見る。会員向けの一覧に「未記入」の印は出さない
-             （本人に烙印が付くのは気分が悪い）。 */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
-        <h2 className="text-sm font-bold text-gray-900 mb-1">プロフィールの埋まり具合</h2>
-        <p className="text-[11px] text-gray-400 mb-4">
-          在籍{activeTotal}名のうち、どれだけ書いてもらえているか。声を掛ける相手を探すために出しています。
-        </p>
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          {[
-            { label: "ひとこと", value: filled.grip, hint: "任意。一覧に出る1行" },
-            { label: "プロフィールシート", value: filled.sheet, hint: "名刺カード" },
-            { label: "つながりの設定", value: filled.matching, hint: "業種・立場・地域" },
-          ].map((x) => {
-            const pct = activeTotal > 0 ? Math.round((x.value / activeTotal) * 100) : 0;
-            return (
-              <div key={x.label} className="rounded-xl bg-gray-50 px-3 py-2.5">
-                <p className="text-[11px] text-gray-500">{x.label}</p>
-                <p className="text-lg font-bold text-gray-900 leading-tight">
-                  {x.value}
-                  <span className="text-xs font-normal text-gray-400">
-                    /{activeTotal}（{pct}%）
-                  </span>
-                </p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{x.hint}</p>
-              </div>
-            );
-          })}
-        </div>
-        <p className="text-[11px] text-gray-500">
-          プロフィールシートかつながりの設定が未記入の方：
-          <b className="text-gray-900">{notFilled.length}名</b>
-          <span className="text-gray-400">（ひとことは任意なので数に入れていません）</span>
-        </p>
-      </div>
-
       <div className="flex items-start gap-2 p-4 mb-6 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 leading-relaxed">
         <Activity className="w-4 h-4 flex-shrink-0 mt-0.5" />
         <span>
@@ -729,6 +696,60 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
             在籍{retention.active} / 退会{retention.withdrawn}
           </p>
         </div>
+      </div>
+
+      {/* 🔴 これは運営だけが見る。会員向けの一覧に「未記入」の印は出さない
+             （本人に烙印が付くのは気分が悪い）。
+             普段は畳んでおく。毎日見る数字ではなく、声を掛ける前に開くもの。 */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-6">
+        <button
+          onClick={() => setShowCompleteness((v) => !v)}
+          className="w-full flex items-center justify-between gap-3 px-5 py-3 text-left"
+        >
+          <span className="text-sm font-bold text-gray-900">
+            プロフィールの埋まり具合
+            <span className="ml-2 text-xs font-normal text-gray-400">
+              未記入 {notFilled.length}名
+            </span>
+          </span>
+          {showCompleteness ? (
+            <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          )}
+        </button>
+
+        {showCompleteness && (
+          <div className="px-5 pb-5">
+            <p className="text-[11px] text-gray-400 mb-3">
+              在籍{activeTotal}名のうち、どれだけ書いてもらえているか。声を掛ける相手を探すために出しています。
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: "プロフィールシート", value: filled.sheet, hint: "名刺カード" },
+                { label: "つながりの設定", value: filled.matching, hint: "業種・立場・地域" },
+              ].map((x) => {
+                const pct = activeTotal > 0 ? Math.round((x.value / activeTotal) * 100) : 0;
+                return (
+                  <div key={x.label} className="rounded-xl bg-gray-50 px-3 py-2.5">
+                    <p className="text-[11px] text-gray-500">{x.label}</p>
+                    <p className="text-lg font-bold text-gray-900 leading-tight">
+                      {x.value}
+                      <span className="text-xs font-normal text-gray-400">
+                        /{activeTotal}（{pct}%）
+                      </span>
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{x.hint}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-3">
+              どちらかが未記入の方：<b className="text-gray-900">{notFilled.length}名</b>
+              <span className="text-gray-400">（ひとことは任意なので数えていません）</span>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 更新状況の内訳（台帳の renewal_status） */}
