@@ -85,7 +85,28 @@ export function useNotifications(): UseNotificationsResult {
     void load();
     const handler = () => void load();
     window.addEventListener(UPDATED_EVENT, handler);
-    return () => window.removeEventListener(UPDATED_EVENT, handler);
+
+    // 🔴 これまで読み直すのは「画面を開いた瞬間」だけだった。
+    //    開いたまま待っている人には新しい通知が永久に出ず、
+    //    別のページへ移動して戻ってきて初めて届く＝「通知が遅い」。
+    //
+    //    ① タブに戻ってきたとき ② ウィンドウにフォーカスが戻ったとき
+    //    ③ 見えている間だけ60秒ごと、の3つで読み直す。
+    //    見えていないタブでは動かさない（開きっぱなしの端末が
+    //    一日中サーバーを叩き続けるのを避ける）。
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", handler);
+    const timer = setInterval(onVisible, 60_000);
+
+    return () => {
+      window.removeEventListener(UPDATED_EVENT, handler);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", handler);
+      clearInterval(timer);
+    };
   }, [load]);
 
   const markRead = (id: string) => {

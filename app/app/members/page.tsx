@@ -35,6 +35,11 @@ function MemberCard({ member }: { member: DirectoryMember }) {
     <Link
       href={`/app/profile/${member.id}`}
       className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:border-gray-300 hover:shadow-md transition-all"
+      // 🔴 441人ぶんのカードを一度に描くと、スクロールも絞り込みも重くなる。
+      //    画面の外にあるカードの中身はブラウザに描かせない。
+      //    高さの目安を渡すのは、描かない分だけスクロールバーが
+      //    伸び縮みして位置が飛ぶのを防ぐため。
+      style={{ contentVisibility: "auto", containIntrinsicSize: "0 84px" }}
     >
       <MemberAvatar
         name={member.name}
