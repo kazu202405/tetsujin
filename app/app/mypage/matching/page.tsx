@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Check, Info, Search, User, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Check, Search, User, AlertCircle, Eye, Lock } from "lucide-react";
 
 interface Option {
   category: string;
@@ -28,13 +28,17 @@ interface Option {
 type Bag = Record<string, string[]>;
 
 /** 画面に出す順番と見出し */
+// 🔴 見出しに必ず向きを入れる（あなたの〜 / 相手の〜）。
+//    どちらのタブも同じカテゴリが並ぶので、「立場・事業形態」とだけ
+//    書かれていると、自分のことなのか相手に求める条件なのかが
+//    カード単体では読めない。
 const PROFILE_SECTIONS: { key: string; category: string; title: string; hint?: string }[] = [
-  { key: "positions", category: "position", title: "立場・事業形態" },
-  { key: "industries", category: "industry", title: "業種" },
-  { key: "regions", category: "region", title: "活動している地域", hint: "複数選べます" },
-  { key: "lifestyles", category: "lifestyle", title: "属性" },
-  { key: "hobbies", category: "hobby", title: "趣味・好きなこと" },
-  { key: "interests", category: "interest", title: "興味・関心のあるテーマ" },
+  { key: "positions", category: "position", title: "あなたの立場・事業形態" },
+  { key: "industries", category: "industry", title: "あなたの業種" },
+  { key: "regions", category: "region", title: "あなたが活動している地域", hint: "複数選べます" },
+  { key: "lifestyles", category: "lifestyle", title: "あなたの属性" },
+  { key: "hobbies", category: "hobby", title: "あなたの趣味・好きなこと" },
+  { key: "interests", category: "interest", title: "あなたの興味・関心のあるテーマ" },
 ];
 
 const WANTS_SECTIONS: { key: string; category: string; title: string; hint?: string }[] = [
@@ -214,60 +218,85 @@ export default function MatchingSettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/80 backdrop-blur border-b border-gray-100">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
+      {/* 🔴 タブと「誰に見えるか」を見出しと一緒に固定する。
+             どちらのタブも同じ見た目の白いカードが並ぶので、
+             スクロールしてタブが流れると、いま自分のことを書いているのか
+             相手に求める条件を書いているのかが画面から読めなくなる。 */}
+      <div className="sticky top-14 lg:top-0 z-30 bg-gray-50/95 backdrop-blur border-b border-gray-200">
+        <div className="max-w-3xl mx-auto px-4 pt-4 flex items-center gap-3">
           <Link href="/app/mypage" className="text-gray-400 hover:text-gray-700">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <h1 className="text-lg font-bold text-gray-900">つながりの設定</h1>
         </div>
+
+        <div className="max-w-3xl mx-auto px-4 pt-3">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setTab("profile")}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${
+                tab === "profile"
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-600 border border-gray-200"
+              }`}
+            >
+              <User className="w-4 h-4" />
+              自分のこと
+              <span
+                className={`text-[10px] ${tab === "profile" ? "text-gray-300" : "text-gray-400"}`}
+              >
+                {profileCount}/{PROFILE_SECTIONS.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setTab("wants")}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${
+                tab === "wants"
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-600 border border-gray-200"
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              探している条件
+              <span
+                className={`text-[10px] ${tab === "wants" ? "text-gray-300" : "text-gray-400"}`}
+              >
+                {wantsCount}/{WANTS_SECTIONS.length}
+              </span>
+            </button>
+          </div>
+
+          {/* 🔴 一番間違えると困るのは「誰に見えるか」。1行にして常に出す。
+                 公開側は白、自分だけの側は塗り＝閉じている見た目にする。
+                 色は足さない（この画面では琥珀＝必須条件・営業目的で既に
+                 意味を持っているので、増やすと読み手が混乱する）。 */}
+          {tab === "profile" ? (
+            <p className="flex items-center gap-1.5 mt-2 mb-3 text-[11px] text-gray-600 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+              <Eye className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+              <span>
+                <b className="text-gray-900">他の会員から見えます。</b>
+                あなたを探している人に見つけてもらうための情報です。
+              </span>
+            </p>
+          ) : (
+            <p className="flex items-center gap-1.5 mt-2 mb-3 text-[11px] text-gray-600 bg-gray-200/70 border border-gray-300 rounded-lg px-3 py-1.5">
+              <Lock className="w-3.5 h-3.5 flex-shrink-0 text-gray-500" />
+              <span>
+                <b className="text-gray-900">あなたと運営だけが見ます。</b>
+                誰を探しているかは相手に伝わりません。
+              </span>
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <p className="flex items-start gap-2 text-xs text-gray-600 bg-white border border-gray-100 rounded-xl px-4 py-3 mb-5 leading-relaxed">
-          <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-gray-400" />
+        <p className="flex items-start gap-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-5 leading-relaxed">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
           <span>
-            <b>「自分のこと」</b>は他の会員から見えます。あなたを探している人に見つけてもらうための情報です。
-            <br />
-            <b>「探している条件」</b>は運営とあなたにしか見えません。
-            <br />
-            <span className="text-amber-700">
-              全部を入れる必要はありませんが、<b>入れていない項目ではマッチしません</b>。
-            </span>
+            全部を入れる必要はありませんが、<b>入れていない項目ではマッチしません</b>。
           </span>
         </p>
-
-        {/* タブ */}
-        <div className="flex gap-2 mb-5">
-          <button
-            onClick={() => setTab("profile")}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${
-              tab === "profile"
-                ? "bg-gray-900 text-white"
-                : "bg-white text-gray-600 border border-gray-200"
-            }`}
-          >
-            <User className="w-4 h-4" />
-            自分のこと
-            <span className={`text-[10px] ${tab === "profile" ? "text-gray-300" : "text-gray-400"}`}>
-              {profileCount}/{PROFILE_SECTIONS.length}
-            </span>
-          </button>
-          <button
-            onClick={() => setTab("wants")}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${
-              tab === "wants"
-                ? "bg-gray-900 text-white"
-                : "bg-white text-gray-600 border border-gray-200"
-            }`}
-          >
-            <Search className="w-4 h-4" />
-            探している条件
-            <span className={`text-[10px] ${tab === "wants" ? "text-gray-300" : "text-gray-400"}`}>
-              {wantsCount}/{WANTS_SECTIONS.length}
-            </span>
-          </button>
-        </div>
 
         {message && (
           <p
@@ -351,9 +380,9 @@ export default function MatchingSettingsPage() {
                 ))}
 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5">
-                  <h2 className="text-sm font-bold text-gray-900 mb-1">自由記述</h2>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">あなたについての自由記述</h2>
                   <p className="text-[11px] text-gray-400 mb-3">
-                    選択肢に無いことがあれば書いてください（できること、得意なことなど）。
+                    選択肢に無いことがあれば書いてください（できること、得意なことなど）。他の会員から見えます。
                   </p>
                   <textarea
                     value={profileNote}
@@ -419,9 +448,9 @@ export default function MatchingSettingsPage() {
                 })}
 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5">
-                  <h2 className="text-sm font-bold text-gray-900 mb-1">自由記述</h2>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">探している相手についての自由記述</h2>
                   <p className="text-[11px] text-gray-400 mb-3">
-                    どんな人を探しているか、選択肢で表せないことがあれば書いてください。
+                    どんな人を探しているか、選択肢で表せないことがあれば書いてください。相手には見えません。
                   </p>
                   <textarea
                     value={wantsNote}
