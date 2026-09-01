@@ -174,6 +174,9 @@ function ViewerLinks({ ownerId }: { ownerId: string }) {
 // ============================================================
 function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
   const [links, setLinks] = useState<OwnSocialLink[]>([]);
+  // 🔴 押す必要があるのかどうかを、ボタン自身が示せるようにする。
+  //    最後に保存した内容と見比べて、変わっていなければ押せなくする。
+  const [savedSnapshot, setSavedSnapshot] = useState("[]");
   const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -184,6 +187,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
       .then((rows) => {
         if (cancelled) return;
         setLinks(rows);
+        setSavedSnapshot(JSON.stringify(rows));
         setStatus("loaded");
       })
       .catch(() => {
@@ -196,6 +200,9 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
 
   const update = (index: number, patch: Partial<OwnSocialLink>) =>
     setLinks((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
+
+  // 入力途中の空行は保存されないので、比較からも外す
+  const dirty = JSON.stringify(links.filter((l) => l.url.trim())) !== savedSnapshot;
 
   const save = async () => {
     setSaving(true);
@@ -211,6 +218,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
     try {
       const saved = await fetchMySocialLinks();
       setLinks(saved);
+      setSavedSnapshot(JSON.stringify(saved));
       // 🔴 マイページの「連絡先を登録しませんか」は覚えている内容で出す。
       //    ここで入れ替えないと、登録したのに戻ると案内が出たままになる。
       setCached("my-social-links", saved);
@@ -232,17 +240,12 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-base font-bold text-gray-900">SNS・リンク</h3>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-gray-800 transition-colors disabled:opacity-60"
-        >
-          <Save className="w-3.5 h-3.5" />
-          {saving ? "保存中..." : "保存"}
-        </button>
-      </div>
+      {/* 🔴 保存ボタンは下に置く。以前は見出しの右（一番上）にあり、
+             追加ボタンは一番下にあった。入力し終えた場所から遠いので
+             「リンクを追加」が確定ボタンに見えてしまう。
+             このページ自体は自動保存なので、ここだけ手動なのも紛らわしい。
+             ∴ 追加と保存を同じ行に並べ、未保存かどうかをその場に出す。 */}
+      <h3 className="text-base font-bold text-gray-900 mb-1">SNS・リンク</h3>
       <p className="text-xs text-gray-500 mb-4 leading-relaxed">
         「承認した人だけ」にすると、連絡先を聞かれたときに自分が選んで教えた相手にだけ
         表示されます。教える前は、リンクがあること自体は見えますがURLは渡りません。
@@ -316,18 +319,32 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
         ))}
       </div>
 
-      <button
-        onClick={() =>
-          setLinks((prev) => [
-            ...prev,
-            { platform: "line", label: null, url: "", visibility: "approved" },
-          ])
-        }
-        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-      >
-        <Plus className="w-4 h-4" />
-        リンクを追加
-      </button>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          onClick={() =>
+            setLinks((prev) => [
+              ...prev,
+              { platform: "line", label: null, url: "", visibility: "approved" },
+            ])
+          }
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          リンクを追加
+        </button>
+
+        <div className="flex items-center gap-2 ml-auto">
+          {dirty && <span className="text-[11px] text-amber-700">未保存の変更があります</span>}
+          <button
+            onClick={save}
+            disabled={saving || !dirty}
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-800 transition-colors disabled:opacity-30"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? "保存中..." : "保存"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
