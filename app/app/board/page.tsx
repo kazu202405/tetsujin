@@ -135,6 +135,8 @@ export default function BoardPage() {
   const [postsStatus, setPostsStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [newPost, setNewPost] = useState("");
   const [posting, setPosting] = useState(false);
+  // 送信中のコメント（投稿id か 親コメントid）。二重送信を止めるために持つ
+  const [sendingComment, setSendingComment] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // 添付画像（ギャラリー等で使う）。送信時にStorageへ上げてからパスを渡す。
@@ -287,7 +289,15 @@ export default function BoardPage() {
     const content = raw.trim();
     if (!content) return;
 
+    // 🔴 送信中は同じ相手への2回目を受け付けない。指で2回叩くと同じコメントが
+    //    2つ並ぶ（実際に起きた）。ボタンを disabled にするだけでは、
+    //    描き直しが間に合わない一瞬に2回目が入るので、ここでも止める。
+    const key = parentCommentId ?? postId;
+    if (sendingComment === key) return;
+    setSendingComment(key);
+
     const result = await createComment(postId, { content, parentCommentId });
+    setSendingComment(null);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -1261,24 +1271,31 @@ export default function BoardPage() {
                                                 className="mt-0.5"
                                               />
                                               <div className="flex-1 flex gap-1.5">
-                                                <input
+                                                <textarea
                                                   value={replyText}
+                                                  rows={1}
                                                   onChange={(e) => setReplyText(e.target.value)}
                                                   onKeyDown={(e) => {
-                                                    if (e.key === "Enter" && !e.shiftKey) {
+                                                    if (
+                                                      e.key === "Enter" &&
+                                                      (e.metaKey || e.ctrlKey)
+                                                    ) {
                                                       e.preventDefault();
                                                       void submitComment(post.id, comment.id);
                                                     }
                                                   }}
                                                   placeholder={`${replyTarget.authorName}さんに返信...`}
-                                                  className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
+                                                  className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all resize-y min-h-[2rem]"
                                                   autoFocus
                                                 />
                                                 <button
                                                   onClick={() =>
                                                     void submitComment(post.id, comment.id)
                                                   }
-                                                  disabled={!replyText.trim()}
+                                                  disabled={
+                                                    !replyText.trim() ||
+                                                    sendingComment === comment.id
+                                                  }
                                                   className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30"
                                                 >
                                                   <Send className="w-3.5 h-3.5" />
@@ -1305,8 +1322,14 @@ export default function BoardPage() {
                       >
                         <MemberAvatar name={me?.name ?? "会員"} url={me?.avatar_url} size="sm" className="mt-0.5" />
                         <div className="flex-1 flex gap-1.5">
-                          <input
+                          {/* 🔴 1行入力だったので改行が入れられず、しかもEnterで
+                                 送信していた。スマホのEnterは改行キーなので、
+                                 改行したつもりで投稿されてしまう（実際に起きた）。
+                                 テキストエリアにして、送信は送信ボタンだけにする。
+                                 パソコン向けに Ctrl/⌘+Enter だけ残す。 */}
+                          <textarea
                             value={commentInputs[post.id] ?? ""}
+                            rows={1}
                             onChange={(e) =>
                               setCommentInputs((prev) => ({
                                 ...prev,
@@ -1314,17 +1337,20 @@ export default function BoardPage() {
                               }))
                             }
                             onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey) {
+                              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                                 e.preventDefault();
                                 void submitComment(post.id);
                               }
                             }}
-                            placeholder="コメントを追加..."
-                            className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
+                            placeholder="コメントを追加...（改行できます）"
+                            className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all resize-y min-h-[2.25rem]"
                           />
                           <button
                             onClick={() => void submitComment(post.id)}
-                            disabled={!(commentInputs[post.id] ?? "").trim()}
+                            disabled={
+                              !(commentInputs[post.id] ?? "").trim() ||
+                              sendingComment === post.id
+                            }
                             className="p-2 text-gray-400 hover:text-gray-900 transition-colors disabled:opacity-30"
                           >
                             <Send className="w-4 h-4" />
