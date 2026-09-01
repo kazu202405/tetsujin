@@ -200,8 +200,18 @@ export default function MyPage() {
             <ChevronRight className="w-5 h-5 text-white/80 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
           </Link>
 
-          {/* 参加した会（今月＋累計） */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col justify-center">
+          {/* 参加した会（今月＋累計）。押すと下の一覧まで送る。
+              数字を見た人が次に知りたいのは「どの会だったか」なので、
+              そこへ行く手段がその場に無いと画面を探すことになる。 */}
+          <button
+            type="button"
+            onClick={() => {
+              document
+                .getElementById("joined-events")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col justify-center text-left hover:border-gray-300 hover:shadow-md transition-all group"
+          >
             <div className="flex items-center gap-2 text-gray-500 mb-1">
               <CalendarDays className="w-4 h-4" />
               <span className="text-xs font-medium">今月参加した会</span>
@@ -210,8 +220,13 @@ export default function MyPage() {
               {eventsThisMonth}
               <span className="text-sm font-medium text-gray-400 ml-1">件</span>
             </p>
-            <p className="text-xs text-gray-400 mt-2">累計 {eventsTotal}件</p>
-          </div>
+            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+              累計 {eventsTotal}件
+              <span className="text-gray-300 group-hover:text-gray-500 transition-colors">
+                ・一覧を見る
+              </span>
+            </p>
+          </button>
         </div>
 
         {/* 今月のおすすめ（つながりマッチング） */}
@@ -271,6 +286,9 @@ export default function MyPage() {
         </div>
 
         {/* カレンダー（参加イベント） + 参加リスト */}
+        {/* 上の「今月参加した会」から飛んでくる先。ヘッダーが固定なので
+            その分だけ余白を取って、見出しが隠れないようにする。 */}
+        <div id="joined-events" className="scroll-mt-24" />
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
             <CalendarDays className="w-4 h-4 text-gray-400" />
