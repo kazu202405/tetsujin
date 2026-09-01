@@ -274,7 +274,12 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
               >
                 {(Object.keys(SOCIAL_PLATFORM_META) as SocialPlatform[]).map((p) => (
                   <option key={p} value={p}>
-                    {SOCIAL_PLATFORM_META[p].label}
+                    {/* 🔴 「その他」は選んで初めて名前の入力欄が出るので、
+                           選ぶ前は自由に名前を付けられると分からない。
+                           一覧の時点で例を見せる。 */}
+                    {p === "other"
+                      ? "その他（Threads・note など）"
+                      : SOCIAL_PLATFORM_META[p].label}
                   </option>
                 ))}
               </select>
@@ -304,7 +309,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
               <input
                 value={link.label ?? ""}
                 onChange={(e) => update(index, { label: e.target.value })}
-                placeholder="表示名（例: note）"
+                placeholder="表示名（例：Threads／note／YouTube）"
                 className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
             )}
