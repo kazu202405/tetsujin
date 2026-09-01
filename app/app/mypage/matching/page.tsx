@@ -106,6 +106,19 @@ const REGION_GROUPS: { label: string; codes: string[] }[] = [
 /** 全国＝47都道府県。海外は含めない（「全国」は国内のことなので） */
 const ALL_PREFECTURES = REGION_GROUPS.flatMap((g) => g.codes);
 
+// ------------------------------------------------------------
+// まず出す項目
+// ------------------------------------------------------------
+// 🔴 9項目が並んでいること自体が「全部埋めるもの」に見えて、
+//    会員に「何か押さないといけない」と思わせていた。
+//    最初は主要なものだけ出して、残りは畳む。3〜4項目なら埋め切れる。
+//
+// 主要の選び方は入会フォームと同じ（立場・業種・地域）。
+// 探す側はそれに「目的」を足す（申請するときに必須なので、
+//   ここで選んでおくと後がそのまま繋がる）。
+const CORE_PROFILE_KEYS = ["positions", "industries", "regions"];
+const CORE_WANTS_KEYS = ["purposes", "positions", "industries", "regions"];
+
 /** 必須指定に使うカテゴリ名（DB側の required に入れる値） */
 const REQUIRED_KEY: Record<string, string> = {
   purposes: "purpose",
@@ -219,6 +232,7 @@ export default function MatchingSettingsPage() {
   //    エンジンは WHERE w.is_active で見ているので、これがオフの人には
   //    候補が出ない。行が無い人は既定で探している扱い（DBのDEFAULT TRUE）。
   const [wantsActive, setWantsActive] = useState(true);
+  const [showMore, setShowMore] = useState(false);
   const [profileNote, setProfileNote] = useState("");
   const [wantsNote, setWantsNote] = useState("");
   const [me, setMe] = useState<{ ageRange: string | null; gender: string | null }>({
@@ -326,6 +340,14 @@ export default function MatchingSettingsPage() {
   const profileCount = PROFILE_SECTIONS.filter((s) => (profile[s.key] ?? []).length > 0).length;
   const wantsCount = WANTS_SECTIONS.filter((s) => (wants[s.key] ?? []).length > 0).length;
 
+  // 畳んだ側に入力が隠れていることに気づけるように数える
+  const hiddenProfileCount = PROFILE_SECTIONS.filter(
+    (s) => !CORE_PROFILE_KEYS.includes(s.key) && (profile[s.key] ?? []).length > 0,
+  ).length;
+  const hiddenWantsCount = WANTS_SECTIONS.filter(
+    (s) => !CORE_WANTS_KEYS.includes(s.key) && (wants[s.key] ?? []).length > 0,
+  ).length;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 🔴 タブと「誰に見えるか」を見出しと一緒に固定する。
@@ -401,11 +423,15 @@ export default function MatchingSettingsPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <p className="flex items-start gap-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-5 leading-relaxed">
-          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-          <span>
-            全部を入れる必要はありませんが、<b>入れていない項目ではマッチしません</b>。
-          </span>
+        {/* 🔴 前は「全部を入れる必要はありませんが、入れていない項目では
+               マッチしません」と出していた。「入れなくていい」と言った直後に
+               「入れないと機能しない」と言っており、読む人には後半しか残らない。
+               会員から「何か押さないといけない気がする」と言われたのはこれが原因。
+               ∴ 脅しではなく効き方を書く。 */}
+        <p className="text-[11px] text-gray-500 bg-white border border-gray-100 rounded-xl px-3 py-2.5 mb-5 leading-relaxed">
+          選んだ項目が多いほど、合う方が見つかりやすくなります。
+          <b className="text-gray-700">空のままでも構いません</b>
+          （その項目は条件にしない、という意味になります）。
         </p>
 
         {message && (
@@ -475,7 +501,9 @@ export default function MatchingSettingsPage() {
                   )}
                 </div>
 
-                {PROFILE_SECTIONS.map((s) => (
+                {PROFILE_SECTIONS.filter(
+                  (x) => CORE_PROFILE_KEYS.includes(x.key) || showMore,
+                ).map((s) => (
                   <div key={s.key} className="bg-white rounded-2xl border border-gray-100 p-5">
                     <h2 className="text-sm font-bold text-gray-900 mb-1">{s.title}</h2>
                     {s.hint && <p className="text-[11px] text-gray-400 mb-3">{s.hint}</p>}
@@ -495,6 +523,22 @@ export default function MatchingSettingsPage() {
                     </div>
                   </div>
                 ))}
+
+                {/* 残りは畳んでおく。全部が並んでいると「全部埋めるもの」に見える。
+                    畳んだままでも保存でき、選んでいる項目があれば件数を出す
+                    （閉じた中に入力が隠れていることに気づけるように）。 */}
+                <button
+                  type="button"
+                  onClick={() => setShowMore((v) => !v)}
+                  className="w-full rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-3 text-xs font-bold text-gray-600 hover:border-gray-400"
+                >
+                  {showMore ? "細かい指定を閉じる" : "もっと細かく指定する"}
+                  {!showMore && hiddenProfileCount > 0 && (
+                    <span className="ml-1.5 font-normal text-gray-400">
+                      （{hiddenProfileCount}項目を選択中）
+                    </span>
+                  )}
+                </button>
 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5">
                   <h2 className="text-sm font-bold text-gray-900 mb-1">あなたについての自由記述</h2>
@@ -540,7 +584,9 @@ export default function MatchingSettingsPage() {
                   </label>
                 </div>
 
-                {WANTS_SECTIONS.map((s) => {
+                {WANTS_SECTIONS.filter(
+                  (x) => CORE_WANTS_KEYS.includes(x.key) || showMore,
+                ).map((s) => {
                   const reqKey = REQUIRED_KEY[s.key];
                   const isRequired = required.includes(reqKey);
                   const hasAny = (wants[s.key] ?? []).length > 0;
@@ -609,6 +655,22 @@ export default function MatchingSettingsPage() {
                     </div>
                   );
                 })}
+
+                {/* 残りは畳んでおく。全部が並んでいると「全部埋めるもの」に見える。
+                    畳んだままでも保存でき、選んでいる項目があれば件数を出す
+                    （閉じた中に入力が隠れていることに気づけるように）。 */}
+                <button
+                  type="button"
+                  onClick={() => setShowMore((v) => !v)}
+                  className="w-full rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-3 text-xs font-bold text-gray-600 hover:border-gray-400"
+                >
+                  {showMore ? "細かい指定を閉じる" : "もっと細かく指定する"}
+                  {!showMore && hiddenWantsCount > 0 && (
+                    <span className="ml-1.5 font-normal text-gray-400">
+                      （{hiddenWantsCount}項目を選択中）
+                    </span>
+                  )}
+                </button>
 
                 <div className="bg-white rounded-2xl border border-gray-100 p-5">
                   <h2 className="text-sm font-bold text-gray-900 mb-1">探している相手についての自由記述</h2>
