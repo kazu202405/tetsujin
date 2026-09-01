@@ -25,7 +25,7 @@ interface SnsLink {
   url: string;
 }
 
-const PLATFORMS = new Set(["line", "instagram", "x", "facebook", "website", "other"]);
+const PLATFORMS = new Set(["line", "instagram", "x", "facebook", "threads", "note", "website", "other"]);
 
 /** 入力されたSNSリンクを、保存してよい形だけに整える。 */
 function sanitizeSnsLinks(input: unknown): SnsLink[] | null {

@@ -301,9 +301,17 @@ export function ConnectionRequestsPanel() {
               </button>
             </div>
             <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
-              選んだものだけが、この方のプロフィール画面に表示されます。
-              あとから増やすことも、教えないまま受けることもできます。
+              選んだものだけが、この方のプロフィール画面に表示されます。あとから増やせます。
             </p>
+            {/* 🔴 1つも選ばずに受けられるが、それが何を意味するのかを
+                   その場に書く。以前はボタンが「教えずに受ける」とだけ出ており、
+                   何が起きるのか読めなかった。 */}
+            {chosen.length === 0 && (
+              <p className="text-[11px] text-gray-600 bg-gray-100 rounded-lg px-3 py-2 mb-4 leading-relaxed">
+                1つも選ばずに受けると、<b>お返事だけが相手に届きます</b>（連絡先は渡りません）。
+                すでに「全員に公開」にしている連絡先は、選ばなくても相手から見えています。
+              </p>
+            )}
 
             {myLinks === null ? (
               <div className="h-20 rounded-xl bg-gray-50 animate-pulse mb-4" />
@@ -375,7 +383,7 @@ export function ConnectionRequestsPanel() {
                 ) : (
                   <Handshake className="w-3.5 h-3.5" />
                 )}
-                {chosen.length > 0 ? "これで教える" : "教えずに受ける"}
+                {chosen.length > 0 ? "これで教える" : "連絡先は教えずに受ける"}
               </button>
             </div>
           </div>

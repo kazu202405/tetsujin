@@ -5,6 +5,8 @@ export type SocialPlatform =
   | "instagram"
   | "x"
   | "facebook"
+  | "threads"
+  | "note"
   | "website"
   | "other";
 
@@ -42,6 +44,16 @@ export const SOCIAL_PLATFORM_META: Record<
     label: "Facebook",
     placeholder: "https://www.facebook.com/...",
     color: "bg-[#1877F2]",
+  },
+  threads: {
+    label: "Threads",
+    placeholder: "https://www.threads.net/@...",
+    color: "bg-black",
+  },
+  note: {
+    label: "note",
+    placeholder: "https://note.com/...",
+    color: "bg-[#41C9B4]",
   },
   website: {
     label: "ウェブサイト",

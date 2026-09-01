@@ -10,7 +10,7 @@ import { type SocialPlatform, normalizeSocialUrl } from "@/lib/social-links";
 
 export const dynamic = "force-dynamic";
 
-const PLATFORMS = new Set(["line", "instagram", "x", "facebook", "website", "other"]);
+const PLATFORMS = new Set(["line", "instagram", "x", "facebook", "threads", "note", "website", "other"]);
 const VISIBILITIES = new Set(["public", "approved", "private"]);
 const MAX_LINKS = 12;
 

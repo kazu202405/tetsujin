@@ -4,7 +4,7 @@
 // SNS欄（social-links-section）と名刺カード（profile-sheet-card）の両方で使うため
 // ここに置いている。LINE は lucide に無いのでインラインSVG。
 
-import { Globe, Instagram, Twitter, Facebook, Link as LinkIcon } from "lucide-react";
+import { Globe, Instagram, Twitter, Facebook, AtSign, FileText, Link as LinkIcon } from "lucide-react";
 import type { SocialPlatform } from "@/lib/social-links";
 
 export function PlatformIcon({
@@ -24,6 +24,9 @@ export function PlatformIcon({
   if (platform === "instagram") return <Instagram className={className} />;
   if (platform === "x") return <Twitter className={className} />;
   if (platform === "facebook") return <Facebook className={className} />;
+  // Threads と note のロゴは lucide に無いので、意味の近い汎用アイコンで代用する
+  if (platform === "threads") return <AtSign className={className} />;
+  if (platform === "note") return <FileText className={className} />;
   if (platform === "website") return <Globe className={className} />;
   return <LinkIcon className={className} />;
 }
