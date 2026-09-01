@@ -245,7 +245,16 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
     onSaved?.();
   };
 
-  if (status === "loading") return null;
+  // 読み込み中は場所を確保して見せる。以前は何も出さず、
+  // 読み込みが終わった瞬間に現れるので、待っていると分からなかった。
+  if (status === "loading") {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+        <h3 className="text-base font-bold text-gray-900 mb-3">SNS・リンク</h3>
+        <div className="h-20 rounded-xl bg-gray-100 animate-pulse" />
+      </div>
+    );
+  }
   if (status === "error") {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
@@ -282,12 +291,14 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
       <div className="space-y-3">
         {links.map((link, index) => (
           <div key={link.id ?? `new-${index}`} className="p-3 bg-gray-50 rounded-xl space-y-2">
-            <div className="flex items-center gap-2">
+            {/* 🔴 スマホでは「承認した人だけ」が長く、横一列だとゴミ箱ごと
+                   はみ出す。折り返しを許して、選択肢も縮むようにする。 */}
+            <div className="flex items-center gap-2 flex-wrap">
               <select
                 value={link.platform}
                 onChange={(e) => update(index, { platform: e.target.value as SocialPlatform })}
                 onBlur={saveOnBlur}
-                className="px-2.5 py-2 rounded-lg border border-gray-200 bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="min-w-0 max-w-[45%] px-2 py-2 rounded-lg border border-gray-200 bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900"
               >
                 {(Object.keys(SOCIAL_PLATFORM_META) as SocialPlatform[]).map((p) => (
                   <option key={p} value={p}>
@@ -305,7 +316,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
                 value={link.visibility}
                 onChange={(e) => update(index, { visibility: e.target.value as SocialVisibility })}
                 onBlur={saveOnBlur}
-                className="px-2.5 py-2 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="min-w-0 max-w-[45%] px-2 py-2 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900"
               >
                 {(Object.keys(VISIBILITY_META) as SocialVisibility[]).map((v) => (
                   <option key={v} value={v}>
@@ -359,7 +370,6 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
         </button>
 
         <div className="flex items-center gap-2 ml-auto">
-          {dirty && <span className="text-[11px] text-amber-700">未保存の変更があります</span>}
           <button
             onClick={save}
             disabled={saving || !dirty}
