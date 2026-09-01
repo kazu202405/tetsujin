@@ -632,7 +632,7 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
   const [onlyLoginUsers, setOnlyLoginUsers] = useState(false);
   // 状態ではなく「次に何をするか」で絞る。そのまま声かけの相手一覧になる。
   const [task, setTask] = useState<
-    "all" | "no_login" | "no_profile" | "payment" | "not_renewed"
+    "all" | "no_login" | "no_profile" | "payment" | "not_renewed" | "waiting" | "renewed"
   >("all");
 
   useEffect(() => {
@@ -664,6 +664,10 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
         return r.renewalStatus === "入金待ち";
       case "not_renewed":
         return r.renewalStatus === "未更新";
+      case "waiting":
+        return r.renewalStatus === "返事待ち";
+      case "renewed":
+        return r.renewalStatus === "更新済";
       default:
         return true;
     }
@@ -712,16 +716,6 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
     rate: rows.length > 0 ? Math.round((activeTotal / rows.length) * 1000) / 10 : 0,
   };
 
-  const renewalBreakdown = Object.entries(
-    rows.reduce<Record<string, number>>((acc, r) => {
-      const key = r.renewalStatus ?? "未記入";
-      acc[key] = (acc[key] ?? 0) + 1;
-      return acc;
-    }, {})
-  )
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count);
-
   // プロフィールの埋まり具合。誰に声を掛ければよいかを運営が見る。
   // ひとことは任意なので充足率は出さない（依頼主判断）
   const filled = {
@@ -736,6 +730,8 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
     no_profile: activeRows.filter((r) => !r.hasSheet || !r.hasMatching).length,
     payment: activeRows.filter((r) => r.renewalStatus === "入金待ち").length,
     not_renewed: activeRows.filter((r) => r.renewalStatus === "未更新").length,
+    waiting: activeRows.filter((r) => r.renewalStatus === "返事待ち").length,
+    renewed: activeRows.filter((r) => r.renewalStatus === "更新済").length,
   };
 
   const notFilled = rows.filter(
@@ -838,19 +834,6 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
         )}
       </div>
 
-      {/* 更新状況の内訳（台帳の renewal_status） */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {renewalBreakdown.map((r) => (
-          <span
-            key={r.label}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-xs text-gray-600"
-          >
-            {r.label}
-            <span className="font-bold text-gray-900">{r.count}</span>
-          </span>
-        ))}
-      </div>
-
       {/* 🔴 状態ではなく「次に何をするか」で絞る。押せばそのまま
              声かけの相手一覧になる。これまで「入金待ちの19名を出す」ことすら
              できなかった（更新状況は数字が並んでいるだけで押せなかった）。 */}
@@ -860,8 +843,10 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
             { key: "all", label: "全員", count: taskCounts.all },
             { key: "no_login", label: "まだログインしていない", count: taskCounts.no_login },
             { key: "no_profile", label: "プロフィール未記入", count: taskCounts.no_profile },
-            { key: "payment", label: "入金待ち", count: taskCounts.payment },
             { key: "not_renewed", label: "未更新", count: taskCounts.not_renewed },
+            { key: "payment", label: "入金待ち", count: taskCounts.payment },
+            { key: "waiting", label: "返事待ち", count: taskCounts.waiting },
+            { key: "renewed", label: "更新済", count: taskCounts.renewed },
           ] as const
         ).map((t) => (
           <button
