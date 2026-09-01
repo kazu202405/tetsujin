@@ -7,6 +7,9 @@ import { signAvatarPaths } from "@/lib/supabase/storage";
 export const dynamic = "force-dynamic";
 
 interface ActivityRow {
+  member_no: number | null;
+  email: string | null;
+  phone: string | null;
   has_grip: boolean;
   has_sheet: boolean;
   has_matching: boolean;
@@ -49,7 +52,10 @@ export async function GET() {
   return NextResponse.json(
     rows.map((r) => ({
       memberId: r.member_id,
+      memberNo: r.member_no ?? null,
       name: r.name,
+      email: r.email ?? null,
+      phone: r.phone ?? null,
       job: r.job,
       avatarUrl: r.avatar_path ? avatarUrls[r.avatar_path] ?? null : null,
       isWithdrawn: r.is_withdrawn,

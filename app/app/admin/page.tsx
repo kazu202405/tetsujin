@@ -547,7 +547,10 @@ function ApplicationsTab() {
 // 画面にも置かない（もっともらしい数字を作らない）。
 interface ActivityRow {
   memberId: string;
+  memberNo: number | null;
   name: string;
+  email: string | null;
+  phone: string | null;
   job: string | null;
   avatarUrl: string | null;
   isWithdrawn: boolean;
@@ -623,7 +626,14 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
   const [loadStatus, setLoadStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<ActivityStatus | "all">("all");
-  const [onlyLoginUsers, setOnlyLoginUsers] = useState(true);
+  // 🔴 既定は全員。以前は「ログインした人だけ」が既定で、ログイン
+  //    アカウントを持つ会員が6名しかいないため 439名中6名しか出ていなかった。
+  //    運営が最初に見たいのは全員のはず。
+  const [onlyLoginUsers, setOnlyLoginUsers] = useState(false);
+  // 状態ではなく「次に何をするか」で絞る。そのまま声かけの相手一覧になる。
+  const [task, setTask] = useState<
+    "all" | "no_login" | "no_profile" | "payment" | "not_renewed"
+  >("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -643,19 +653,41 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
     };
   }, []);
 
+  const matchesTask = (r: ActivityRow) => {
+    switch (task) {
+      case "no_login":
+        return !r.hasLogin;
+      case "no_profile":
+        // ひとことは任意なので数えない（埋まり具合の判定と揃える）
+        return !r.hasSheet || !r.hasMatching;
+      case "payment":
+        return r.renewalStatus === "入金待ち";
+      case "not_renewed":
+        return r.renewalStatus === "未更新";
+      default:
+        return true;
+    }
+  };
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return rows
       .filter((r) => !r.isWithdrawn)
       .filter((r) => !onlyLoginUsers || r.hasLogin)
       .filter((r) => filterStatus === "all" || judgeActivity(r) === filterStatus)
+      .filter(matchesTask)
       .filter(
         (r) =>
           !query ||
           r.name.toLowerCase().includes(query) ||
-          (r.job ?? "").toLowerCase().includes(query)
+          (r.job ?? "").toLowerCase().includes(query) ||
+          // 運営は「3番の人」「この電話番号の人」で探す
+          String(r.memberNo ?? "").includes(query) ||
+          (r.email ?? "").toLowerCase().includes(query) ||
+          (r.phone ?? "").replace(/[-\s]/g, "").includes(query.replace(/[-\s]/g, ""))
       );
-  }, [rows, search, filterStatus, onlyLoginUsers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, search, filterStatus, onlyLoginUsers, task]);
 
   if (loadStatus === "loading") {
     return <div className="text-center text-gray-400 py-20">読み込み中...</div>;
@@ -697,6 +729,15 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
     matching: rows.filter((r) => !r.isWithdrawn && r.hasMatching).length,
   };
   // ひとことは必須ではないので、未記入の数には入れない（依頼主判断）
+  const activeRows = rows.filter((r) => !r.isWithdrawn);
+  const taskCounts = {
+    all: activeRows.length,
+    no_login: activeRows.filter((r) => !r.hasLogin).length,
+    no_profile: activeRows.filter((r) => !r.hasSheet || !r.hasMatching).length,
+    payment: activeRows.filter((r) => r.renewalStatus === "入金待ち").length,
+    not_renewed: activeRows.filter((r) => r.renewalStatus === "未更新").length,
+  };
+
   const notFilled = rows.filter(
     (r) => !r.isWithdrawn && (!r.hasSheet || !r.hasMatching),
   );
@@ -810,6 +851,34 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
         ))}
       </div>
 
+      {/* 🔴 状態ではなく「次に何をするか」で絞る。押せばそのまま
+             声かけの相手一覧になる。これまで「入金待ちの19名を出す」ことすら
+             できなかった（更新状況は数字が並んでいるだけで押せなかった）。 */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {(
+          [
+            { key: "all", label: "全員", count: taskCounts.all },
+            { key: "no_login", label: "まだログインしていない", count: taskCounts.no_login },
+            { key: "no_profile", label: "プロフィール未記入", count: taskCounts.no_profile },
+            { key: "payment", label: "入金待ち", count: taskCounts.payment },
+            { key: "not_renewed", label: "未更新", count: taskCounts.not_renewed },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTask(t.key)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+              task === t.key
+                ? "bg-gray-900 text-white"
+                : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            {t.label}
+            <span className={task === t.key ? "text-gray-300" : "text-gray-400"}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -817,7 +886,7 @@ function ActivityTab({ onSelectMember }: { onSelectMember: (id: string) => void 
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="名前・職種で検索..."
+            placeholder="名前・職種・会員番号・メール・電話で検索..."
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
           />
         </div>
