@@ -204,6 +204,22 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
   // 入力途中の空行は保存されないので、比較からも外す
   const dirty = JSON.stringify(links.filter((l) => l.url.trim())) !== savedSnapshot;
 
+  // 🔴 このページはシートだけ自動保存で、SNS欄は手動保存だった。
+  //    入力してもボタンを押さずに離れると消える（実際に消えた）。
+  //    ボタンの位置を直しただけでは「押さないと消える」構造は残る。
+  //    ∴ 入力欄から離れたら保存する。
+  //
+  //    ただし打ちかけでは保存しない。URLは必ず途中の状態を通るので、
+  //    そこで送るとサーバーの検証に弾かれてエラーが出続けるうえ、
+  //    "https://htt" のような屑が残る。
+  //    ドットが1つも無いうちは打ちかけとみなして待つ。
+  const looksComplete = (url: string) => url.includes(".");
+  const saveOnBlur = () => {
+    if (!dirty || saving) return;
+    if (!links.every((l) => !l.url.trim() || looksComplete(l.url.trim()))) return;
+    void save();
+  };
+
   const save = async () => {
     setSaving(true);
     setMessage(null);
@@ -270,6 +286,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
               <select
                 value={link.platform}
                 onChange={(e) => update(index, { platform: e.target.value as SocialPlatform })}
+                onBlur={saveOnBlur}
                 className="px-2.5 py-2 rounded-lg border border-gray-200 bg-white text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900"
               >
                 {(Object.keys(SOCIAL_PLATFORM_META) as SocialPlatform[]).map((p) => (
@@ -287,6 +304,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
               <select
                 value={link.visibility}
                 onChange={(e) => update(index, { visibility: e.target.value as SocialVisibility })}
+                onBlur={saveOnBlur}
                 className="px-2.5 py-2 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900"
               >
                 {(Object.keys(VISIBILITY_META) as SocialVisibility[]).map((v) => (
@@ -309,6 +327,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
               <input
                 value={link.label ?? ""}
                 onChange={(e) => update(index, { label: e.target.value })}
+                onBlur={saveOnBlur}
                 placeholder="表示名（例：Threads／note／YouTube）"
                 className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
@@ -317,6 +336,7 @@ function OwnerLinks({ onSaved }: { onSaved?: () => void }) {
             <input
               value={link.url}
               onChange={(e) => update(index, { url: e.target.value })}
+              onBlur={saveOnBlur}
               placeholder={SOCIAL_PLATFORM_META[link.platform].placeholder}
               className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
             />
