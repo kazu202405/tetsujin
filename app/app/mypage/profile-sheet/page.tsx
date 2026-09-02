@@ -166,6 +166,8 @@ export default function ProfileSheetPage() {
     "idle"
   );
   const [saveError, setSaveError] = useState<string | null>(null);
+  // 画像書き出しの失敗。保存の状態とは別に持つ（自動保存で消されると読めなくなる）
+  const [exportError, setExportError] = useState<string | null>(null);
   // 直近の保存が自動保存だったか（ボタンの文言を出し分けるため）
   const [savedByAuto, setSavedByAuto] = useState(true);
   // 直近で保存に成功した内容。変化が無いときに無駄な保存を投げないための比較用。
@@ -408,6 +410,7 @@ export default function ProfileSheetPage() {
 
   const handleExportJpeg = async () => {
     if (!cardRef.current) return;
+    setExportError(null);
     try {
       const html2canvas = (await import("html2canvas-pro")).default;
       const canvas = await html2canvas(cardRef.current, {
@@ -420,7 +423,9 @@ export default function ProfileSheetPage() {
       link.href = canvas.toDataURL("image/jpeg", 0.95);
       link.click();
     } catch {
-      alert("画像の書き出しに失敗しました。もう一度お試しください。");
+      // ⚠ ブラウザ標準ダイアログは「異常が起きた」と読まれるので使わない。
+      //   保存状態と同じ行に赤字で出す。
+      setExportError("画像の書き出しに失敗しました。もう一度お試しください。");
     }
   };
 
@@ -627,6 +632,7 @@ export default function ProfileSheetPage() {
             {saveState === "dirty" && <span className="text-gray-400">未保存の変更があります</span>}
             {saveState === "saving" && <span className="text-gray-400">保存中...</span>}
             {saveState === "error" && <span className="text-red-600">{saveError}</span>}
+            {exportError && <span className="text-red-600">{exportError}</span>}
           </div>
         </div>
       </div>
