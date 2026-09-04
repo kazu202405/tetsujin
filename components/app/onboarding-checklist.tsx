@@ -96,13 +96,11 @@ export function OnboardingChecklist() {
       done: data.joinedEvent,
       href: "/app/post",
     },
-    {
-      key: "connection",
-      label: "会った人を記録する",
-      hint: "いつ・どこで会ったかを自分用に残せます",
-      done: data.hasConnection,
-      href: "/app/connections",
-    },
+    // 「会った人を記録する」は依頼主判断で2026-09-04にガイドから外した。
+    // 出会い記録そのものは残っている（サイドバー／下タブの「出会い」）が、
+    // 会に参加した分は自動で並ぶだけで connections には保存されないため、
+    // 会に出ても永久に埋まらない項目になっていた。
+    // API は has_connection を返し続けている＝戻すときはここに足すだけ。
   ];
 
   const doneCount = steps.filter((s) => s.done).length;
