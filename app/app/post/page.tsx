@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { CalendarDays, Plus, ChevronLeft } from "lucide-react";
 import type { Event, MyProfile, ParticipantRole, ToastMessage } from "./types";
 import { useCurrentMember } from "@/lib/current-member";
@@ -428,7 +428,11 @@ export default function PostPage() {
       addToast("会の一覧を読み込めませんでした。再読み込みしてください", "error");
       return;
     }
-    const ev = events.find((e) => e.id === pendingShareId);
+    // 🔴 表示用の events ではなく、取得元の eventRecords を見る。
+    //    events は eventRecords から別の useEffect で作り直しており、
+    //    取得完了と同じ描画では、まだ前の（空の）中身のままになっている。
+    //    そこで探すと「読み込めているのに見つからない」と誤報する。
+    const ev = eventRecords.find((e) => e.id === pendingShareId);
     setPendingShareId(null);
     if (!ev) {
       addToast("その会は見つかりませんでした。終了・削除されたかもしれません", "error");
@@ -439,13 +443,20 @@ export default function PostPage() {
     setViewMonth(m - 1);
     setSelectedDate(ev.date);
     setHighlightId(ev.id);
-    // 描画が終わってから送る（先に呼ぶと、まだ要素が無くて空振りする）
-    requestAnimationFrame(() => {
-      document
-        .getElementById(`event-${ev.id}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-  }, [pendingShareId, eventsStatus, events, addToast]);
+  }, [pendingShareId, eventsStatus, eventRecords, addToast]);
+
+  // 🔴 スクロールはここで別に行う。上の useEffect の中で呼ぶと、
+  //    月と日付を切り替えた描画がまだ済んでおらず、要素が存在しない。
+  //    ?. で握るので何も起きず、失敗したことにも気づけない。
+  //    ∴ 実際にカードが並んだ後（visibleEvents が変わった後）に探す。
+  const scrolledToRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightId || scrolledToRef.current === highlightId) return;
+    const el = document.getElementById(`event-${highlightId}`);
+    if (!el) return;
+    scrolledToRef.current = highlightId;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightId, visibleEvents]);
 
   // サイドバーから管理パネルを開く
   const handleManageFromSidebar = (eventId: string) => {
