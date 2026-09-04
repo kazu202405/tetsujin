@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  Link2,
 } from "lucide-react";
 import type { Event, Series } from "../types";
 import { MemberAvatar } from "@/components/app/member-avatar";
@@ -30,6 +31,9 @@ interface EventCardProps {
   onToggleJoin: (eventId: string) => void;
   onSetManagingEventId: (id: string | null) => void;
   onToggleFollowSeries: (seriesId: string) => void;
+  onShare: (eventId: string) => void;
+  /** 共有リンクから開かれた会。どれの話か分かるよう枠を強調する。 */
+  highlighted?: boolean;
 }
 
 export default function EventCard({
@@ -42,6 +46,8 @@ export default function EventCard({
   onToggleJoin,
   onSetManagingEventId,
   onToggleFollowSeries,
+  onShare,
+  highlighted = false,
 }: EventCardProps) {
   const [expandedSeries, setExpandedSeries] = useState(false);
 
@@ -62,8 +68,14 @@ export default function EventCard({
 
   return (
     <div
+      // 共有リンク（?event=...）から開いたときに、この要素まで送る
+      id={`event-${event.id}`}
       className={`bg-white rounded-2xl border shadow-sm p-5 hover:shadow-md transition-all ${
-        isUpcoming ? "border-amber-200" : "border-gray-100"
+        highlighted
+          ? "border-[var(--tetsu-pink)] ring-2 ring-[var(--tetsu-pink)]/30"
+          : isUpcoming
+          ? "border-amber-200"
+          : "border-gray-100"
       }`}
     >
       {/* タイトル行 */}
@@ -257,6 +269,16 @@ export default function EventCard({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {/* この会だけを指すURLを配れるようにする。
+              一覧の中でしか参加できず、人に教える手段が無かった。 */}
+          <button
+            onClick={() => onShare(event.id)}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+            title="この会のURLをコピーします"
+          >
+            <Link2 className="w-3.5 h-3.5" />
+            共有
+          </button>
           {event.isHost && (
             <button
               onClick={() =>

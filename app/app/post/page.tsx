@@ -388,6 +388,65 @@ export default function PostPage() {
     }
   };
 
+  // ------------------------------------------------------------
+  // この会だけを指すURL
+  // ------------------------------------------------------------
+  // 参加できるのが一覧の中だけで、人に教える手段が無かった。
+  // 会員限定のままでよい（依頼主判断 2026-09-04）＝未ログインで開いた人は
+  // middleware が ?next= 付きでログインへ送り、ログイン後にここへ戻る。
+  const shareUrlFor = (eventId: string) =>
+    `${window.location.origin}/app/post?event=${eventId}`;
+
+  const handleShare = async (eventId: string) => {
+    const url = shareUrlFor(eventId);
+    try {
+      await navigator.clipboard.writeText(url);
+      addToast("この会のURLをコピーしました。LINE/メールに貼り付けて送れます");
+    } catch {
+      // 🔴 クリップボードは権限やhttp接続で普通に失敗する。
+      //    黙って成功と言わず、URLそのものを見せて手で拾えるようにする。
+      addToast(`コピーできませんでした：${url}`, "error");
+    }
+  };
+
+  // 共有リンク（?event=...）で開かれたとき、その会まで送る
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [pendingShareId, setPendingShareId] = useState<string | null>(null);
+  useEffect(() => {
+    // useSearchParams は Suspense 境界を要求するので、ここでは素で読む
+    const id = new URLSearchParams(window.location.search).get("event");
+    if (id) setPendingShareId(id);
+  }, []);
+
+  useEffect(() => {
+    // イベントが揃うまで判定しない。揃う前に見ると「見つからない」と誤報する。
+    if (!pendingShareId || eventsStatus === "loading") return;
+    // 🔴 取得に失敗したときは「見つからない」と言わない。
+    //    一覧が空なだけで会は存在しており、消えたと伝えると嘘になる。
+    if (eventsStatus === "error") {
+      setPendingShareId(null);
+      addToast("会の一覧を読み込めませんでした。再読み込みしてください", "error");
+      return;
+    }
+    const ev = events.find((e) => e.id === pendingShareId);
+    setPendingShareId(null);
+    if (!ev) {
+      addToast("その会は見つかりませんでした。終了・削除されたかもしれません", "error");
+      return;
+    }
+    const [y, m] = ev.date.split("-").map(Number);
+    setViewYear(y);
+    setViewMonth(m - 1);
+    setSelectedDate(ev.date);
+    setHighlightId(ev.id);
+    // 描画が終わってから送る（先に呼ぶと、まだ要素が無くて空振りする）
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`event-${ev.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [pendingShareId, eventsStatus, events, addToast]);
+
   // サイドバーから管理パネルを開く
   const handleManageFromSidebar = (eventId: string) => {
     setManagingEventId(eventId);
@@ -501,6 +560,8 @@ export default function PostPage() {
                     onToggleJoin={handleJoinClick}
                     onSetManagingEventId={setManagingEventId}
                     onToggleFollowSeries={toggleFollowSeries}
+                    onShare={handleShare}
+                    highlighted={highlightId === event.id}
                   />
                 ))}
               </div>

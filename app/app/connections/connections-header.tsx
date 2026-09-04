@@ -15,9 +15,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { usePendingIncomingCount } from "@/lib/connection-requests-api";
 
+// 申請を先頭に置く（依頼主判断 2026-09-04）。
+// 相手を待たせるのは申請の側だけで、記録は自分のペースで見ればよい。
+// ナビの「出会い」も申請に着地させている＝並びと行き先を一致させる。
 const SUB_TABS = [
-  { href: "/app/connections", label: "記録" },
   { href: "/app/connections/requests", label: "申請" },
+  { href: "/app/connections", label: "記録" },
 ];
 
 export function ConnectionsHeader({

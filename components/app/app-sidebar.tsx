@@ -31,46 +31,29 @@ import { useCurrentMember } from "@/lib/current-member";
 import { isAdminRole } from "@/lib/member-roles";
 import { clearClientCache } from "@/lib/client-cache";
 
-/** サイドバーに出すコミュニティの実数（旧: 固定値） */
-function useCommunityStats() {
-  const [stats, setStats] = useState({
-    memberCount: 0,
-    eventsThisMonth: 0,
-    postsThisMonth: 0,
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/stats", { cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("failed");
-        const body = (await res.json()) as typeof stats;
-        if (!cancelled) setStats(body);
-      })
-      .catch(() => {
-        /* 取れなければ0のまま（作った数字は出さない） */
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return stats;
-}
-
 const navItems: {
   href: string;
   label: string;
   icon: typeof User;
   adminOnly?: boolean;
+  /**
+   * 選択中かどうかを見るときの前方一致。省略時は href。
+   * 「出会い」は申請に着地させるが、記録タブ（/app/connections）を開いても
+   * ナビは光っていてほしいので、行き先と判定を別々に持つ。
+   */
+  activePrefix?: string;
 }[] = [
   { href: "/app/mypage", label: "マイページ", icon: User },
   { href: "/app/members", label: "メンバー", icon: Users },
   { href: "/app/board", label: "掲示板", icon: MessageCircle },
   { href: "/app/post", label: "会を探す", icon: CalendarSearch },
   // { href: "/app/discover", label: "おすすめ", icon: UtensilsCrossed },
-  { href: "/app/connections", label: "出会い", icon: Handshake },
+  {
+    href: "/app/connections/requests",
+    label: "出会い",
+    icon: Handshake,
+    activePrefix: "/app/connections",
+  },
   // 本部だけに見せている見本（会員に出す形が決まるまで adminOnly）
   { href: "/app/quests", label: "お願いごと", icon: Sparkles, adminOnly: true },
   { href: "/app/tree", label: "紹介ツリー", icon: GitBranch, adminOnly: true },
@@ -86,7 +69,6 @@ export function AppSidebar() {
   const { unreadCount } = useNotifications();
   const boardUnread = useBoardUnread();
   const requestsPending = usePendingIncomingCount();
-  const stats = useCommunityStats();
   // モバイル/タブレット用ドロワー（ハンバーガー）
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -125,11 +107,13 @@ export function AppSidebar() {
     };
   }, [drawerOpen]);
 
-  // 申請は「出会い」の中のタブになったので、バッジも出会いに出す
-  const badgeFor = (href: string) =>
-    href === "/app/board"
+  // 申請は「出会い」の中のタブになったので、バッジも出会いに出す。
+  // 判定は activePrefix（無ければ href）で見る＝行き先を変えても連動する。
+  const keyOf = (item: (typeof navItems)[number]) => item.activePrefix ?? item.href;
+  const badgeFor = (item: (typeof navItems)[number]) =>
+    keyOf(item) === "/app/board"
       ? boardUnread
-      : href === "/app/connections"
+      : keyOf(item) === "/app/connections"
       ? requestsPending
       : 0;
 
@@ -173,8 +157,8 @@ export function AppSidebar() {
         {/* ナビゲーション */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {visibleNavItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
-            const badge = badgeFor(item.href);
+            const isActive = pathname.startsWith(keyOf(item));
+            const badge = badgeFor(item);
             return (
               <Link
                 key={item.href}
@@ -200,33 +184,6 @@ export function AppSidebar() {
             );
           })}
         </nav>
-
-        {/* コミュニティ統計 */}
-        <div className="px-4 py-5 border-t border-gray-100">
-          <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">
-            コミュニティ
-          </p>
-          <div className="space-y-2.5 text-xs text-gray-500">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="w-3.5 h-3.5 text-gray-400" />
-                <span>メンバー</span>
-              </div>
-              <span className="font-bold text-gray-700">
-                {stats.memberCount}人
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CalendarSearch className="w-3.5 h-3.5 text-gray-400" />
-                <span>今月の会</span>
-              </div>
-              <span className="font-bold text-gray-700">
-                {stats.eventsThisMonth}件
-              </span>
-            </div>
-          </div>
-        </div>
 
         {/* ログアウトは常に見つけられるようサイドバー最下部へ置く */}
         {isSupabaseConfigured && (
@@ -347,8 +304,8 @@ export function AppSidebar() {
                 );
               })()}
               {visibleNavItems.map((item) => {
-                const isActive = pathname.startsWith(item.href);
-                const badge = badgeFor(item.href);
+                const isActive = pathname.startsWith(keyOf(item));
+                const badge = badgeFor(item);
                 return (
                   <Link
                     key={item.href}
@@ -375,31 +332,6 @@ export function AppSidebar() {
                 );
               })}
             </nav>
-
-            {/* コミュニティ統計 */}
-            <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0 space-y-2.5">
-              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                コミュニティ
-              </p>
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <div className="flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-gray-400" />
-                  <span>メンバー</span>
-                </div>
-                <span className="font-bold text-gray-700">
-                  {stats.memberCount}人
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <div className="flex items-center gap-1.5">
-                  <CalendarSearch className="w-3.5 h-3.5 text-gray-400" />
-                  <span>今月の会</span>
-                </div>
-                <span className="font-bold text-gray-700">
-                  {stats.eventsThisMonth}件
-                </span>
-              </div>
-            </div>
 
             {/* モバイルでもメニュー最下部から直接ログアウトできる */}
             {isSupabaseConfigured && (

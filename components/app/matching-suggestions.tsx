@@ -6,12 +6,22 @@
 // 🔴 0人のときに何も出さないのが一番まずい。
 //    会員は「壊れている」のか「自分がまだ設定していない」のか分からない。
 //    ∴ 理由と、次にやることを必ず出す。
+//
+// 🔴 2026-09-04〜 会員には結果を出さず「準備中」にする（依頼主判断）。
+//    条件を登録しているのは630名中4名。この状態で回すと、ほぼ全員が
+//    「条件に合う方が見つかりませんでした」に当たる。
+//    それは事実として正しいが、受け取る側には「使えない機能」としか映らず、
+//    一度そう思われると、人数が揃ってからでは開いてもらえない。
+//    ∴ 母数が育つまでは結果を伏せ、代わりに条件の登録だけ集める。
+//    運営（isAdminRole）には今までどおり出す＝揃い具合を中から見るため。
 // ============================================================
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sparkles, ChevronRight, Settings2 } from "lucide-react";
 import { MemberAvatar } from "@/components/app/member-avatar";
+import { useCurrentMember } from "@/lib/current-member";
+import { isAdminRole } from "@/lib/member-roles";
 
 interface Suggestion {
   id: string;
@@ -22,12 +32,59 @@ interface Suggestion {
   avatarUrl: string | null;
 }
 
+/**
+ * 会員に出す「準備中」。
+ *
+ * 結果を伏せるだけにすると、条件を登録する理由まで一緒に消える。
+ * ∴ ここを条件登録の入口そのものにする。ボタンは1つだけ置く。
+ *
+ * 登録済みの人数は出さない。いま4名で、その数字は登録の背中を押すどころか
+ * 「誰もやっていない」という理由になる。揃ってきたら出せばよい。
+ */
+function MatchingPreparing() {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-[var(--tetsu-pink)]" />
+          今月のおすすめ
+        </h3>
+        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-[10px] font-bold text-gray-500">
+          準備中
+        </span>
+      </div>
+
+      <p className="text-xs text-gray-500 leading-relaxed mb-4">
+        「どんな方とつながりたいか」がみなさんから集まりしだい、
+        条件の近い方を毎月ご紹介します。
+        <br />
+        先に登録しておくと、はじまった月からご紹介できます。
+      </p>
+
+      <Link
+        href="/app/mypage/matching"
+        className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-gray-800 transition-colors"
+      >
+        つながり条件を登録する
+        <ChevronRight className="w-3.5 h-3.5" />
+      </Link>
+    </div>
+  );
+}
+
 export function MatchingSuggestions() {
+  const currentMember = useCurrentMember();
+  const isStaff = isAdminRole(currentMember?.role);
   const [items, setItems] = useState<Suggestion[]>([]);
   const [wantsFilled, setWantsFilled] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 会員には結果を出さないので、そもそも取りに行かない。
+    if (!isStaff) {
+      setLoading(false);
+      return;
+    }
     fetch("/api/me/matching/suggestions", { cache: "no-store" })
       .then(async (res) => (res.ok ? await res.json() : null))
       .then((body) => {
@@ -38,7 +95,10 @@ export function MatchingSuggestions() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [isStaff]);
+
+  // ---------- 会員（準備中） ----------
+  if (!isStaff) return <MatchingPreparing />;
 
   if (loading) {
     return <div className="h-40 rounded-2xl bg-white animate-pulse mb-6" />;

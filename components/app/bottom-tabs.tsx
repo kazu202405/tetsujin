@@ -18,11 +18,24 @@ import { CalendarSearch, Handshake, MessageCircle, User, Users } from "lucide-re
 import { useBoardUnread } from "@/lib/board-api";
 import { usePendingIncomingCount } from "@/lib/connection-requests-api";
 
-const TABS: { href: string; label: string; icon: typeof User }[] = [
+const TABS: {
+  href: string;
+  label: string;
+  icon: typeof User;
+  /** 選択中かどうかを見るときの前方一致。省略時は href。 */
+  activePrefix?: string;
+}[] = [
   { href: "/app/board", label: "掲示板", icon: MessageCircle },
   { href: "/app/post", label: "会を探す", icon: CalendarSearch },
   { href: "/app/members", label: "メンバー", icon: Users },
-  { href: "/app/connections", label: "出会い", icon: Handshake },
+  // 申請に着地させる。記録タブを開いてもタブは光ったままにしたいので、
+  // 行き先（href）と選択判定（activePrefix）を別々に持つ。
+  {
+    href: "/app/connections/requests",
+    label: "出会い",
+    icon: Handshake,
+    activePrefix: "/app/connections",
+  },
   { href: "/app/mypage", label: "マイページ", icon: User },
 ];
 
@@ -33,8 +46,13 @@ export function BottomTabs() {
   // 相手を待たせる操作なので、埋もれさせない。
   const requestsPending = usePendingIncomingCount();
 
-  const badgeFor = (href: string) =>
-    href === "/app/board" ? boardUnread : href === "/app/connections" ? requestsPending : 0;
+  const keyOf = (tab: (typeof TABS)[number]) => tab.activePrefix ?? tab.href;
+  const badgeFor = (tab: (typeof TABS)[number]) =>
+    keyOf(tab) === "/app/board"
+      ? boardUnread
+      : keyOf(tab) === "/app/connections"
+      ? requestsPending
+      : 0;
 
   return (
     <nav
@@ -44,8 +62,8 @@ export function BottomTabs() {
     >
       <div className="flex">
         {TABS.map((tab) => {
-          const isActive = pathname.startsWith(tab.href);
-          const badge = badgeFor(tab.href);
+          const isActive = pathname.startsWith(keyOf(tab));
+          const badge = badgeFor(tab);
           const Icon = tab.icon;
           return (
             <Link
