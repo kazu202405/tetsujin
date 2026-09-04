@@ -26,6 +26,15 @@ export function clearClientCache() {
   cache.clear();
 }
 
+/**
+ * 覚えている内容のうち1つだけ捨てる。
+ * 次に開いた画面は「一度も取れていない」扱いになり、
+ * 古い内容が一瞬出てから差し替わる、というちらつきが起きない。
+ */
+export function clearCached(key: string) {
+  cache.delete(key);
+}
+
 /** 手元の控えを差し替える（作成・削除の直後など） */
 export function setCached<T>(key: string, value: T) {
   cache.set(key, value);

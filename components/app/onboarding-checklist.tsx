@@ -29,10 +29,10 @@ export interface OnboardingProgress {
   dismissed: boolean;
 }
 
-const CACHE_KEY = "onboarding";
+export const ONBOARDING_CACHE_KEY = "onboarding";
 
 // 取れていないうちはガイドを出さない（ちらついて閉じ損なうのを防ぐ）
-const UNKNOWN: OnboardingProgress = {
+export const UNKNOWN_ONBOARDING: OnboardingProgress = {
   hasAvatar: false,
   hasSheet: false,
   hasSocialLink: false,
@@ -43,15 +43,23 @@ const UNKNOWN: OnboardingProgress = {
   dismissed: true,
 };
 
-export function OnboardingChecklist() {
-  const { data, status, reload } = useCachedResource<OnboardingProgress>(
-    CACHE_KEY,
-    "/api/me/onboarding",
-    UNKNOWN,
-  );
-  const [closing, setClosing] = useState(false);
+export interface OnboardingStep {
+  key: string;
+  label: string;
+  hint: string;
+  done: boolean;
+  href: string;
+}
 
-  const steps: { key: string; label: string; hint: string; done: boolean; href: string }[] = [
+/**
+ * ガイドに出す項目。
+ *
+ * 🔴 設定画面の「もう一度見る」も、出す／出さないの判断にこれを使う。
+ *    項目を数える場所が2つに分かれると、片方だけ増減したときに
+ *    「押したのに何も出ない」が静かに起きる。数える所は1つにする。
+ */
+export function buildOnboardingSteps(data: OnboardingProgress): OnboardingStep[] {
+  return [
     {
       key: "avatar",
       label: "プロフィール写真を登録する",
@@ -102,14 +110,29 @@ export function OnboardingChecklist() {
     // 会に出ても永久に埋まらない項目になっていた。
     // API は has_connection を返し続けている＝戻すときはここに足すだけ。
   ];
+}
 
+/** 全部済んでいるか。設定画面の「もう一度見る」の出し分けにも使う。 */
+export function isOnboardingComplete(data: OnboardingProgress): boolean {
+  return buildOnboardingSteps(data).every((s) => s.done);
+}
+
+export function OnboardingChecklist() {
+  const { data, status, reload } = useCachedResource<OnboardingProgress>(
+    ONBOARDING_CACHE_KEY,
+    "/api/me/onboarding",
+    UNKNOWN_ONBOARDING,
+  );
+  const [closing, setClosing] = useState(false);
+
+  const steps = buildOnboardingSteps(data);
   const doneCount = steps.filter((s) => s.done).length;
   const allDone = doneCount === steps.length;
 
   const dismiss = async () => {
     setClosing(true);
     // 押した瞬間に消す。保存の返事を待たせない。
-    setCached<OnboardingProgress>(CACHE_KEY, { ...data, dismissed: true });
+    setCached<OnboardingProgress>(ONBOARDING_CACHE_KEY, { ...data, dismissed: true });
     try {
       await fetch("/api/me/onboarding", {
         method: "PATCH",

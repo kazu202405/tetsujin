@@ -12,7 +12,13 @@ import {
 import { PushNotificationSetup } from "@/components/app/push-notification-setup";
 import { AvatarUpload } from "@/components/app/avatar-upload";
 import { BillingSection } from "@/components/app/billing-section";
-import { clearClientCache } from "@/lib/client-cache";
+import { clearCached, useCachedResource } from "@/lib/client-cache";
+import {
+  ONBOARDING_CACHE_KEY,
+  UNKNOWN_ONBOARDING,
+  isOnboardingComplete,
+  type OnboardingProgress,
+} from "@/components/app/onboarding-checklist";
 import { useCurrentMember } from "@/lib/current-member";
 
 const FIELD =
@@ -74,7 +80,20 @@ export default function SettingsPage() {
     setSavingPrefs(false);
   };
   const [resetConfirm, setResetConfirm] = useState(false);
-  const [resetDone, setResetDone] = useState(false);
+  const [resetMessage, setResetMessage] = useState<
+    { type: "success" | "error"; text: string } | null
+  >(null);
+  // ガイドが出せる状態かどうかを、ガイド本体と同じ数え方で見る。
+  // 全部済んでいる人はガイドが描画されないので、ボタンを出すと
+  // 「押したのに何も出ない」になる。
+  const { data: onboarding, status: onboardingStatus } =
+    useCachedResource<OnboardingProgress>(
+      ONBOARDING_CACHE_KEY,
+      "/api/me/onboarding",
+      UNKNOWN_ONBOARDING,
+    );
+  const onboardingComplete =
+    onboardingStatus === "loaded" && isOnboardingComplete(onboarding);
   const displayName = currentMember?.name ?? "会員";
   const initial = displayName.trim().charAt(0) || "T";
 
@@ -121,18 +140,28 @@ export default function SettingsPage() {
   // 「閉じた」状態だけ。済んでいるステップは済んだままガイドが戻る。
   const handleResetOnboarding = async () => {
     setResetConfirm(false);
+    setResetMessage(null);
     try {
-      await fetch("/api/me/onboarding", {
+      const response = await fetch("/api/me/onboarding", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dismissed: false }),
       });
-      clearClientCache();
+      // 🔴 fetch は通信そのものが落ちたときしか例外を投げない。
+      //    500 や 401 が返っても catch に入らないので、必ず ok を見る。
+      //    ここを飛ばすと、保存できていないのに「表示しました」と出て、
+      //    マイページに何も無い＝アプリが壊れていると読まれる。
+      if (!response.ok) throw new Error("failed");
+      // 覚えている進捗だけ捨てる。マイページを開いた時点で取り直す。
+      clearCached(ONBOARDING_CACHE_KEY);
     } catch {
-      /* 失敗しても表示が戻らないだけ */
+      setResetMessage({
+        type: "error",
+        text: "表示に戻せませんでした。通信状況をご確認のうえ、もう一度お試しください。",
+      });
+      return;
     }
-    setResetDone(true);
-    setTimeout(() => setResetDone(false), 4000);
+    setResetMessage({ type: "success", text: "マイページに表示しました。" });
   };
 
   return (
@@ -354,7 +383,13 @@ export default function SettingsPage() {
           <p className="text-sm text-gray-600 leading-relaxed mb-5">
             いちど閉じた「はじめてガイド」を、マイページにもう一度表示します。すでに済んでいるステップは完了のままです。
           </p>
-          {!resetConfirm ? (
+          {onboardingComplete ? (
+            // 全部済んでいる人はガイド本体が描画されない。ボタンを出すと
+            // 「表示しました」と言われて何も無い、が起きるので出さない。
+            <p className="text-sm text-gray-500">
+              すべてのステップが完了しているので、表示するものはありません。
+            </p>
+          ) : !resetConfirm ? (
             <button
               onClick={() => setResetConfirm(true)}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors"
@@ -383,11 +418,18 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-          {resetDone && (
+          {resetMessage?.type === "success" && (
             <p className="mt-3 text-sm font-medium text-green-600 flex items-center gap-1.5">
               <Check className="w-4 h-4" />
-              マイページに表示しました。
+              {resetMessage.text}
+              {/* 押したあと自分で移動する必要があったので、行き先を添える */}
+              <Link href="/app/mypage" className="underline hover:no-underline">
+                マイページを開く
+              </Link>
             </p>
+          )}
+          {resetMessage?.type === "error" && (
+            <p className="mt-3 text-sm font-medium text-red-600">{resetMessage.text}</p>
           )}
         </div>
       </div>
