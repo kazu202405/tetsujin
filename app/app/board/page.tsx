@@ -38,7 +38,7 @@ import { markBoardVisited } from "@/lib/board-data";
 import { useCurrentMember } from "@/lib/current-member";
 import { isAdminRole } from "@/lib/member-roles";
 import { MemberAvatar } from "@/components/app/member-avatar";
-import { AutoTextarea } from "@/components/app/auto-textarea";
+import { MentionTextarea } from "@/components/app/mention-textarea";
 import {
   type BoardChannel,
   type BoardComment,
@@ -771,10 +771,10 @@ export default function BoardPage() {
             <div className="flex items-start gap-3">
               <MemberAvatar name={me?.name ?? "会員"} url={me?.avatar_url} size="md" className="mt-0.5" />
               <div className="flex-1">
-                <AutoTextarea
+                <MentionTextarea
                   value={newPost}
                   onChange={setNewPost}
-                  placeholder={`${activeChannel?.name ?? "チャンネル"}に投稿...`}
+                  placeholder={`${activeChannel?.name ?? "チャンネル"}に投稿...（@で宛先）`}
                   minRows={2}
                   maxRows={16}
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent focus:bg-white transition-all"
@@ -932,7 +932,7 @@ export default function BoardPage() {
                         </div>
                       ) : (
                         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap mb-3">
-                          <RichText text={post.content} />
+                          <RichText text={post.content} mentions={post.mentions} />
                         </p>
                       )}
 
@@ -1054,7 +1054,7 @@ export default function BoardPage() {
                                               </div>
                                             ) : (
                                               <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                                <RichText text={comment.content} />
+                                                <RichText text={comment.content} mentions={comment.mentions} />
                                               </p>
                                             )}
                                           </div>
@@ -1195,7 +1195,7 @@ export default function BoardPage() {
                                                           </div>
                                                         ) : (
                                                           <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                                            <RichText text={reply.content} />
+                                                            <RichText text={reply.content} mentions={reply.mentions} />
                                                           </p>
                                                         )}
                                                       </div>
@@ -1271,11 +1271,12 @@ export default function BoardPage() {
                                                 className="mt-0.5"
                                               />
                                               <div className="flex-1 flex gap-1.5">
-                                                <textarea
+                                                <MentionTextarea
                                                   value={replyText}
-                                                  rows={1}
-                                                  onChange={(e) => setReplyText(e.target.value)}
-                                                  onKeyDown={(e) => {
+                                                  minRows={1}
+                                                  maxRows={8}
+                                                  onChange={setReplyText}
+                                                  onKeyDownExtra={(e) => {
                                                     if (
                                                       e.key === "Enter" &&
                                                       (e.metaKey || e.ctrlKey)
@@ -1284,8 +1285,9 @@ export default function BoardPage() {
                                                       void submitComment(post.id, comment.id);
                                                     }
                                                   }}
-                                                  placeholder={`${replyTarget.authorName}さんに返信...`}
-                                                  className="flex-1 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all resize-y min-h-[2rem]"
+                                                  placeholder={`${replyTarget.authorName}さんに返信...（@で宛先）`}
+                                                  wrapperClassName="flex-1"
+                                                  className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
                                                   autoFocus
                                                 />
                                                 <button
@@ -1327,23 +1329,22 @@ export default function BoardPage() {
                                  改行したつもりで投稿されてしまう（実際に起きた）。
                                  テキストエリアにして、送信は送信ボタンだけにする。
                                  パソコン向けに Ctrl/⌘+Enter だけ残す。 */}
-                          <textarea
+                          <MentionTextarea
                             value={commentInputs[post.id] ?? ""}
-                            rows={1}
-                            onChange={(e) =>
-                              setCommentInputs((prev) => ({
-                                ...prev,
-                                [post.id]: e.target.value,
-                              }))
+                            minRows={1}
+                            maxRows={8}
+                            onChange={(next) =>
+                              setCommentInputs((prev) => ({ ...prev, [post.id]: next }))
                             }
-                            onKeyDown={(e) => {
+                            onKeyDownExtra={(e) => {
                               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                                 e.preventDefault();
                                 void submitComment(post.id);
                               }
                             }}
-                            placeholder="コメントを追加...（改行できます）"
-                            className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all resize-y min-h-[2.25rem]"
+                            placeholder="コメントを追加...（@で宛先・改行できます）"
+                            wrapperClassName="flex-1"
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all"
                           />
                           <button
                             onClick={() => void submitComment(post.id)}

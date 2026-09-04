@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
 import { checkWriteRate } from "@/lib/rate-limit";
 import { signAvatarPaths, signPostImagePaths } from "@/lib/supabase/storage";
+import { fetchMentions } from "@/lib/supabase/mentions";
 import type { MemberRoleCode } from "@/lib/member-roles";
 
 export const dynamic = "force-dynamic";
@@ -61,9 +62,11 @@ export async function GET(request: Request) {
   const rows = (data ?? []) as FeedRow[];
 
   // 顔写真・投稿画像は非公開バケット。表示用の署名URLをまとめて発行する。
-  const [avatarUrls, imageUrls] = await Promise.all([
+  // メンションの宛先も同時に引く（画面は解決したものだけ色を付ける）。
+  const [avatarUrls, imageUrls, mentions] = await Promise.all([
     signAvatarPaths(supabase, rows.map((r) => r.author_avatar_path)),
     signPostImagePaths(supabase, rows.map((r) => r.image_path)),
+    fetchMentions(supabase, "post_mentions", "post_id", rows.map((r) => r.id)),
   ]);
 
   const posts = rows.map((r) => ({
@@ -77,6 +80,7 @@ export async function GET(request: Request) {
     likedByMe: r.liked_by_me,
     isMine: r.is_mine,
     editedAt: r.edited_at ?? null,
+    mentions: mentions[r.id] ?? [],
     author: {
       id: r.author_id,
       name: r.author_name,

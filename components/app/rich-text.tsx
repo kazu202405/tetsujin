@@ -17,6 +17,8 @@
 //    ように、URLの直後に空白を置かず句読点で続けるのが普通なので、
 //    全角の句読点・括弧もURLの終わりとして扱う。
 //    半角英数字だけを許すことはできない（日本語ドメインやパスがあるため）。
+import Link from "next/link";
+
 const URL_RE = /(https?:\/\/[^\s。、！？「」『』（）【】〈〉《》・…]+)/gi;
 
 // 🔴 日本語の文末はURLの直後に来る。「https://example.com。」を
@@ -36,28 +38,86 @@ function splitTrailing(url: string): [string, string] {
   return [url.slice(0, url.length - cut.length), cut];
 }
 
-function Mentions({ text }: { text: string }) {
+/** 本文中で実際に届いた宛先。サーバーが解決したものだけが渡ってくる */
+export interface ResolvedMention {
+  id: string;
+  name: string;
+}
+
+/** 全員宛ての合図。DB側（mentions_everyone）と同じ綴りを見る */
+const EVERYONE_RE = /@all(?![a-zA-Z0-9_])|@全員/;
+
+function escapeRe(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// 🔴 2026-09-05まで、ここは @ に続く文字を無条件で色付けしていた。
+//    宛先の解決も通知も無いので、書いた人は届いたと思い、書かれた人は
+//    気づかない。「色が付く＝届く」という誤解だけが先にできていた。
+//    ∴ サーバーが解決した宛先（と @all）だけを色付ける。
+//    解決しなかった @なんとか は、ただの文字として出す。
+function Mentions({
+  text,
+  mentions,
+}: {
+  text: string;
+  mentions: ResolvedMention[];
+}) {
+  // 長い名前から先に当てる。「@田中」が「@田中太郎」を食わないように。
+  const byName = [...mentions].sort((a, b) => b.name.length - a.name.length);
+  const parts = byName.length
+    ? `(${byName.map((m) => "@" + escapeRe(m.name)).join("|")}|${EVERYONE_RE.source})`
+    : `(${EVERYONE_RE.source})`;
+  const re = new RegExp(parts, "g");
+
   return (
     <>
-      {text.split(/(@\S+)/g).map((part, i) =>
-        part.startsWith("@") ? (
-          <span key={i} className="text-amber-600 font-bold">
-            {part}
-          </span>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
+      {text.split(re).map((part, i) => {
+        if (!part) return null;
+        const hit = byName.find((m) => part === "@" + m.name);
+        if (hit) {
+          return (
+            <Link
+              key={i}
+              href={`/app/profile/${hit.id}`}
+              className="text-amber-600 font-bold hover:underline"
+            >
+              {part}
+            </Link>
+          );
+        }
+        if (new RegExp(`^(?:${EVERYONE_RE.source})$`).test(part)) {
+          return (
+            <span key={i} className="text-amber-600 font-bold">
+              {part}
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
     </>
   );
 }
 
-/** 会員が書いた文章を、URLはリンク・@は色付きにして表示する */
-export function RichText({ text }: { text: string }) {
+/**
+ * 会員が書いた文章を、URLはリンク・メンションは色付きにして表示する。
+ *
+ * mentions を渡さない画面（プロフィール・お願いごと等）では、
+ * @ はただの文字になる。そこにメンションの仕組みは無いので、
+ * 色を付けると届くように見えてしまう。
+ */
+export function RichText({
+  text,
+  mentions = [],
+}: {
+  text: string;
+  mentions?: ResolvedMention[];
+}) {
   return (
     <>
       {text.split(URL_RE).map((part, i) => {
-        if (!/^https?:\/\//i.test(part)) return <Mentions key={i} text={part} />;
+        if (!/^https?:\/\//i.test(part))
+          return <Mentions key={i} text={part} mentions={mentions} />;
         const [href, tail] = splitTrailing(part);
         return (
           <span key={i}>

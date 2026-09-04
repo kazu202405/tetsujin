@@ -10,6 +10,7 @@ import {
   Bell,
   UserPlus,
   CheckCircle2,
+  AtSign,
   Newspaper,
   Mail,
 } from "lucide-react";
@@ -27,6 +28,12 @@ const TYPE_META: Record<
     Icon: MessageSquare,
     bg: "bg-blue-50",
     iconColor: "text-blue-500",
+  },
+  // 名指し・全員宛て。他の掲示板通知に埋もれないよう色を分ける
+  mention: {
+    Icon: AtSign,
+    bg: "bg-amber-50",
+    iconColor: "text-amber-600",
   },
   board_unread: {
     Icon: MessageCircle,

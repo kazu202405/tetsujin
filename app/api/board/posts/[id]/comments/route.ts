@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { NO_STORE_HEADERS, requireMember } from "@/lib/supabase/api";
 import { checkWriteRate } from "@/lib/rate-limit";
 import { signAvatarPaths } from "@/lib/supabase/storage";
+import { fetchMentions } from "@/lib/supabase/mentions";
 
 export const dynamic = "force-dynamic";
 
@@ -47,10 +48,10 @@ export async function GET(
   }
 
   const rows = (data ?? []) as ThreadRow[];
-  const avatarUrls = await signAvatarPaths(
-    supabase,
-    rows.map((r) => r.author_avatar_path),
-  );
+  const [avatarUrls, mentions] = await Promise.all([
+    signAvatarPaths(supabase, rows.map((r) => r.author_avatar_path)),
+    fetchMentions(supabase, "comment_mentions", "comment_id", rows.map((r) => r.id)),
+  ]);
 
   const toItem = (r: ThreadRow) => ({
     id: r.id,
@@ -62,6 +63,8 @@ export async function GET(
     isMine: r.is_mine,
     editedAt: r.edited_at ?? null,
     isDeleted: Boolean(r.is_deleted),
+    // 削除済みは本文を返していないので、宛先も返さない
+    mentions: r.is_deleted ? [] : mentions[r.id] ?? [],
     author: {
       id: r.author_id,
       name: r.author_name,

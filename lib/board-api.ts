@@ -7,6 +7,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { ResolvedMention } from "@/components/app/rich-text";
+
+/** 解決済みのメンション宛先（色付けとリンクに使う） */
+export type { ResolvedMention };
 import { createClient } from "@/lib/supabase/client";
 import { POST_IMAGE_BUCKET } from "@/lib/supabase/storage";
 import { useCachedResource } from "./client-cache";
@@ -46,6 +50,8 @@ export interface BoardPost {
   isMine: boolean;
   /** 編集された投稿には日時が入る（画面に「編集済み」と出す） */
   editedAt: string | null;
+  /** サーバーが解決した宛先。ここに無い @文字列 は色を付けない＝届いていない */
+  mentions: ResolvedMention[];
   author: BoardAuthor;
 }
 
@@ -58,6 +64,8 @@ export interface BoardComment {
   editedAt: string | null;
   /** 削除済み。返信がぶら下がっていると会話が読めなくなるので行は残してある */
   isDeleted: boolean;
+  /** サーバーが解決した宛先。ここに無い @文字列 は色を付けない＝届いていない */
+  mentions: ResolvedMention[];
   author: BoardAuthor;
   replies?: BoardComment[];
 }

@@ -16,6 +16,7 @@ export function AutoTextarea({
   className = "",
   minRows = 2,
   maxRows,
+  autoFocus,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -25,6 +26,7 @@ export function AutoTextarea({
   minRows?: number;
   /** これ以上は伸ばさず中でスクロールさせる（省略時は無制限） */
   maxRows?: number;
+  autoFocus?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -56,6 +58,7 @@ export function AutoTextarea({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       rows={minRows}
+      autoFocus={autoFocus}
       className={`${className} resize-none overflow-hidden`}
     />
   );

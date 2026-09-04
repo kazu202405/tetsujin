@@ -22,7 +22,8 @@ export type NotificationType =
   | "billing_alert"
   | "connection_request"
   | "connection_accepted"
-  | "connection_declined";
+  | "connection_declined"
+  | "mention";
 
 export interface NotificationItem {
   id: string;
