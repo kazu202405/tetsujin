@@ -250,6 +250,16 @@ export default function RegisterPage() {
                     <p className="font-bold">●PayPay　支払い</p>
                     <p>ID：shiho75</p>
                   </div>
+                  {/* カード決済は準備中（Stripeは2026年10月から稼働予定）。
+                      書いておかないと「カードは使えないのか」と問い合わせになり、
+                      使えるようになったことにも気づいてもらえない。 */}
+                  <div className="pt-1 border-t border-amber-200">
+                    <p className="font-bold">●クレジットカード決済</p>
+                    <p>
+                      ただいま準備中です。ご利用いただけるようになりましたら、
+                      アプリ内でお知らせします。
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
