@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/marketing/page-header";
+import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
 
 const genderOptions = ["女", "男", "その他"];
@@ -158,6 +160,33 @@ export default function RegisterPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // ------------------------------------------------------------
+  // ログイン済みの人がここに来る場合
+  // ------------------------------------------------------------
+  // アプリでアカウントだけ作った人は「ご登録内容を教えてください」から
+  // ここへ送られる。その中には名簿にメールが無いだけの在籍会員も混ざる
+  // （システムからは新規と区別がつかない）。
+  //
+  // 🔴 メールはアカウントのものに固定する。ここで別のメールを書かれると、
+  //    承認しても auth_user_id が繋がらず、本人は永久に入れないまま
+  //    「承認されたのに入れない」になる。突き合わせの鍵はメールしかない。
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let cancelled = false;
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (!cancelled) setAccountEmail(data.user?.email ?? null);
+      })
+      .catch(() => {
+        /* 取れなければ通常の申込フォームとして出す */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const RequiredBadge = () => (
     <span className="px-1.5 py-0.5 bg-[var(--tetsu-pink)] text-white text-xs rounded font-bold">
       必須
@@ -172,7 +201,10 @@ export default function RegisterPage() {
 
   return (
     <>
-      <PageHeader title="新規会員登録" breadcrumb="新規会員登録" />
+      <PageHeader
+        title={accountEmail ? "ご登録内容の入力" : "新規会員登録"}
+        breadcrumb={accountEmail ? "ご登録内容の入力" : "新規会員登録"}
+      />
 
       <section className="py-16 sm:py-24 bg-white">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -182,7 +214,7 @@ export default function RegisterPage() {
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
               <h2 className="text-2xl font-extrabold text-gray-900 mb-3">
-                仮申し込みが完了しました
+                {accountEmail ? "ご登録内容を受け付けました" : "仮申し込みが完了しました"}
               </h2>
               <p className="text-gray-500 mb-2">
                 お申し込みありがとうございます。
@@ -190,8 +222,19 @@ export default function RegisterPage() {
               <p className="text-gray-500 mb-6">
                 運営にて確認後、承認させていただきます。
               </p>
+              {/* 🔴 この経路には、名簿にメールが無いだけの在籍会員が混ざる。
+                     そのまま「3日以内にお支払いを」と出すと、払い済みの人が
+                     二重に払いかねない。∴ 先に断りを入れる。 */}
+              {accountEmail && (
+                <p className="text-sm text-gray-600 leading-relaxed mb-6 max-w-md mx-auto">
+                  運営が名簿と照合します。すでに会員の方は、承認され次第そのまま
+                  ご利用いただけるようになります（お支払いは不要です）。
+                </p>
+              )}
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-left max-w-md mx-auto">
-                <p className="text-sm font-bold text-amber-800 mb-2">お支払いについて</p>
+                <p className="text-sm font-bold text-amber-800 mb-2">
+                  お支払いについて{accountEmail && "（はじめてご入会の方）"}
+                </p>
                 <p className="text-sm text-amber-700 leading-relaxed">
                   本日を含め３日以内にお支払いをお願いいたします。
                 </p>
@@ -297,9 +340,17 @@ export default function RegisterPage() {
                     type="email"
                     name="email"
                     required
-                    className={inputClass}
+                    className={inputClass + (accountEmail ? " bg-gray-50 text-gray-500" : "")}
                     placeholder="example@email.com"
+                    defaultValue={accountEmail ?? undefined}
+                    readOnly={Boolean(accountEmail)}
                   />
+                  {accountEmail && (
+                    <p className="mt-1.5 text-[11px] text-gray-500">
+                      ログイン中のアカウントのメールアドレスです。
+                      ここを変えると承認後もご利用いただけないため、変更できません。
+                    </p>
+                  )}
                 </div>
 
                 {/* 電話番号 */}

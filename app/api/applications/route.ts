@@ -9,6 +9,7 @@
 // ============================================================
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, isServiceRoleConfigured } from "@/lib/supabase/admin";
 import { isMockMode } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
@@ -68,8 +69,7 @@ export async function POST(request: Request) {
 
   const membershipType = clean(body.membershipType, 10);
 
-  const supabase = await createClient();
-  const { error } = await supabase.from("applications").insert({
+  const payload = {
     name,
     name_furigana: clean(body.nameFurigana, 100),
     gender: clean(body.gender, 20),
@@ -88,7 +88,58 @@ export async function POST(request: Request) {
     regions: codes(body.regions),
     terms_agreed: true,
     status: "pending",
-  });
+  };
+
+  // ------------------------------------------------------------
+  // 🔴 同じメールの申請が既にあれば、2件目を作らず中身を差し替える
+  // ------------------------------------------------------------
+  // アプリで直接アカウントを作った人は 0049 が申請を自動で立てている。
+  // その人が案内どおり入会申込フォームも出すと、同じ人の申請が2件並ぶ
+  // （2026-09-05 南山さんで実際に発生）。運営はどちらを処理したのか
+  // 分からなくなり、片方が審査中のまま永久に残る。
+  //
+  // 申請は会員以外も出すため RLS では SELECT / UPDATE ができない。
+  // ∴ 照合はサーバー側の管理クライアントで行う。メールで自分の行を
+  //    引くだけなので、他人の申請には触れない。
+  if (isServiceRoleConfigured) {
+    const admin = createAdminClient();
+    const { data: existing } = await admin
+      .from("applications")
+      .select("id, status")
+      .ilike("email", email)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      // 承認済みなら触らない。すでに会員になっているので出し直す必要がない。
+      if (existing.status === "approved") {
+        return NextResponse.json({ ok: true, alreadyApproved: true }, { headers: HEADERS });
+      }
+
+      // 審査中なら中身を更新、却下済みなら申請し直しとして審査中に戻す
+      const { error: updateError } = await admin
+        .from("applications")
+        .update({ ...payload, reviewed_by: null, reviewed_at: null, review_note: null })
+        .eq("id", existing.id);
+
+      if (updateError) {
+        console.error("application update failed", { code: updateError.code });
+        return NextResponse.json(
+          { error: "送信できませんでした。時間をおいて再度お試しください" },
+          { status: 500, headers: HEADERS },
+        );
+      }
+      return NextResponse.json({ ok: true }, { headers: HEADERS });
+    }
+  } else {
+    // 鍵が無い環境では重複を防げない。黙って通すと、あとで運営が
+    // 「なぜ2件あるのか」を追えなくなるのでログには必ず残す。
+    console.warn("SUPABASE_SERVICE_ROLE_KEY 未設定のため、申請の重複チェックを飛ばしました");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").insert(payload);
 
   if (error) {
     console.error("application insert failed", { code: error.code });
