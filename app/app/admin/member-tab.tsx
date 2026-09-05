@@ -17,7 +17,7 @@ import { ToastStack, type ToastMessage } from "@/components/app/toast";
 import { isOwnerRole, roleLabelOf } from "@/lib/member-roles";
 import { useCurrentMember } from "@/lib/current-member";
 import { type MemberDbRow, formatStartMonth, useMembersDb } from "./members-data";
-import { MemberList, type MemberSort } from "./member-list";
+import { MemberList, type MemberSort, type SortDir } from "./member-list";
 import { LedgerEditor } from "./ledger-editor";
 import { RenewalLink } from "./renewal-link";
 import { BillingPlansPanel } from "./billing-plans-panel";
@@ -34,7 +34,7 @@ function fmtDate(iso: string | null | undefined): string {
 /** 626名を一度に描画すると重いので、既定はこの件数まで（検索で絞り込む運用） */
 const PAGE_SIZE = 100;
 
-type MemberFilter = "all" | "active" | "withdrawn" | "login" | "no_contact" | "no_referrer_link";
+type MemberFilter = "all" | "active" | "withdrawn" | "login" | "no_number" | "no_contact" | "no_referrer_link";
 
 export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) {
   const { rows, loadStatus } = useMembersDb();
@@ -46,6 +46,10 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<MemberFilter>("all");
   const [sort, setSort] = useState<MemberSort>("member_no");
+  // 🔴 以前は向きを持っていなかった。同じ見出しを押しても setSort に同じ値を
+  //    入れ直すだけで何も起きず、向きは列ごとに決め打ちだった（金額と入会は
+  //    降順、他は昇順）。見出しの矢印も常に「↓」で実際と合っていない。
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<ToastMessage | null>(null);
@@ -68,6 +72,9 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
       active: merged.filter((r) => !r.is_withdrawn).length,
       withdrawn: merged.filter((r) => r.is_withdrawn).length,
       login: merged.filter((r) => r.auth_user_id).length,
+      // 🔴 退会者は数えない。採番は在籍者にしかしないので、混ぜると
+      //    「あと何人か」が実態とずれる（退会分だけ多く見える）。
+      noNumber: merged.filter((r) => r.member_no == null && !r.is_withdrawn).length,
       noContact: merged.filter((r) => !r.email && !r.phone).length,
       // 台帳に紹介者の記載はあるが、まだ会員と紐づけていない人
       noReferrerLink: merged.filter((r) => r.referrer && !r.referrer_member_id).length,
@@ -82,6 +89,8 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
     if (filter === "active") list = list.filter((r) => !r.is_withdrawn);
     if (filter === "withdrawn") list = list.filter((r) => r.is_withdrawn);
     if (filter === "login") list = list.filter((r) => r.auth_user_id);
+    if (filter === "no_number")
+      list = list.filter((r) => r.member_no == null && !r.is_withdrawn);
     if (filter === "no_contact") list = list.filter((r) => !r.email && !r.phone);
     if (filter === "no_referrer_link")
       list = list.filter((r) => r.referrer && !r.referrer_member_id);
@@ -111,20 +120,23 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
       退会: 4,
     };
 
-    return [...list].sort((a, b) => {
+    // まず昇順で比べ、向きは最後に掛ける（列ごとに向きが散らばらないように）
+    const compare = (a: MemberDbRow, b: MemberDbRow) => {
       if (sort === "name") return a.name.localeCompare(b.name, "ja");
       if (sort === "renewal") {
         const key = (r: MemberDbRow) => renewalOrder[r.renewal_status ?? ""] ?? 9;
         return key(a) - key(b);
       }
-      if (sort === "price") return (b.price ?? 0) - (a.price ?? 0);
+      if (sort === "price") return (a.price ?? 0) - (b.price ?? 0);
       if (sort === "start") {
         const key = (r: MemberDbRow) => (r.start_year ?? 0) * 100 + (r.start_month ?? 0);
-        return key(b) - key(a);
+        return key(a) - key(b);
       }
       return noAsNumber(a.member_no) - noAsNumber(b.member_no);
-    });
-  }, [merged, search, filter, sort]);
+    };
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => compare(a, b) * dir);
+  }, [merged, search, filter, sort, sortDir]);
 
   const visible = filtered.slice(0, visibleCount);
   const detail = detailId ? merged.find((r) => r.id === detailId) ?? null : null;
@@ -226,6 +238,7 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
     { key: "active", label: "在籍", count: counts.active },
     { key: "withdrawn", label: "退会", count: counts.withdrawn },
     { key: "login", label: "ログインあり", count: counts.login },
+    { key: "no_number", label: "未採番（在籍）", count: counts.noNumber },
     { key: "no_contact", label: "連絡先なし", count: counts.noContact },
     { key: "no_referrer_link", label: "紹介者 未紐づけ", count: counts.noReferrerLink },
   ];
@@ -305,8 +318,16 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
         rows={visible}
         roleLabelOf={roleLabelOf}
         sort={sort}
+        sortDir={sortDir}
         onSort={(key) => {
-          setSort(key);
+          // 同じ見出しをもう一度押したら向きを反転。別の列なら既定の向きから。
+          // 既定は列ごとに変える（金額と入会日は「大きい/新しい順」で見たい）。
+          if (key === sort) {
+            setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+          } else {
+            setSort(key);
+            setSortDir(key === "price" || key === "start" ? "desc" : "asc");
+          }
           setVisibleCount(PAGE_SIZE);
         }}
         onSelect={setDetailId}

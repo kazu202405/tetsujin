@@ -18,6 +18,7 @@ import type { MemberRole } from "@/lib/member-roles";
 import { type MemberDbRow, formatStartMonth } from "./members-data";
 
 export type MemberSort = "member_no" | "name" | "start" | "price" | "renewal";
+export type SortDir = "asc" | "desc";
 
 const COLUMNS: { key: MemberSort | null; label: string; align?: "right" | "center" }[] = [
   { key: "member_no", label: "会員番号", align: "right" },
@@ -70,12 +71,14 @@ export function MemberList({
   rows,
   roleLabelOf,
   sort,
+  sortDir,
   onSort,
   onSelect,
 }: {
   rows: MemberDbRow[];
   roleLabelOf: (role: MemberDbRow["role"]) => MemberRole;
   sort: MemberSort;
+  sortDir: SortDir;
   onSort: (key: MemberSort) => void;
   onSelect: (id: string) => void;
 }) {
@@ -106,7 +109,10 @@ export function MemberList({
                       title="クリックで並び替え"
                     >
                       {col.label}
-                      {sort === col.key && " ↓"}
+                      {/* 🔴 以前はどの列でも「↓」を出していたが、実際の向きは
+                             列ごとに固定で、押しても変わらなかった。
+                             いまは押すたびに反転するので、向きを正しく出す。 */}
+                      {sort === col.key && (sortDir === "asc" ? " ↑" : " ↓")}
                     </button>
                   ) : (
                     <span className="text-gray-600">{col.label}</span>
