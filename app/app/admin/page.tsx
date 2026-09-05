@@ -98,6 +98,8 @@ interface Application {
   membership_type: "法人" | "個人" | null;
   payment_method: string | null;
   note: string | null;
+  /** form = 入会申込フォーム / signup = アプリで直接アカウントを作った人 */
+  source?: "form" | "signup";
   status: ApplicationStatus;
   member_id: string | null;
   reviewed_at: string | null;
@@ -378,6 +380,14 @@ function ApplicationsTab() {
                       <StatusIcon className="w-3 h-3" />
                       {config.label}
                     </span>
+                    {/* フォームから来た申請と、アプリで直接アカウントを作った人は
+                        中身の埋まり方がまったく違う。印が無いと後者を見た運営が
+                        「入会フォームが壊れている」と読む。 */}
+                    {app.source === "signup" && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold whitespace-nowrap flex-shrink-0">
+                        アプリから登録
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                     {app.job && <span>{app.job}</span>}
@@ -400,6 +410,19 @@ function ApplicationsTab() {
                   <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 mb-4">
                     <span>年代: {app.age_range ?? "未記入"}</span><span>・</span><span>性別: {app.gender ?? "未記入"}</span><span>・</span><span>紹介者: {app.referrer ?? "未記入"}</span>
                   </div>
+                  {app.source === "signup" && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-4 text-xs text-amber-800 leading-relaxed">
+                      <p className="font-bold mb-1">この方は入会申込フォームを通っていません</p>
+                      <p>
+                        アプリで直接アカウントを作られたため、氏名とメールアドレス以外は
+                        空欄です（規約同意も取得していません）。
+                      </p>
+                      <p className="mt-1.5">
+                        すでに会員の方なら「既存の会員に紐づけて承認」を選んでください。
+                        名簿にその方の行があり、メールが未登録だったというだけの場合が多いです。
+                      </p>
+                    </div>
+                  )}
                   {app.status === "pending" && (
                     <div className="space-y-3">
                       {/* 🔴 同じ名前の在籍会員がいたら、承認する前に必ず見せる。
