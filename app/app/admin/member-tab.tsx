@@ -290,20 +290,28 @@ export function MemberTab({ focusMemberId }: { focusMemberId?: string | null }) 
               setVisibleCount(PAGE_SIZE);
             }}
             placeholder="名前・会員番号・職業・メール・電話・紹介者で検索..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
           />
         </div>
         <select
           value={sort}
-          onChange={(e) => setSort(e.target.value as MemberSort)}
+          onChange={(e) => {
+            // 🔴 見出しクリックと同じ扱いにする。ここで向きを戻さないと、
+            //    直前に反転させた向きが残り、「入会が新しい順」を選んだのに
+            //    古い順で出る、といった食い違いが起きる。
+            const key = e.target.value as MemberSort;
+            setSort(key);
+            setSortDir(key === "price" || key === "start" ? "desc" : "asc");
+            setVisibleCount(PAGE_SIZE);
+          }}
           className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-900"
           aria-label="並び替え"
         >
           <option value="member_no">会員番号順</option>
           <option value="name">氏名順</option>
-          <option value="start">入会が新しい順</option>
+          <option value="start">入会日</option>
           <option value="renewal">更新状況（要対応から）</option>
-          <option value="price">入会時金額が高い順</option>
+          <option value="price">入会時金額</option>
         </select>
       </div>
 
@@ -550,7 +558,7 @@ function MemberDetailModal({
                       value={referrerSearch}
                       onChange={(e) => setReferrerSearch(e.target.value)}
                       placeholder="会員を名前で検索"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 mb-2"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 mb-2"
                     />
                     <div className="max-h-40 overflow-y-auto space-y-1">
                       {referrerCandidates.map((c) => (
