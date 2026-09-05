@@ -28,6 +28,9 @@ data/raw/
 data/processed/
 *.xlsx
 *.xls
+# 🔴 *.xlsx は TETSUJIN.xlsx.bak に一致しない。請求書の退避ファイルには
+#    振込先の口座番号がそのまま入っているので、拡張子の後ろも塞ぐ。
+*.bak
 !data/README.md
 public/members-db.json
 
