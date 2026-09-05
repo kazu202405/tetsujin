@@ -145,6 +145,24 @@ function toPayload(data: ProfileData, themeColor: string) {
   };
 }
 
+/**
+ * 会員番号の自動採番に必要な項目（DB側 profile_sheet_is_complete と同じ10個）。
+ * 🔴 片方だけ増減すると「全部埋めたのに番号が来ない」「案内が消えない」が
+ *    静かに起きる。増やすときは必ず両方直すこと。
+ */
+const NUMBER_REQUIRED_FIELDS = [
+  "nameFurigana",
+  "nickname",
+  "job",
+  "genre",
+  "industry",
+  "location",
+  "hobbies",
+  "myHistory",
+  "tetsujinBenefit",
+  "hitokoto",
+] as const;
+
 export default function ProfileSheetPage() {
   const currentMember = useCurrentMember();
   const [mode, setMode] = useState<"edit" | "preview">("preview");
@@ -159,6 +177,11 @@ export default function ProfileSheetPage() {
     hitokoto: currentMember?.grip ?? "",
     photoUrl: currentMember ? "" : initialData.photoUrl,
   }));
+
+  // 会員番号の自動採番まで、あと何項目か
+  const remainingForNumber = NUMBER_REQUIRED_FIELDS.filter(
+    (k) => !String(data[k] ?? "").trim(),
+  ).length;
 
   // 保存状態（自動保存と保存ボタンの両方でここを更新する）
   const [sheetLoaded, setSheetLoaded] = useState(false);
@@ -654,6 +677,15 @@ export default function ProfileSheetPage() {
                     {/* 会員番号は会員台帳が正本。本人が書き換えられると台帳と食い違うため表示のみ。 */}
                     <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
                       {data.memberNumber || "未採番"}
+                      {!data.memberNumber && (
+                        // 🔴 黙って採番すると、会員には「なぜ番号が付いたのか / なぜ
+                        //    付かないのか」が分からない。残り件数まで出す。
+                        <span className="block mt-1 text-[11px] text-[var(--tetsu-pink)] font-bold">
+                          {remainingForNumber === 0
+                            ? "保存すると会員番号が付きます"
+                            : `このシートをすべて埋めると会員番号が付きます（あと${remainingForNumber}項目）`}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div>
