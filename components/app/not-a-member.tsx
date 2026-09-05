@@ -42,6 +42,12 @@ export function NotAMember({ email }: { email?: string | null }) {
             <li>・入会時に登録したメールアドレスと違う</li>
             <li>・まだ入会のお申し込みをされていない</li>
           </ul>
+          {/* 承認されると自動で繋がるが、開いたままの画面は変わらない。
+              「待てばいいのか、何かするのか」が分からないと問い合わせになる。 */}
+          <p className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500 leading-relaxed">
+            承認されると自動でご利用いただけるようになります。
+            そのときは、この画面を再読み込みしてください。
+          </p>
         </div>
 
         <p className="text-xs text-gray-500 leading-relaxed mb-6">

@@ -238,30 +238,30 @@ function LoginForm() {
           )}
         </div>
 
-        {/* 新規登録への導線 */}
-        <p className="text-center text-sm text-gray-500 mt-6">
-          {!isMockMode ? (
-            <>
-              アカウントをお持ちでない方は{" "}
-              <Link
-                href="/signup"
-                className="font-bold text-[var(--tetsu-pink)] hover:underline"
-              >
-                新規登録
-              </Link>
-            </>
-          ) : (
-            <>
-              まだ会員でない方は{" "}
-              <Link
-                href="/register"
-                className="font-bold text-[var(--tetsu-pink)] hover:underline"
-              >
-                入会のお申し込み
-              </Link>
-            </>
-          )}
-        </p>
+        {/* 入口は2つある。本番で「新規登録」しか出していなかったため、
+            まだ会員でない人は一度アカウントを作ってから
+            「会員として登録されていません」に当たるまで、
+            申込ページの存在に気づけなかった。両方を並べる。 */}
+        <div className="text-center text-sm text-gray-500 mt-6 space-y-1.5">
+          <p>
+            すでに会員の方で、はじめてご利用の場合は{" "}
+            <Link
+              href="/signup"
+              className="font-bold text-[var(--tetsu-pink)] hover:underline"
+            >
+              新規登録
+            </Link>
+          </p>
+          <p>
+            まだ会員でない方は{" "}
+            <Link
+              href="/register"
+              className="font-bold text-[var(--tetsu-pink)] hover:underline"
+            >
+              入会のお申し込み
+            </Link>
+          </p>
+        </div>
       </div>
     </section>
   );
