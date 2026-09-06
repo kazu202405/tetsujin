@@ -232,6 +232,10 @@ function ApplicationsTab() {
   // 既存の会員に紐づけて承認する場合の選択状態（申請ごと）
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<MemberHit | null>(null);
+  // 🔴 同名の在籍会員がいる申請で「別の方です」と確認した申請id。
+  //    注意書きだけでは素通りする（実際に2件が二重登録になった）ので、
+  //    候補がいるときは新規追加の手を止める。
+  const [ackDifferent, setAckDifferent] = useState<Set<string>>(new Set());
 
   const reload = useCallback(async () => {
     try {
@@ -362,6 +366,9 @@ function ApplicationsTab() {
           const config = statusConfig[app.status];
           const StatusIcon = config.icon;
           const isExpanded = expandedId === app.id;
+          // 同名の在籍会員がいる間は、新しい会員として追加する手を止める
+          const hasSameName = (app.sameNameMembers?.length ?? 0) > 0;
+          const newBlocked = hasSameName && !ackDifferent.has(app.id);
           return (
             <div key={app.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <button
@@ -452,10 +459,29 @@ function ApplicationsTab() {
                             ))}
                           </ul>
                           <p className="text-[11px] text-amber-800 leading-relaxed">
-                            同じ方なら「既存会員に紐づける」を選んでください。そのまま承認すると、
-                            会員番号の無い別の行がもう1つできます。同姓同名の別の方であれば、
-                            そのまま承認して問題ありません。
+                            同じ方なら「既存の会員に紐づける」を選んでください。そのまま新しく追加すると、
+                            会員番号の無い別の行がもう1つでき、番号も入会年月も引き継がれません。
                           </p>
+                          {/* 同姓同名は実在するので新規追加の道は塞がない。
+                              ただし1つ操作を挟んで、確認したことを残す。 */}
+                          <label className="mt-2.5 flex items-start gap-2 text-[11px] text-amber-900 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={ackDifferent.has(app.id)}
+                              onChange={(e) =>
+                                setAckDifferent((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(app.id);
+                                  else next.delete(app.id);
+                                  return next;
+                                })
+                              }
+                              className="mt-0.5 w-4 h-4 accent-amber-600 flex-shrink-0"
+                            />
+                            <span>
+                              上の会員とは<strong>別の方</strong>です（同姓同名）。新しい会員として追加します
+                            </span>
+                          </label>
                         </div>
                       )}
 
@@ -487,8 +513,15 @@ function ApplicationsTab() {
                         ) : (
                           <button
                             onClick={() => review(app.id, "approve")}
-                            disabled={savingId === app.id || pickerFor === app.id}
-                            className="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-60"
+                            disabled={savingId === app.id || pickerFor === app.id || newBlocked}
+                            title={newBlocked ? "同じ名前の在籍会員がいます。上で確認してください" : undefined}
+                            className={
+                              "inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-60 " +
+                              // 候補がいるときは既存に紐づけるほうを主役にする
+                              (hasSameName
+                                ? "bg-white border-2 border-gray-200 text-gray-600 hover:bg-gray-50"
+                                : "bg-green-600 text-white hover:bg-green-700")
+                            }
                           >
                             <UserCheck className="w-4 h-4" />新しい会員として追加
                           </button>
@@ -501,7 +534,12 @@ function ApplicationsTab() {
                               setLinkTarget(null);
                             }}
                             disabled={savingId === app.id}
-                            className="inline-flex items-center gap-2 px-6 py-2.5 bg-white border-2 border-blue-200 text-blue-600 rounded-xl text-sm font-bold hover:bg-blue-50 transition-colors disabled:opacity-60"
+                            className={
+                              "inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-60 " +
+                              (hasSameName
+                                ? "bg-blue-600 text-white hover:bg-blue-700"
+                                : "bg-white border-2 border-blue-200 text-blue-600 hover:bg-blue-50")
+                            }
                           >
                             <Link2 className="w-4 h-4" />既存の会員に紐づける
                           </button>
