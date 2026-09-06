@@ -55,6 +55,7 @@ import {
   fetchPosts,
   formatPostedAt,
   markBoardRead,
+  toggleCommentLike,
   toggleLike,
   updateChannel,
   uploadPostImage,
@@ -128,7 +129,8 @@ export default function BoardPage() {
   const me = useCurrentMember();
   const isAdmin = isAdminRole(me?.role);
 
-  const { channels, status: channelStatus, reload: reloadChannels } = useBoardChannels();
+  const { channels, status: channelStatus, reload: reloadChannels, markChannelRead } =
+    useBoardChannels();
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
 
   const [posts, setPosts] = useState<BoardPost[]>([]);
@@ -145,6 +147,9 @@ export default function BoardPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [showModal, setShowModal] = useState(false);
+  // 拡大表示する画像。一覧では枠に収めて出しているので、
+  // 押したら全体を大きく見られるようにする（押せることに気づけない＝無いのと同じ）
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   // コメント（開いた投稿だけ取得する）
   const [commentsMap, setCommentsMap] = useState<Record<string, BoardComment[]>>({});
@@ -171,6 +176,16 @@ export default function BoardPage() {
     markBoardVisited();
   }, []);
 
+  // 拡大表示はEscでも閉じる（PCで閉じ方を探させない）
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
+
   // 最初のチャンネルを選ぶ／選択中が消えたら先頭へ戻す
   useEffect(() => {
     if (channels.length === 0) return;
@@ -195,8 +210,9 @@ export default function BoardPage() {
     void loadPosts(activeChannelId);
     // 開いたチャンネルだけを既読にする。掲示板全体を既読にすると
     // 見ていないチャンネルの未読まで消えて、バッジが当てにならなくなる。
-    void markBoardRead(activeChannelId).then(() => reloadChannels(true));
-  }, [activeChannelId, loadPosts, reloadChannels]);
+    // バッジは取り直さず手元で0にする（既読化のたびに1往復増えていた）
+    void markBoardRead(activeChannelId).then(() => markChannelRead(activeChannelId));
+  }, [activeChannelId, loadPosts, markChannelRead]);
 
   const activeChannel: BoardChannel | undefined = useMemo(
     () => channels.find((c) => c.id === activeChannelId),
@@ -262,6 +278,38 @@ export default function BoardPage() {
             : p
         )
       );
+      setError(result.error);
+    }
+  };
+
+  /**
+   * コメント・返信のいいね。投稿と同じで、先に画面を変えて失敗したら戻す。
+   * コメントは親と返信の2階層あるので、両方を同じ関数で書き換える。
+   */
+  const handleCommentLike = async (postId: string, comment: BoardComment) => {
+    const nextLiked = !comment.likedByMe;
+    const apply = (list: BoardComment[], liked: boolean, count: number): BoardComment[] =>
+      list.map((c) =>
+        c.id === comment.id
+          ? { ...c, likedByMe: liked, likeCount: count }
+          : { ...c, replies: c.replies ? apply(c.replies, liked, count) : c.replies }
+      );
+
+    setCommentsMap((prev) => ({
+      ...prev,
+      [postId]: apply(
+        prev[postId] ?? [],
+        nextLiked,
+        comment.likeCount + (nextLiked ? 1 : -1)
+      ),
+    }));
+
+    const result = await toggleCommentLike(comment.id, nextLiked);
+    if (!result.ok) {
+      setCommentsMap((prev) => ({
+        ...prev,
+        [postId]: apply(prev[postId] ?? [], comment.likedByMe, comment.likeCount),
+      }));
       setError(result.error);
     }
   };
@@ -943,10 +991,23 @@ export default function BoardPage() {
                         </p>
                       )}
 
+                      {/* 🔴 切り抜かない。以前は高さ192pxで object-cover だったので
+                             縦長の写真は上下が見えず、押しても何も起きなかった。
+                             全体を収めて出し、押したら拡大する。 */}
                       {post.imageUrl && (
-                        <div className="mb-3 rounded-xl overflow-hidden max-w-lg">
-                          <img src={post.imageUrl} alt="" className="w-full h-48 object-cover" />
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setLightbox(post.imageUrl)}
+                          title="画像を拡大する"
+                          className="group block mb-3 rounded-xl overflow-hidden max-w-lg bg-gray-50 border border-gray-100 cursor-zoom-in"
+                        >
+                          <img
+                            src={post.imageUrl}
+                            alt=""
+                            loading="lazy"
+                            className="w-full max-h-96 object-contain transition-transform group-hover:scale-[1.01]"
+                          />
+                        </button>
                       )}
 
                       <div className="flex items-center gap-4">
@@ -1075,7 +1136,55 @@ export default function BoardPage() {
                                               </p>
                                             )}
                                           </div>
-                                          <div className="flex items-center gap-3 mt-1 ml-1">
+                                          {/* 🔴 操作（いいね・返信）を先頭に、記録（日時・編集・削除）を後ろに置く。
+                                                 以前は日時と同じ大きさ・同じ灰色で最後に並んでいて、
+                                                 返信できることに気づかれていなかった。 */}
+                                          <div className="flex items-center gap-2.5 mt-1 ml-1">
+                                            {!comment.isDeleted && (
+                                              <button
+                                                onClick={() => void handleCommentLike(post.id, comment)}
+                                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+                                                  comment.likedByMe
+                                                    ? "text-pink-500 bg-pink-50"
+                                                    : "text-gray-500 hover:text-pink-500 hover:bg-gray-100"
+                                                }`}
+                                              >
+                                                <Heart
+                                                  className={`w-3.5 h-3.5 ${comment.likedByMe ? "fill-current" : ""}`}
+                                                />
+                                                {comment.likeCount > 0 && comment.likeCount}
+                                              </button>
+                                            )}
+                                            {!comment.isDeleted && (
+                                              <button
+                                                onClick={() => {
+                                                  if (replyTarget?.commentId === comment.id) {
+                                                    setReplyTarget(null);
+                                                    setReplyText("");
+                                                  } else {
+                                                    setReplyTarget({
+                                                      postId: post.id,
+                                                      commentId: comment.id,
+                                                      authorName: comment.author.name,
+                                                    });
+                                                    setReplyText(`@${comment.author.name} `);
+                                                    setExpandedReplies((prev) =>
+                                                      new Set(prev).add(comment.id)
+                                                    );
+                                                  }
+                                                }}
+                                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+                                                  replyTarget?.commentId === comment.id
+                                                    ? "text-amber-600 bg-amber-50"
+                                                    : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                                                }`}
+                                              >
+                                                <Reply className="w-3.5 h-3.5" />
+                                                返信
+                                                {(comment.replies?.filter((r) => !r.isDeleted).length ?? 0) > 0 &&
+                                                  ` ${comment.replies?.filter((r) => !r.isDeleted).length}`}
+                                              </button>
+                                            )}
                                             <span className="text-[10px] text-gray-300">
                                               {formatPostedAt(comment.createdAt)}
                                               {comment.editedAt && !comment.isDeleted && (
@@ -1111,34 +1220,6 @@ export default function BoardPage() {
                                                   </button>
                                                 </>
                                               )}
-                                            <button
-                                              onClick={() => {
-                                                if (replyTarget?.commentId === comment.id) {
-                                                  setReplyTarget(null);
-                                                  setReplyText("");
-                                                } else {
-                                                  setReplyTarget({
-                                                    postId: post.id,
-                                                    commentId: comment.id,
-                                                    authorName: comment.author.name,
-                                                  });
-                                                  setReplyText(`@${comment.author.name} `);
-                                                  setExpandedReplies((prev) =>
-                                                    new Set(prev).add(comment.id)
-                                                  );
-                                                }
-                                              }}
-                                              className={`inline-flex items-center gap-1 text-[10px] font-medium transition-colors ${
-                                                replyTarget?.commentId === comment.id
-                                                  ? "text-amber-600"
-                                                  : "text-gray-400 hover:text-gray-600"
-                                              }`}
-                                            >
-                                              <Reply className="w-3 h-3" />
-                                              返信
-                                              {(comment.replies?.filter((r) => !r.isDeleted).length ?? 0) > 0 &&
-                                                ` ${comment.replies?.filter((r) => !r.isDeleted).length}件`}
-                                            </button>
                                           </div>
 
                                           {/* 返信一覧（折りたたみ） */}
@@ -1216,7 +1297,22 @@ export default function BoardPage() {
                                                           </p>
                                                         )}
                                                       </div>
-                                                      <div className="flex items-center gap-3 mt-0.5 ml-1">
+                                                      <div className="flex items-center gap-2.5 mt-0.5 ml-1">
+                                                        <button
+                                                          onClick={() =>
+                                                            void handleCommentLike(post.id, reply)
+                                                          }
+                                                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+                                                            reply.likedByMe
+                                                              ? "text-pink-500 bg-pink-50"
+                                                              : "text-gray-500 hover:text-pink-500 hover:bg-gray-100"
+                                                          }`}
+                                                        >
+                                                          <Heart
+                                                            className={`w-3.5 h-3.5 ${reply.likedByMe ? "fill-current" : ""}`}
+                                                          />
+                                                          {reply.likeCount > 0 && reply.likeCount}
+                                                        </button>
                                                         <span className="text-[10px] text-gray-300">
                                                           {formatPostedAt(reply.createdAt)}
                                                           {reply.editedAt && (
@@ -1267,8 +1363,9 @@ export default function BoardPage() {
                                                               new Set(prev).add(comment.id)
                                                             );
                                                           }}
-                                                          className="text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-colors"
+                                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
                                                         >
+                                                          <Reply className="w-3.5 h-3.5" />
                                                           返信
                                                         </button>
                                                       </div>
@@ -1420,6 +1517,39 @@ export default function BoardPage() {
               閉じる
             </button>
           </p>
+        </div>
+      )}
+
+      {/* 画像の拡大。どこを押しても閉じる（スマホで閉じ方に迷わせない） */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightbox(null)}
+          role="presentation"
+        >
+          <img
+            src={lightbox}
+            alt=""
+            className="max-w-full max-h-[85vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightbox(null)}
+            aria-label="閉じる"
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 text-gray-700 flex items-center justify-center hover:bg-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          {/* 端末に保存したい人向けの逃げ道。署名URLは1時間有効 */}
+          <a
+            href={lightbox}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-5 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-white/90 text-xs font-bold text-gray-700 hover:bg-white"
+          >
+            元のサイズで開く
+          </a>
         </div>
       )}
 

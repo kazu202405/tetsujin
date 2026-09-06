@@ -48,10 +48,26 @@ export async function GET(
   }
 
   const rows = (data ?? []) as ThreadRow[];
-  const [avatarUrls, mentions] = await Promise.all([
+
+  // 🔴 いいねは post_thread() を書き換えずにここで引く。
+  //    CREATE OR REPLACE は全文置換で、前の版が足した行を黙って落とすため
+  //    （本番で5日間、決済列の保護が外れた前例がある）。
+  //    件数は行数がコメント数ぶんしかないので、1回引いて数える。
+  const commentIds = rows.map((r) => r.id);
+  const [avatarUrls, mentions, likes] = await Promise.all([
     signAvatarPaths(supabase, rows.map((r) => r.author_avatar_path)),
-    fetchMentions(supabase, "comment_mentions", "comment_id", rows.map((r) => r.id)),
+    fetchMentions(supabase, "comment_mentions", "comment_id", commentIds),
+    commentIds.length
+      ? supabase.from("comment_likes").select("comment_id, member_id").in("comment_id", commentIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
+
+  const likeCount = new Map<string, number>();
+  const likedByMe = new Set<string>();
+  for (const row of (likes.data ?? []) as { comment_id: string; member_id: string }[]) {
+    likeCount.set(row.comment_id, (likeCount.get(row.comment_id) ?? 0) + 1);
+    if (row.member_id === guard.member.id) likedByMe.add(row.comment_id);
+  }
 
   const toItem = (r: ThreadRow) => ({
     id: r.id,
@@ -63,6 +79,8 @@ export async function GET(
     isMine: r.is_mine,
     editedAt: r.edited_at ?? null,
     isDeleted: Boolean(r.is_deleted),
+    likeCount: likeCount.get(r.id) ?? 0,
+    likedByMe: likedByMe.has(r.id),
     // 削除済みは本文を返していないので、宛先も返さない
     mentions: r.is_deleted ? [] : mentions[r.id] ?? [],
     author: {

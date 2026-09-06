@@ -8,11 +8,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ResolvedMention } from "@/components/app/rich-text";
-import { dedupedFetch } from "@/lib/client-cache";
+import { dedupedFetch, getCached, setCached } from "@/lib/client-cache";
 
 /** 解決済みのメンション宛先（色付けとリンクに使う） */
 export type { ResolvedMention };
 import { createClient } from "@/lib/supabase/client";
+import { shrinkImageForUpload } from "@/lib/image-resize";
 import { POST_IMAGE_BUCKET } from "@/lib/supabase/storage";
 import { useCachedResource } from "./client-cache";
 import type { MemberRoleCode } from "@/lib/member-roles";
@@ -65,6 +66,8 @@ export interface BoardComment {
   editedAt: string | null;
   /** 削除済み。返信がぶら下がっていると会話が読めなくなるので行は残してある */
   isDeleted: boolean;
+  likeCount: number;
+  likedByMe: boolean;
   /** サーバーが解決した宛先。ここに無い @文字列 は色を付けない＝届いていない */
   mentions: ResolvedMention[];
   author: BoardAuthor;
@@ -94,14 +97,36 @@ export function formatPostedAt(iso: string): string {
 // ============ チャンネル ============
 
 const EMPTY_CHANNELS: BoardChannel[] = [];
+const CHANNELS_KEY = "board-channels";
 
 export function useBoardChannels() {
-  const { data, status, reload } = useCachedResource<BoardChannel[]>(
-    "board-channels",
+  const { data, status, reload, setData } = useCachedResource<BoardChannel[]>(
+    CHANNELS_KEY,
     "/api/board/channels",
     EMPTY_CHANNELS,
   );
-  return { channels: data, status, reload };
+
+  /**
+   * 既読にしたチャンネルのバッジだけ手元で0にする。
+   *
+   * 🔴 ここで取り直さない。既読化の直後に一覧を引き直すと、
+   *    「たった今こちらが0にした」ことを確かめるためだけに1往復増える
+   *    （チャンネルを切り替えるたびに毎回）。
+   *    他の値は既読化では変わらないので、手元を直せば足りる。
+   */
+  const markChannelRead = useCallback(
+    (channelId: string) => {
+      const current = getCached<BoardChannel[]>(CHANNELS_KEY) ?? data;
+      const next = current.map((c) =>
+        c.id === channelId ? { ...c, unread_count: 0 } : c,
+      );
+      setCached(CHANNELS_KEY, next);
+      setData(next);
+    },
+    [data, setData],
+  );
+
+  return { channels: data, status, reload, markChannelRead };
 }
 
 export async function createChannel(input: {
@@ -198,12 +223,16 @@ export async function uploadPostImage(
     return { ok: false, error: "画像は10MBまでです" };
   }
 
-  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  // 掲示板は原寸を出さないので、上げる前に長辺1600pxまで縮める。
+  // 失敗したら元のファイルがそのまま返る（投稿できなくなる方が困る）。
+  const upload = await shrinkImageForUpload(file);
+
+  const ext = upload.type === "image/png" ? "png" : upload.type === "image/webp" ? "webp" : "jpg";
   const path = `${memberId}/${Date.now()}.${ext}`;
 
   const { error } = await createClient()
     .storage.from(POST_IMAGE_BUCKET)
-    .upload(path, file, { cacheControl: "3600", upsert: false });
+    .upload(path, upload, { cacheControl: "3600", upsert: false });
 
   if (error) return { ok: false, error: "画像をアップロードできませんでした" };
   return { ok: true, path };
@@ -214,6 +243,20 @@ export async function toggleLike(
   liked: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const response = await fetch(`/api/board/posts/${postId}/like`, {
+    method: liked ? "POST" : "DELETE",
+  });
+  if (!response.ok) {
+    return { ok: false, error: await readError(response, "いいねを更新できませんでした") };
+  }
+  return { ok: true };
+}
+
+/** コメントのいいね。投稿のいいねと同じ形（付ける＝POST／外す＝DELETE）。 */
+export async function toggleCommentLike(
+  commentId: string,
+  liked: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const response = await fetch(`/api/board/comments/${commentId}/like`, {
     method: liked ? "POST" : "DELETE",
   });
   if (!response.ok) {
@@ -265,28 +308,47 @@ export function useBoardUnread(): number {
         if (!cancelled) setUnread(0);
       }
     };
+    // 既読化した本人からは新しい件数が一緒に届く。
+    // その場合は数えに行かない（1往復まるごと減る）。
+    const onRead = (event: Event) => {
+      const next = (event as CustomEvent<{ unread?: number | null }>).detail?.unread;
+      if (typeof next === "number") {
+        if (!cancelled) setUnread(next);
+        return;
+      }
+      void load();
+    };
     void load();
-    window.addEventListener("tetsujin-board-read", load);
+    window.addEventListener("tetsujin-board-read", onRead);
     return () => {
       cancelled = true;
-      window.removeEventListener("tetsujin-board-read", load);
+      window.removeEventListener("tetsujin-board-read", onRead);
     };
   }, []);
 
   return unread;
 }
 
-/** 掲示板を開いたときに既読化する。チャンネルを渡すとそのチャンネルだけ。 */
-export async function markBoardRead(channelId?: string): Promise<void> {
+/**
+ * 掲示板を開いたときに既読化する。チャンネルを渡すとそのチャンネルだけ。
+ * 既読化した直後の未読件数を返す（バッジを数え直すための往復を省くため）。
+ */
+export async function markBoardRead(channelId?: string): Promise<number | null> {
   try {
-    await fetch("/api/board/read", {
+    const response = await fetch("/api/board/read", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(channelId ? { channelId } : {}),
     });
-    window.dispatchEvent(new Event("tetsujin-board-read"));
+    const body = (await response.json().catch(() => null)) as { unread?: number | null } | null;
+    const unread = typeof body?.unread === "number" ? body.unread : null;
+    window.dispatchEvent(
+      new CustomEvent("tetsujin-board-read", { detail: { unread } }),
+    );
+    return unread;
   } catch {
     /* 既読化に失敗してもバッジが残るだけなので握りつぶす */
+    return null;
   }
 }
 
