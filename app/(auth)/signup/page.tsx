@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { UserPlus, Mail, Lock, User, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -21,6 +22,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 // この画面を消しても塞がらない点に注意。anon キーはクライアントバンドルに
 // 入っているので auth/v1/signup は直接叩ける。守りは必ずDB側に置くこと。
 export default function SignupPage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,7 +40,7 @@ export default function SignupPage() {
 
     setLoading(true);
     const supabase = createClient();
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
@@ -47,6 +49,17 @@ export default function SignupPage() {
       },
     });
     setLoading(false);
+
+    // 🔴 メール確認を使うかどうかは Supabase 側の設定で変わる。
+    //    画面に決め打ちで書かない。確認が要らない設定なら signUp が
+    //    そのままセッションを返すので、その場合は待たせずに中へ入れる。
+    //    書き分けないと「確認メールを送りました」と出したのに
+    //    メールが来ない、という一番混乱する状態になる。
+    if (!signUpError && signUpData.session) {
+      router.push("/app/mypage");
+      router.refresh();
+      return;
+    }
 
     if (signUpError) {
       // 🔴 以前は上の2つ以外を全部「登録できませんでした。時間をおいて…」に
@@ -98,7 +111,8 @@ export default function SignupPage() {
     );
   }
 
-  // 登録完了＝確認メール送信済み
+  // 確認メールを使う設定のときだけここへ来る（使わない設定なら
+  // 上でそのままアプリへ入っている）
   if (done) {
     return (
       <section className="min-h-screen flex items-center justify-center bg-[var(--tetsu-warm)] pt-24 pb-16 px-4">
