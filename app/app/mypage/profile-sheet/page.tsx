@@ -913,22 +913,24 @@ export default function ProfileSheetPage() {
                     </div>
 
                     <div className="px-4 pt-3 pb-3">
-                    {/* 写真 */}
+                    {/* 写真・名前・呼び名は左カラムの中央に置く。
+                        🔴 写真は横幅75%で、以前は左端に寄っていたため
+                           右側だけ余白が広く、傾いて見えていた（依頼主指摘）。 */}
                     {data.photoUrl ? (
                       <img
                         src={data.photoUrl}
                         alt={data.nameKanji}
-                        className="w-[75%] aspect-[5/6] object-cover"
+                        className="w-[75%] aspect-[5/6] object-cover mx-auto block"
                         crossOrigin="anonymous"
                       />
                     ) : (
-                      <div className="w-[75%] aspect-[5/6] bg-gray-200 flex items-center justify-center">
+                      <div className="w-[75%] aspect-[5/6] bg-gray-200 flex items-center justify-center mx-auto">
                         <Upload className="w-10 h-10 text-gray-400" />
                       </div>
                     )}
 
                     {/* ルビ付き名前 */}
-                    <div className="mt-3">
+                    <div className="mt-3 text-center">
                       <p
                         className="text-3xl font-extrabold text-gray-900 leading-tight"
                         style={{ fontFamily: "'Noto Serif JP', serif" }}
