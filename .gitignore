@@ -34,6 +34,9 @@ data/processed/
 !data/README.md
 public/members-db.json
 
+# 台帳を一括で書き換える前に取る全行のバックアップ（氏名・メール・電話が入る）
+backups/
+
 # 作業用メモ・ツール出力
 .playwright-mcp/
 z copy.md

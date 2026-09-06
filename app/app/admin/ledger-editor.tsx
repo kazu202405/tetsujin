@@ -18,6 +18,25 @@ import type { MemberDbRow } from "./members-data";
 const INPUT =
   "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900";
 
+/**
+ * 課金開始日の目安＝「次に来る入会月」の翌月1日。
+ *
+ * 年払い済みの期間は入会月まで含むので、請求を始めるのはその翌月から。
+ * 2026-09-06 に既存335名をこの形に揃えたので、手で入れるときも同じ日になるよう
+ * ここから入れられるようにする（人が数えると月をまたぐたびにずれる）。
+ *
+ * 入会月が入っていない人には出さない（数えるもとが無い）。
+ */
+export function nextBillingStart(startMonth: number | null, today: Date = new Date()): string | null {
+  if (startMonth == null || startMonth < 1 || startMonth > 12) return null;
+  // 「次に来る入会月」＝今月より後なら今年、今月以前なら来年
+  const year = today.getFullYear() + (startMonth > today.getMonth() + 1 ? 0 : 1);
+  // その翌月
+  const m = startMonth === 12 ? 1 : startMonth + 1;
+  const y = startMonth === 12 ? year + 1 : year;
+  return `${y}-${String(m).padStart(2, "0")}-01`;
+}
+
 export function LedgerEditor({
   row,
   saving,
@@ -73,6 +92,9 @@ export function LedgerEditor({
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const numOrNull = (v: string) => (v.trim() === "" ? null : Number(v));
+
+  // 入会月から数えた課金開始日の目安（入会月が空なら出さない）
+  const suggestedStart = nextBillingStart(numOrNull(form.start_month));
 
   const save = async () => {
     const body = {
@@ -299,6 +321,18 @@ export function LedgerEditor({
             disabled={form.billing_exempt}
             className={INPUT + (form.billing_exempt ? " opacity-50" : "")}
           />
+          {/* 入会月の翌月をワンタップで入れる。既存会員はこの日で揃えてある。
+              勝手に入れずに押してもらうのは、いま入っている日付が
+              「運営が決めた日」なのか「初期値」なのか分からなくなるため。 */}
+          {suggestedStart && !form.billing_exempt && form.billing_starts_on !== suggestedStart && (
+            <button
+              type="button"
+              onClick={() => set("billing_starts_on", suggestedStart)}
+              className="mt-1.5 text-[11px] text-gray-500 underline underline-offset-2 hover:text-gray-900"
+            >
+              入会月（{form.start_month}月）の翌月にする → {suggestedStart}
+            </button>
+          )}
         </label>
       </div>
 
