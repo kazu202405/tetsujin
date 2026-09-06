@@ -114,16 +114,24 @@ export function useBoardChannels() {
    *    （チャンネルを切り替えるたびに毎回）。
    *    他の値は既読化では変わらないので、手元を直せば足りる。
    */
+  // 🔴 依存に data を入れないこと。入れると一覧が変わるたびにこの関数の
+  //    正体（参照）が変わり、これを依存に持つ画面側の useEffect が再実行され、
+  //    その中で既読化 → 一覧が変わる → また再実行、と無限に回る。
+  //    実際に1回踏んだ（2026-09-07・掲示板が posts と read を延々と叩いた）。
+  //    ∴ 今の値は手元の控えから読み、依存は setData（Reactが固定）だけにする。
   const markChannelRead = useCallback(
     (channelId: string) => {
-      const current = getCached<BoardChannel[]>(CHANNELS_KEY) ?? data;
+      const current = getCached<BoardChannel[]>(CHANNELS_KEY);
+      const target = current?.find((c) => c.id === channelId);
+      // 既に0なら何もしない（同じ値で書き換えて再描画を誘発しない）
+      if (!current || !target || target.unread_count === 0) return;
       const next = current.map((c) =>
         c.id === channelId ? { ...c, unread_count: 0 } : c,
       );
       setCached(CHANNELS_KEY, next);
       setData(next);
     },
-    [data, setData],
+    [setData],
   );
 
   return { channels: data, status, reload, markChannelRead };
