@@ -17,7 +17,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AtSign, Users } from "lucide-react";
 import { AutoTextarea } from "@/components/app/auto-textarea";
-import { useCachedResource } from "@/lib/client-cache";
 
 interface Mentionable {
   id: string;
@@ -25,8 +24,30 @@ interface Mentionable {
   nickname: string | null;
 }
 
-const CACHE_KEY = "mentionable";
-const EMPTY: Mentionable[] = [];
+// ============================================================
+// 宛先候補は「1回だけ・必要になってから」取る
+// ============================================================
+// 🔴 掲示板はコメント入力欄を投稿の数だけ描く。この部品が表示のたびに
+//    取りに行くと、投稿50件の画面で同じ一覧を50回引くことになる。
+//    実測（2026-09-06・投稿1件の画面）で既に4回叩いていた。
+//
+//    ∴ ①取得は1回にまとめて全部の入力欄で使い回す（下の共有Promise）
+//      ②@ を打つまで取りに行かない。ほとんどの入力欄は候補を出さずに
+//        終わるので、そのぶんまるごと消える。
+let shared: Promise<Mentionable[]> | null = null;
+
+function loadMentionable(): Promise<Mentionable[]> {
+  if (!shared) {
+    shared = fetch("/api/board/mentionable", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : []))
+      .catch(() => {
+        // 失敗を覚えたままにしない。次に @ を打ったときは取り直す。
+        shared = null;
+        return [];
+      });
+  }
+  return shared;
+}
 
 /** 候補に出す最大件数。多すぎると入力欄が隠れる。 */
 const MAX_SUGGESTIONS = 6;
@@ -77,17 +98,25 @@ export function MentionTextarea({
    */
   onKeyDownExtra?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }) {
-  const { data: members } = useCachedResource<Mentionable[]>(
-    CACHE_KEY,
-    "/api/board/mentionable",
-    EMPTY,
-  );
+  const [members, setMembers] = useState<Mentionable[]>([]);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [caret, setCaret] = useState(0);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
 
   const active = useMemo(() => (open ? activeQuery(value, caret) : null), [open, value, caret]);
+
+  // @ を打った時点ではじめて取りに行く（2回目以降は共有ぶんが即返る）
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    void loadMentionable().then((list) => {
+      if (!cancelled) setMembers(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [active !== null]);
 
   const matches = useMemo(() => {
     if (!active) return [];
