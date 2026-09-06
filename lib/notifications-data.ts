@@ -8,6 +8,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { dedupedFetch } from "@/lib/client-cache";
 
 export type NotificationType =
   | "board_unread"
@@ -71,10 +72,13 @@ export function useNotifications(): UseNotificationsResult {
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/notifications", { cache: "no-store" });
-      if (!response.ok) throw new Error("failed");
+      // 🔴 通知ベル・ドロワー・通知一覧が同時にこれを呼ぶ。取得だけまとめる
+      //    （読み直しの条件はそれぞれ違うので、フック側の作りは変えない）。
       setNotifications(
-        (await response.json()) as (NotificationItem & { read: boolean })[]
+        await dedupedFetch<(NotificationItem & { read: boolean })[]>(
+          "notifications",
+          "/api/notifications",
+        ),
       );
     } catch {
       // 取得できないときは何も出さない（存在しない通知を作らない）

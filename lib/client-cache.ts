@@ -21,9 +21,55 @@ export type LoadStatus = "loading" | "loaded" | "error";
 
 const cache = new Map<string, unknown>();
 
+// ============================================================
+// 同じデータを何度も取りに行かないための2つの控え
+// ============================================================
+// 🔴 実測（2026-09-06・掲示板・dev）で、1画面を開くだけで
+//    /api/board/read が5本、/api/notifications が3本走っていた。
+//    同じデータを見る部品（サイドバー・下タブ・通知ベル・出会いの見出し）が
+//    それぞれ自分で取りに行くため。
+//
+//    inflight … いま飛んでいる同じ取得に相乗りする。同時に開いた分は1本にまとまる
+//    fetchedAt … 直前に取れたばかりなら取り直さない。画面を行き来するたびの
+//                往復が消える
+//
+// ⚠️ 期限は短くする。長くすると「他の端末で押したのに反映されない」になる。
+//    ここは往復を減らすためだけの控えで、鮮度を捨てる仕組みではない。
+const inflight = new Map<string, Promise<unknown>>();
+const fetchedAt = new Map<string, number>();
+
+/** これより新しく取れていれば、取り直さない（ミリ秒） */
+const FRESH_MS = 3000;
+
+/**
+ * useCachedResource を使っていない手書きのフック向け。
+ * 同じ取得に相乗りするところだけを提供する（控えは持たない）。
+ *
+ * 🔴 通知と掲示板の未読はサイドバー・下タブ・通知ベルがそれぞれ
+ *    自前で取りに行っており、1画面で同じAPIを3〜4本叩いていた。
+ *    それぞれの読み直しの条件（フォーカス・60秒ごと・イベント）は
+ *    そのまま残したいので、フック側は書き換えず、取得だけまとめる。
+ */
+export async function dedupedFetch<T>(key: string, url: string): Promise<T> {
+  let pending = inflight.get(key) as Promise<T> | undefined;
+  if (!pending) {
+    pending = fetch(url, { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) throw new Error("failed");
+      return (await response.json()) as T;
+    });
+    inflight.set(key, pending);
+    void pending.catch(() => undefined).finally(() => {
+      if (inflight.get(key) === pending) inflight.delete(key);
+    });
+  }
+  return pending;
+}
+
 /** ログアウト時に呼ぶ。前の人のデータを次の人に見せないため。 */
 export function clearClientCache() {
   cache.clear();
+  inflight.clear();
+  fetchedAt.clear();
 }
 
 /**
@@ -33,6 +79,9 @@ export function clearClientCache() {
  */
 export function clearCached(key: string) {
   cache.delete(key);
+  // 🔴 取得時刻も一緒に捨てる。残すと「たった今取れたばかり」と見なされ、
+  //    せっかく捨てた内容を取り直さないまま次の画面へ行く。
+  fetchedAt.delete(key);
 }
 
 /** 手元の控えを差し替える（作成・削除の直後など） */
@@ -64,12 +113,29 @@ export function useCachedResource<T>(key: string, url: string, empty: T) {
     };
   }, []);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (force = false) => {
+    // 取れたばかりなら何もしない（画面を行き来するたびの往復を消す）
+    if (!force && Date.now() - (fetchedAt.get(key) ?? 0) < FRESH_MS && cache.has(key)) {
+      setData(cache.get(key) as T);
+      setStatus("loaded");
+      return;
+    }
     try {
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) throw new Error("failed");
-      const body = (await response.json()) as T;
+      // 同じ取得が既に飛んでいれば相乗りする（同時に開いた部品の分をまとめる）
+      let pending = inflight.get(key) as Promise<T> | undefined;
+      if (!pending || force) {
+        pending = fetch(url, { cache: "no-store" }).then(async (response) => {
+          if (!response.ok) throw new Error("failed");
+          return (await response.json()) as T;
+        });
+        inflight.set(key, pending);
+        void pending.catch(() => undefined).finally(() => {
+          if (inflight.get(key) === pending) inflight.delete(key);
+        });
+      }
+      const body = await pending;
       cache.set(key, body);
+      fetchedAt.set(key, Date.now());
       if (!alive.current) return;
       setData(body);
       setStatus("loaded");

@@ -74,6 +74,86 @@ REVOKE ALL ON FUNCTION public.profile_sheet_is_complete(UUID, TEXT, TEXT) FROM P
 GRANT EXECUTE ON FUNCTION public.profile_sheet_is_complete(UUID, TEXT, TEXT) TO authenticated;
 
 -- ------------------------------------------------------------
+-- お披露目の投稿
+-- ------------------------------------------------------------
+-- 新しい方が入ったことを一般会員に知らせる手段が無かった
+-- （「入会申請が届きました」は運営宛てだけ）。
+--
+-- 依頼主の決定（2026-09-06）：
+--   ・知らせるのは「シートが埋まった時点」＝どんな方か分かる状態でお披露目する
+--     （承認した瞬間だと、写真も自己紹介も無い状態で紹介することになる）
+--   ・全員への個別通知ではなく掲示板へ自動投稿する
+--     個別通知にすると入会が続いた月は通知欄が新規入会だらけになる。
+--     掲示板なら他の話題と同じ流れに並び、あとから見返せる。
+--     未読バッジは通常どおり全員に立つ。
+--
+-- 投稿先は「新規ご入会挨拶」(slug=welcome)。テストデータのまま未運用で
+-- 廃止方針だったチャンネルだが、まさにこの用途のために作られており、
+-- 中身が入れば役目を果たす。
+--
+-- 🔴 投稿者は本人にする。運営名義だと運営のアイコンが並び、
+--    返信先も運営になってしまう。本人名義なら、そのまま
+--    「はじめまして」のやりとりが始まる。
+--    本人は自分の投稿を編集できるので、文面は後から直せる。
+CREATE OR REPLACE FUNCTION public.post_member_introduction(p_member_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_channel UUID;
+  v_name    TEXT;
+  v_job     TEXT;
+  v_lines   TEXT;
+  v_sheet   RECORD;
+BEGIN
+  SELECT id INTO v_channel
+    FROM public.board_channels
+   WHERE slug = 'welcome' AND is_archived = FALSE
+   LIMIT 1;
+
+  -- チャンネルが無い／閉じられているなら黙って何もしない。
+  -- 採番そのものを巻き込んで失敗させる理由がない。
+  IF v_channel IS NULL THEN
+    RETURN;
+  END IF;
+
+  SELECT name, job INTO v_name, v_job FROM public.members WHERE id = p_member_id;
+  SELECT hitokoto, location, industry INTO v_sheet
+    FROM public.profile_sheets WHERE member_id = p_member_id;
+
+  -- 空の項目で行を空けない（「はじめまして、〇〇です。」の下が
+  -- 空行だらけになると、書きかけに見える）
+  v_lines := 'はじめまして、' || COALESCE(v_name, 'メンバー') || 'です。';
+  IF COALESCE(TRIM(v_job), '') <> '' THEN
+    v_lines := v_lines || E'\n' || TRIM(v_job);
+  END IF;
+  IF COALESCE(TRIM(v_sheet.location), '') <> '' THEN
+    v_lines := v_lines || E'\n' || TRIM(v_sheet.location);
+  END IF;
+  IF COALESCE(TRIM(v_sheet.hitokoto), '') <> '' THEN
+    v_lines := v_lines || E'\n\n' || TRIM(v_sheet.hitokoto);
+  END IF;
+  v_lines := v_lines || E'\n\nよろしくお願いします！';
+
+  INSERT INTO public.posts (channel_id, author_id, content)
+  VALUES (v_channel, p_member_id, LEFT(v_lines, 5000));
+
+  -- 🔴 本人に必ず伝える。黙って自分名義の投稿が立つと、
+  --    「勝手に書かれた」と受け取られる。直せることも一緒に伝える。
+  PERFORM public.push_notification(
+    p_member_id, NULL, 'announcement',
+    '掲示板に自己紹介を投稿しました',
+    'プロフィールシートの内容から作りました。ご自分で書き直せます。',
+    '/app/board'
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.post_member_introduction(UUID) FROM PUBLIC, anon, authenticated;
+
+-- ------------------------------------------------------------
 -- 採番
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.assign_member_no_on_sheet()
@@ -101,6 +181,11 @@ BEGIN
 
   SELECT COALESCE(MAX(member_no), 0) + 1 INTO v_next FROM public.members;
   NEW.member_no := v_next;
+
+  -- 🔴 お披露目はここでしか行わない。「member_no が入ったら投稿する」に
+  --    すると、運営が未採番142名を手で振っている最中に142件が一気に
+  --    掲示板へ流れる。投稿するのは「シートを埋めて自動採番された人」だけ。
+  PERFORM public.post_member_introduction(NEW.id);
 
   RETURN NEW;
 END;

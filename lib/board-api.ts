@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ResolvedMention } from "@/components/app/rich-text";
+import { dedupedFetch } from "@/lib/client-cache";
 
 /** 解決済みのメンション宛先（色付けとリンクに使う） */
 export type { ResolvedMention };
@@ -254,9 +255,11 @@ export function useBoardUnread(): number {
     let cancelled = false;
     const load = async () => {
       try {
-        const response = await fetch("/api/board/read", { cache: "no-store" });
-        if (!response.ok) throw new Error("failed");
-        const body = (await response.json()) as { unread: number };
+        // サイドバーと下タブが同時に呼ぶので、取得だけまとめる
+        const body = await dedupedFetch<{ unread: number }>(
+          "board-unread",
+          "/api/board/read",
+        );
         if (!cancelled) setUnread(body.unread);
       } catch {
         if (!cancelled) setUnread(0);

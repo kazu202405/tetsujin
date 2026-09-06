@@ -195,7 +195,7 @@ export default function BoardPage() {
     void loadPosts(activeChannelId);
     // 開いたチャンネルだけを既読にする。掲示板全体を既読にすると
     // 見ていないチャンネルの未読まで消えて、バッジが当てにならなくなる。
-    void markBoardRead(activeChannelId).then(reloadChannels);
+    void markBoardRead(activeChannelId).then(() => reloadChannels(true));
   }, [activeChannelId, loadPosts, reloadChannels]);
 
   const activeChannel: BoardChannel | undefined = useMemo(
@@ -267,12 +267,19 @@ export default function BoardPage() {
   };
 
   // ---------- コメント ----------
+  // 🔴 取りに行っている間、画面に何も出ていなかった。押しても無反応に見え、
+  //    実際の待ち時間より長く感じる（「重い」の体感はここも効いていた）。
+  const [loadingCommentsFor, setLoadingCommentsFor] = useState<string | null>(null);
+
   const loadComments = useCallback(async (postId: string) => {
+    setLoadingCommentsFor(postId);
     try {
       const items = await fetchComments(postId);
       setCommentsMap((prev) => ({ ...prev, [postId]: items }));
     } catch {
       setError("コメントを取得できませんでした");
+    } finally {
+      setLoadingCommentsFor((current) => (current === postId ? null : current));
     }
   }, []);
 
@@ -988,6 +995,16 @@ export default function BoardPage() {
                                 コメントを閉じる
                               </button>
                               <div className="pt-3 border-t border-gray-100">
+                                {loadingCommentsFor === post.id && (
+                                  <div className="space-y-2 mb-3">
+                                    {[0, 1].map((i) => (
+                                      <div key={i} className="flex gap-2.5 animate-pulse">
+                                        <div className="w-8 h-8 rounded-full bg-gray-100 flex-shrink-0" />
+                                        <div className="flex-1 h-12 rounded-xl bg-gray-100" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                                 <div className="space-y-3">
                                   {/* 🔴 削除済みで返信が無いコメントは出さない。
                                          「削除されました」だけが並ぶと読みにくいだけ。
