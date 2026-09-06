@@ -249,7 +249,7 @@ function LoginForm() {
               href="/signup"
               className="font-bold text-[var(--tetsu-pink)] hover:underline"
             >
-              新規登録
+              ログインをつくる
             </Link>
           </p>
           <p>
@@ -260,6 +260,12 @@ function LoginForm() {
             >
               入会のお申し込み
             </Link>
+            <br />
+            {/* 申込だけではログインできない。ここで書いておかないと
+                「申し込んだのに入れない」が繰り返される（実際に起きた）。 */}
+            <span className="text-xs text-gray-400">
+              お申し込みのあと、運営の承認を経てご利用いただけます
+            </span>
           </p>
         </div>
       </div>

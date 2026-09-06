@@ -202,8 +202,8 @@ export default function RegisterPage() {
   return (
     <>
       <PageHeader
-        title={accountEmail ? "ご登録内容の入力" : "新規会員登録"}
-        breadcrumb={accountEmail ? "ご登録内容の入力" : "新規会員登録"}
+        title={accountEmail ? "ご登録内容の入力" : "入会のお申し込み"}
+        breadcrumb={accountEmail ? "ご登録内容の入力" : "入会のお申し込み"}
       />
 
       <section className="py-16 sm:py-24 bg-white">

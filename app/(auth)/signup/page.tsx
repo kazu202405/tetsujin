@@ -134,7 +134,11 @@ export default function SignupPage() {
           <div className="w-12 h-12 bg-[var(--tetsu-pink)] rounded-2xl flex items-center justify-center mb-3">
             <span className="text-white text-lg font-extrabold">T</span>
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900">新規登録</h1>
+          {/* 🔴 ここと /register がどちらも「新規登録」で、運営も会員も
+                 取り違えていた。ここは「すでに会員の人がログインを作る」場所、
+                 /register は「まだ会員でない人が入会を申し込む」場所。
+                 名前で区別が付くようにする。 */}
+          <h1 className="text-2xl font-extrabold text-gray-900">ログインをつくる</h1>
           <p className="text-sm text-gray-500 mt-1">TETSUJIN会 メンバーページ</p>
           {/* 名簿に無いメールでは会員にならないので、先に伝えておく */}
           <p className="text-xs text-gray-500 mt-3 text-center leading-relaxed max-w-xs">
