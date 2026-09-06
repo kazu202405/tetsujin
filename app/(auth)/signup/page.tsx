@@ -49,12 +49,26 @@ export default function SignupPage() {
     setLoading(false);
 
     if (signUpError) {
+      // 🔴 以前は上の2つ以外を全部「登録できませんでした。時間をおいて…」に
+      //    まとめていた。原因が分からず、本人は待てばいいのか別のことを
+      //    すればいいのか判断できない。運営に伝わる言葉も残らない。
+      //    ∴ 実際に起きる理由ごとに分ける。
+      const raw = signUpError.message ?? "";
+      const lower = raw.toLowerCase();
       const message =
-        signUpError.message === "User already registered"
+        raw === "User already registered"
           ? "このメールアドレスは既に登録されています。ログインをお試しください。"
-          : signUpError.message.includes("Password")
+          : raw.includes("Password") || lower.includes("password")
             ? "パスワードが条件を満たしていません。8文字以上で設定してください。"
-            : "登録できませんでした。時間をおいて もう一度お試しください。";
+            // Supabase のメール送信には時間あたりの上限がある。
+            // 何人かが続けて登録すると、後の人だけがここで弾かれる。
+            : lower.includes("rate limit") || lower.includes("for security purposes")
+              ? "confirmメールの送信が一時的に混み合っています。10分ほどあけて、もう一度お試しください。"
+              : lower.includes("unable to validate email") || lower.includes("invalid email")
+                ? "メールアドレスの形式をご確認ください。"
+                : lower.includes("signups not allowed")
+                  ? "いま新規登録を受け付けていません。運営までご連絡ください。"
+                  : `登録できませんでした（${raw}）。解決しない場合はこの文言を運営までお知らせください。`;
       setError(message);
       return;
     }
